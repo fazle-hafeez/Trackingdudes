@@ -7,9 +7,8 @@ const LoadingComponent = ({ visible }) => {
       transparent={true}
       animationType="fade"
       visible={visible}
-      // statusBarTranslucent
     >
-      <View className="flex-1 bg-black/80 justify-center items-center">
+      <View className="flex-1 bg-black/85 justify-center items-center">
         <View className="">
           <ActivityIndicator size={80} color="white" />
         </View>

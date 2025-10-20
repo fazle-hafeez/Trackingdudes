@@ -10,11 +10,9 @@ export const apiRequest = async (
   isFormData = false
 ) => {
   const url = `${BASE_URL}${endpoint}`;
-
   let headers = {};
-  if (!isFormData) {
-    headers["Content-Type"] = "application/json";
-  }
+
+  if (!isFormData) headers["Content-Type"] = "application/json";
 
   if (useToken) {
     try {
@@ -30,20 +28,40 @@ export const apiRequest = async (
     }
   }
 
-  let options = { method, headers };
-  if (body) {
-    options.body = isFormData ? body : JSON.stringify(body);
-  }
+  const options = { method, headers };
+  if (body) options.body = isFormData ? body : JSON.stringify(body);
 
   try {
     const response = await fetch(url, options);
-    const data = await response.json();
+    const text = await response.text();
 
-    if (!response.ok) throw data;
+    let data;
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch {
+      data = text;
+    }
+
+    console.log("RAW RESPONSE STATUS:", response.status);
+    console.log("RAW RESPONSE BODY:", data);
+
+    // Always return backend JSON even if status != 200
+    if (!response.ok) {
+      // Return full backend object (not overridden)
+      return data || {
+        status: "error",
+        error: "Unknown server error",
+        message: "Server returned an invalid response",
+      };
+    }
+
     return data;
   } catch (error) {
-    console.error("API Error:", error);
-    throw error;
+    return {
+      status: "error",
+      error: "NetworkError",
+      message: "Network error, please try again later.",
+    };
   }
 };
 

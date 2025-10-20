@@ -1,4 +1,4 @@
-import React, { useState, useContext } from "react";
+import React, { useState } from "react";
 import { View, Text, TextInput, StatusBar, Platform } from "react-native";
 import { Link, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -8,29 +8,29 @@ import Button from "../../src/components/Button";
 import ModalComponent from "../../src/components/ModalComponent";
 import LoadingComponent from "../../src/components/LoadingComponent";
 import PasswordInputField from "../../src/components/ToggleField";
-
-import { AuthContext } from "../../src/context/AuthContexts";
 import { useApi } from "../../src/hooks/useApi";
-
+import { useAuth } from "../../src/context/UseAuth";
 const CompleteRegistration = () => {
   const router = useRouter();
-  const { login } = useContext(AuthContext);
-  const { post, loading } = useApi();
-
+  const { post } = useApi();
+  const {
+    showModal,
+    hideModal,
+    modalVisible,
+    modalMessage,
+    modalType,
+    setGlobalLoading,
+    globalLoading,
+    login
+  } = useAuth();
   const [username, setUsername] = useState("");
   const [usernameError, setUsernameError] = useState("");
   const [password, setPassword] = useState("");
   const [passError, setPassError] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [confirmPassError, setConfirmPassError] = useState("");
-  const [modalMess, setModalMess] = useState("");
-  const [modalVisibility, setModalVisibility] = useState(false);
-  const [modalErrorType, setModalErrorType] = useState("");
-  const [isButton, setIsButton] = useState(true);
-
   const handleRegister = async () => {
     let hasError = false;
-
     if (!username.trim()) {
       setUsernameError("Field is required");
       hasError = true;
@@ -38,6 +38,17 @@ const CompleteRegistration = () => {
     if (!password.trim()) {
       setPassError("Field is required");
       hasError = true;
+    }
+     if (password.trim().length < 8) {
+      setPassError("Password must be at least 8 characters long.", "error");
+      hasError = true;
+    }
+    else if (!password.trim().match("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]{8,}$")) {
+      showModal("Password must include at least one uppercase letter, one lowercase letter, one digit, and one special character (e.g., @, $, !, %).", "error");
+      hasError = true;
+    } else {
+      setPassError("");
+      hasError = false;
     }
     if (!confirmPassword.trim()) {
       setConfirmPassError("Field is required");
@@ -49,12 +60,13 @@ const CompleteRegistration = () => {
     }
 
     if (hasError) return;
-
+    setGlobalLoading(true)
     try {
+      const cleanUsername = username.trim().replace(/\s+/g, "");
       const result = await post(
         "/register/create-user/",
         {
-          username: username.trim(),
+          username: cleanUsername,
           password: password.trim(),
           confirm_password: confirmPassword.trim(),
         },
@@ -64,39 +76,36 @@ const CompleteRegistration = () => {
       if (result.status === "success") {
         await login(
           { username },
-          result?.token ?? null,
+          result?.tokens ?? null,
           { remember: false, keepLoggedIn: false }
         );
 
-        setModalMess(result?.data || "User created successfully!");
-        setModalErrorType("success");
-        setModalVisibility(true);
-        setIsButton(false);
-
         setTimeout(() => {
-          setModalVisibility(false);
-          router.push("/auth/signup");
+          showModal(result?.data || "User created successfully!", "success");
+        }, 0);
+        setTimeout(() => {
+          hideModal();
+          router.push("/auth/login");
         }, 3000);
       } else if (result.restart === true) {
-        setModalMess(result?.data || "Please log in again.");
-        setModalErrorType("error");
-        setModalVisibility(true);
-        setIsButton(true);
-
+        setTimeout(() => {
+          showModal(result?.data || "Please log in again.", "error");
+        }, 0);
         setTimeout(() => {
           setModalVisibility(false);
           router.push("/auth/login");
         }, 2000);
       } else {
-        setModalMess(result?.data || "Something went wrong. Please try again later.");
-        setModalErrorType("error");
-        setModalVisibility(true);
+        setTimeout(() => {
+          showModal(result?.data || "Something went wrong. Please try again later.", "error")
+
+        }, 0);
       }
     } catch (error) {
-      console.log("Registration Error:", error.message);
-      setModalMess(error.message || "Network error occurred.");
-      setModalErrorType("error");
-      setModalVisibility(true);
+      showModal(error.error || "Network error occurred.");
+
+    }finally{
+      setGlobalLoading(false)
     }
   };
 
@@ -158,7 +167,7 @@ const CompleteRegistration = () => {
 
           {/* Submit button */}
           <View className="mt-2">
-            <Button title="Submit" onClickEvent={handleLogin} />
+            <Button title="Submit" onClickEvent={handleRegister} />
           </View>
           <View className="border border-gray-200 my-2"></View>
           <View className="flex-row flex-nowrap">
@@ -170,15 +179,14 @@ const CompleteRegistration = () => {
 
       {/* Modal */}
       <ModalComponent
-        visible={modalVisibility}
-        onClose={() => setModalVisibility(false)}
-        message={modalMess}
-        errorType={modalErrorType}
-        isButton={isButton}
+        visible={modalVisible}
+        onClose={hideModal}
+        message={modalMessage}
+        errorType={modalType}
       />
       {/*loading modal */}
       <LoadingComponent
-        visible={loading}
+        visible={globalLoading}
       />
     </SafeAreaView>
   );

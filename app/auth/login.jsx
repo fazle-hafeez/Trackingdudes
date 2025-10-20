@@ -1,17 +1,16 @@
-import React, { useState, useEffect, useContext } from "react";
-import { View, Text, TextInput, StatusBar, Platform } from "react-native";
+import React, { useState, useEffect } from "react";
+import { View, Text, TextInput, StatusBar, Platform, } from "react-native";
 import Checkbox from "expo-checkbox";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Link, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-
 import HeroSection from "../../src/components/HeroSection";
 import Button from "../../src/components/Button";
 import ModalComponent from "../../src/components/ModalComponent";
 import LoadingComponent from "../../src/components/LoadingComponent";
 import PasswordInputField from "../../src/components/ToggleField";
-import { AuthContext } from "../../src/context/AuthContexts";
-import { useApi } from "../../src/hooks/useApi"; 
+import { useApi } from "../../src/hooks/useApi";
+import { useAuth } from "../../src/context/UseAuth";
 
 const Login = () => {
   const [username, setUserName] = useState("");
@@ -20,99 +19,98 @@ const Login = () => {
   const [passError, setPassError] = useState("");
   const [remember, setRemember] = useState(true);
   const [keepLoggedIn, setKeepLoggedIn] = useState(true);
-  const [modalMess, setModalMess] = useState("");
-  const [modalVisibility, setModalVisibility] = useState(false);
-  const [modalErrorType, setModalErrorType] = useState("");
-  const [isButton, setIsButton] = useState(true);
+  const [lastTriedUser, setLastTriedUser] = useState("");
 
   const router = useRouter();
-  const { login } = useContext(AuthContext);
-  const { post, loading } = useApi(); //our custom hook handles API logic
+  const { post,put} = useApi();
+  const { showModal, hideModal, modalVisible, modalMessage, modalType, setGlobalLoading, globalLoading, } = useAuth();
 
+  //  Load saved username
   useEffect(() => {
     (async () => {
       try {
-        const savedName = await AsyncStorage.getItem("rememberedEmail");
+        const savedName = await AsyncStorage.getItem("rememberedUserName");
         if (savedName) setUserName(savedName);
       } catch (err) {
-        console.warn("Failed to load remembered name:", err);
+        console.warn("Failed to load remembered username:", err);
       }
     })();
   }, []);
-
 
   useEffect(() => {
     (async () => {
       try {
-        const savedUser = await AsyncStorage.getItem("user");
-        if (savedUser) {
-          const parsed = JSON.parse(savedUser);
-          if (parsed?.username) setUserName(parsed.username);
-        }
+        const savedName = await AsyncStorage.getItem("user");
+        const parsed = JSON.parse(savedName)
+        if (parsed) setUserName(parsed.username);
       } catch (err) {
-        console.warn("Failed to load user:", err);
+        console.warn("Failed to load remembered username:", err);
       }
     })();
   }, []);
-
-  //  Handle Login
+  // Handle Login
   const handleLogin = async () => {
     let hasError = false;
 
-    if (username.trim() === "") {
+    if (!username.trim()) {
       setUserNameError("Field is required");
       hasError = true;
     }
-    if (password.trim() === "") {
+    if (!password.trim()) {
       setPassError("Field is required");
       hasError = true;
+      return
     }
-
+    
     if (hasError) return;
+
+    setGlobalLoading(true);
 
     try {
       const cleanUsername = username.trim().replace(/\s+/g, "");
       const payload = {
         username: cleanUsername,
-        password: password,
+        password,
         keep_logged_in: keepLoggedIn,
       };
 
-      const result = await post("/tokens/refresh/", payload);
+      const result = await put("/tokens/refresh/", payload);
 
-      if (result.status === "success" && result.tokens) {
-        // Save tokens
+      if (result?.status === "success") {
         await AsyncStorage.setItem("tokens", JSON.stringify(result.tokens));
 
-        // Remember username if checked
         if (remember) {
-          await AsyncStorage.setItem("rememberedEmail", cleanUsername);
+          await AsyncStorage.setItem("rememberedUserName", cleanUsername);
         } else {
-          await AsyncStorage.removeItem("rememberedEmail");
+          await AsyncStorage.removeItem("rememberedUserName");
         }
 
-        setModalErrorType("success");
-        setModalMess(result.data || "Login successful!");
-        setModalVisibility(true);
-        setIsButton(false);
-
-        // Redirect after short delay
+        showModal(result.data || "you are  Login successful!", "success");
         setTimeout(() => {
-          setModalVisibility(false);
+          hideModal();
           router.push("/dashboard/dashboardPage");
-        }, 2000);
-      } else {
-        setModalErrorType("error");
-        setModalMess(result.data || "Invalid username or password");
-        setModalVisibility(true);
+        }, 2500);
+      }
+      else if (result?.status === "error") {
+        if (lastTriedUser === cleanUsername) {
+          showModal("Too many login attempts. Please try again later.", "error");
+          setTimeout(() => {
+            router.push("/auth/signup")
+          }, 2500);
+        } else {
+          showModal(result?.data || "Invalid username or password.", "error");
+          setLastTriedUser(cleanUsername);
+        }
+      }
+      else {
+        showModal(result.data || "Something went wrong. Please try again.", "error");
       }
     } catch (error) {
-      setModalErrorType("error");
-      setModalMess("Something went wrong. Please try again.");
-      setModalVisibility(true);
+      showModal("A server error occurred. Please try again later.", "error");
+    } finally {
+      setGlobalLoading(false);
     }
   };
-
   return (
     <SafeAreaView className="flex-1 bg-white">
       <StatusBar barStyle="light-content" backgroundColor="#0000ff" />
@@ -120,16 +118,14 @@ const Login = () => {
 
       <View className="flex-1 p-4">
         <View
-          className={`bg-[rgba(255,255,255,0.9)] rounded-xl p-6 ${
-            Platform.OS === "ios" ? " shadow-sm" : ""
-          }`}
+          className={`bg-[rgba(255,255,255,0.9)] rounded-xl p-6 ${Platform.OS === "ios" ? " shadow-sm" : ""
+            }`}
           style={{ marginTop: -230, elevation: 5 }}
         >
           <Text className="text-xl mb-2 text-headercolor">Enter your user name</Text>
           <TextInput
-            className={`rounded-md text-lg text-headercolor border ${
-              usernameError ? "border-red-500" : "border-gray-400"
-            }`}
+            className={`rounded-md text-lg text-headercolor border ${usernameError ? "border-red-500" : "border-gray-400"
+              }`}
             placeholder="Type your username here"
             keyboardType="email-address"
             autoCapitalize="none"
@@ -208,17 +204,13 @@ const Login = () => {
         </View>
       </View>
 
-      {/* Modals */}
       <ModalComponent
-        visible={modalVisibility}
-        onClose={() => setModalVisibility(false)}
-        message={modalMess}
-        errorType={modalErrorType}
-        isButton={isButton}
+        visible={modalVisible}
+        onClose={hideModal}
+        message={modalMessage}
+        errorType={modalType}
       />
-
-      {/* Loading Spinner */}
-      <LoadingComponent visible={loading} />
+      <LoadingComponent visible={globalLoading} />
     </SafeAreaView>
   );
 };

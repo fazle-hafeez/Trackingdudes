@@ -8,7 +8,15 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Auto-load user on app start
+  //  Modal state
+  const [modalVisible, setModalVisible] = useState(false);
+  const [modalMessage, setModalMessage] = useState("");
+  const [modalType, setModalType] = useState("info");
+
+  //  Global loading
+  const [globalLoading, setGlobalLoading] = useState(false);
+
+  //  Load user on app start
   useEffect(() => {
     const loadUser = async () => {
       try {
@@ -19,50 +27,48 @@ export const AuthProvider = ({ children }) => {
         if (storedUser && storedToken && keepLoggedIn === "true") {
           setUser(JSON.parse(storedUser));
           setToken(storedToken);
-        } 
+        }
       } catch (err) {
         console.warn("Error loading user/token", err);
       } finally {
         setLoading(false);
+        setModalVisible(false);
+        setModalMessage("");
+        setModalType("");
       }
     };
     loadUser();
   }, []);
 
-  //  Login and save user + token
-  const login = async (userData, jwtToken, { remember, keepLoggedIn }) => {
-  setUser(userData);
-  setToken(jwtToken || null);
+  //  Login
+  const login = async (userData, accessToken, { remember, keepLoggedIn }) => {
+    setUser(userData);
+    setToken(accessToken || null);
 
-  //  Save user safely
-  if (userData) {
-    await AsyncStorage.setItem("user", JSON.stringify(userData));
-  }
+    if (userData) {
+      await AsyncStorage.setItem("user", JSON.stringify(userData));
+    }
 
-  //  Only save token if it's valid (non-null / non-empty)
-  if (jwtToken) {
-    await AsyncStorage.setItem("token", jwtToken);
-  } else {
-    await AsyncStorage.removeItem("token");
-  }
+    if (accessToken) {
+      await AsyncStorage.setItem("token", accessToken);
+    } else {
+      await AsyncStorage.removeItem("token");
+    }
 
-  //  Handle remember email
-  if (remember && userData?.username) {
-    await AsyncStorage.setItem("rememberedEmail", userData.username);
-  } else {
-    await AsyncStorage.removeItem("rememberedEmail");
-  }
+    if (remember && userData?.username) {
+      await AsyncStorage.setItem("rememberedUserName", userData.username);
+    } else {
+      await AsyncStorage.removeItem("rememberedUserName");
+    }
 
-  //  Handle keep logged in
-  if (keepLoggedIn) {
-    await AsyncStorage.setItem("keepLoggedIn", "true");
-  } else {
-    await AsyncStorage.removeItem("keepLoggedIn");
-  }
-};
+    if (keepLoggedIn) {
+      await AsyncStorage.setItem("keepLoggedIn", "true");
+    } else {
+      await AsyncStorage.removeItem("keepLoggedIn");
+    }
+  };
 
-
-  //  Logout and clear everything
+  // Logout
   const logout = async () => {
     setUser(null);
     setToken(null);
@@ -70,12 +76,47 @@ export const AuthProvider = ({ children }) => {
       "user",
       "token",
       "keepLoggedIn",
-      "rememberedEmail",
+      "rememberedUserName",
     ]);
   };
 
+  //  Global modal helpers
+  const showModal = (message, type = "success") => {
+    setModalMessage(message);
+    setModalType(type);
+    setModalVisible(true);
+  };
+
+  const hideModal = () => {
+    setModalVisible(false);
+    setModalMessage("");
+  };
+
+  //  Auto-hide success modals
+  useEffect(() => {
+    if (modalVisible && modalType === "success") {
+      const timer = setTimeout(() => hideModal(), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [modalVisible, modalType]);
+
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, loading }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        token,
+        login,
+        logout,
+        loading,
+        showModal,
+        hideModal,
+        modalVisible,
+        modalMessage,
+        modalType,
+        globalLoading,
+        setGlobalLoading,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

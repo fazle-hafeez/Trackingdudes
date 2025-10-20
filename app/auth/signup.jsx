@@ -1,35 +1,32 @@
-
 import React, { useState } from "react";
-import { View, Text, TextInput, StatusBar, TouchableOpacity, Platform } from "react-native";
+import {View,Text,TextInput,StatusBar,TouchableOpacity,Platform} from "react-native";
 import { Link, useLocalSearchParams, useRouter } from "expo-router";
+import { SafeAreaView } from "react-native-safe-area-context";
 import HeroSection from "../../src/components/HeroSection";
 import Button from "../../src/components/Button";
 import ModalComponent from "../../src/components/ModalComponent";
 import LoadingComponent from "../../src/components/LoadingComponent";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { useApi } from "../../src/hooks/useApi"; //  import your custom hook
+import { useApi } from "../../src/hooks/useApi";
+import { useAuth } from "../../src/context/UseAuth";
 
-const signUp = () => {
+const SignUp = () => {
   const route = useLocalSearchParams();
   const router = useRouter();
-  const { post, loading } = useApi(); //  use our clean API hook
+  const { post} = useApi();
+  const {showModal, hideModal, modalVisible,modalMessage, modalType,setGlobalLoading,globalLoading,} = useAuth();
 
-  const [username, setUsername] = useState("");
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [usernameError, setUsernameError] = useState("");
   const [emailError, setEmailError] = useState("");
-  const [modalVisible, setModalVisible] = useState(false);
-  const [modalMess, setModalMess] = useState("");
-  const [modalIcon, setModalIcon] = useState("");
   const [lastSubmittedEmail, setLastSubmittedEmail] = useState("");
-  const [isButton, setIsButton] = useState(true);
-
+  const [receivedcode, setReceivedCode] = useState(false)
   const receivedCode = () => {
     router.push({
       pathname: "/auth/emailVerification",
       params: {
         enableBtn: true,
-        trimmedEmail: route.trimmedEmail,
+        trimmedEmail: route.trimmedEmail || trimmedEmail,
         resetEmail: route.resetEmail,
       },
     });
@@ -38,15 +35,12 @@ const signUp = () => {
   const handleLogin = async () => {
     let hasError = false;
 
-    if (username.trim() === "") {
+    if (!name.trim()) {
       setUsernameError("Field is required");
       hasError = true;
-    } else {
-      setUsernameError("");
     }
-
     const trimmedEmail = email.trim();
-    if (trimmedEmail === "") {
+    if (!trimmedEmail) {
       setEmailError("Field is required");
       hasError = true;
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
@@ -55,62 +49,58 @@ const signUp = () => {
     } else {
       setEmailError("");
     }
-
     if (hasError) return;
+    setGlobalLoading(true);
 
     try {
       const response = await post(
         "/register/register-email/",
-        { username: username, email: trimmedEmail },
-        false // no token needed
+        { name, email: trimmedEmail },
+        false
       );
+      console.log(response);
 
       if (response?.status === "success") {
+        showModal(response.data || "Verification email sent successfully!", "success");
+        setReceivedCode(true)
+        if (response.action === "Next") {
+          setTimeout(() => {
+            hideModal();
+            router.push({
+              pathname: "/auth/emailVerification",
+              params: { name, trimmedEmail },
+            });
+          }, 2000);
+        }
         setLastSubmittedEmail("");
-        setModalMess(response.data || "Verification email sent successfully!");
-        setModalIcon("success");
-        setModalVisible(true);
-        setIsButton(false);
-
-        setTimeout(() => {
-          setModalVisible(false);
-          router.push({
-            pathname: "/auth/emailVerification",
-            params: { username, trimmedEmail },
-          });
-        }, 2000);
-
-        setUsername("");
-        setEmail("");
-      } else if (
-        response?.http_code === 409 &&
-        response?.status === "error"
-      ) {
+      } else if (response?.status === "error") {
         if (lastSubmittedEmail === trimmedEmail) {
-          setModalMess(
-            "You are making too many request in a very short window of time. Please, make sure you don't overburden the server..."
-          );
+          setTimeout(() => {
+            showModal(
+              "You are making too many requests in a short time. Please wait a bit before trying again.",
+              "error"
+            );
+          }, 0)
         } else {
-          setModalMess(
-            response?.data ||
-            "Another user is already registered with that email."
-          );
+          setTimeout(() => {
+            showModal(
+              response?.data || "Another user is already registered with that email.",
+              "error"
+            );
+          }, 0);
           setLastSubmittedEmail(trimmedEmail);
         }
-        setModalIcon("error");
-        setModalVisible(true);
-        setIsButton(true);
       } else {
-        setModalMess("Something went wrong. Please try again.");
-        setModalIcon("error");
-        setModalVisible(true);
-        setIsButton(true);
+        setTimeout(() => {
+          showModal(response.message || "Something went wrong. Please try again.", "error");
+        }, 0);
       }
     } catch (error) {
-      setModalMess("A server error occurred. Please try again later.");
-      setModalIcon("error");
-      setModalVisible(true);
-      setIsButton(true);
+      setTimeout(() => {
+        showModal(error.error || "A server error occurred. Please try again later.", "error");
+      }, 0);
+    } finally {
+      setGlobalLoading(false);
     }
   };
 
@@ -134,9 +124,9 @@ const signUp = () => {
             className={`border ${usernameError ? "border-red-500" : "border-gray-400"
               } rounded-md text-lg text-headercolor px-3 py-3`}
             placeholder="This is to call you with, in the email"
-            value={username}
-            onChangeText={(text) => {
-              setUsername(text);
+            value={name}
+            onChangeText={(val) => {
+              setName(val);
               setUsernameError("");
             }}
           />
@@ -172,13 +162,13 @@ const signUp = () => {
               Already have an account?
               <Link href="/auth/login" className="text-blue underline">
                 {" "}
-                Sign up
+                Sign in
               </Link>
             </Text>
           </View>
         </View>
 
-        {route.show && (
+        {receivedcode || route.show && (
           <View className="flex-row mt-3 pl-5 ml-1 items-center">
             <Text className="text-xl font-normal text-headercolor">
               I received the code?
@@ -193,17 +183,16 @@ const signUp = () => {
         )}
       </View>
 
+      {/* Global modal and loading */}
       <ModalComponent
         visible={modalVisible}
-        onClose={() => setModalVisible(false)}
-        message={modalMess}
-        errorType={modalIcon}
-        isButton={isButton}
+        onClose={hideModal}
+        message={modalMessage}
+        errorType={modalType}
       />
-
-      <LoadingComponent visible={loading} />
+      <LoadingComponent visible={globalLoading} />
     </SafeAreaView>
   );
 };
 
-export default signUp;
+export default SignUp;
