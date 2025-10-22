@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, StatusBar,StyleSheet } from 'react-native';
 import { FontAwesome5, MaterialIcons, Entypo } from '@expo/vector-icons';
 import FontAwesome6 from '@expo/vector-icons/FontAwesome6';
 import { useNavigation } from '@react-navigation/native';
@@ -12,17 +12,11 @@ export default function Dashboard() {
 
   return (
     <SafeAreaView className="flex-1 bg-[#eef3f9] relative">
+      <StatusBar barStyle="light-content" backgroundColor="#0000ff" />
       {/*  Fixed Header */}
       <View
         className="flex-row items-center bg-blue px-4 py-3"
-        style={{
-          position: 'absolute',
-          top: 32,
-          left: 0,
-          right: 0,
-          zIndex: 20,
-          
-        }}
+        style={styles.menu}
       >
         <Entypo
           name="menu"
@@ -115,3 +109,14 @@ const Feature = ({ icon, label, onPress }) => (
     <Text className="mt-3 text-center text-xl text-headercolor">{label}</Text>
   </TouchableOpacity>
 );
+
+const styles = StyleSheet.create({
+  menu: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 20,
+    elevation: 5
+  }
+})

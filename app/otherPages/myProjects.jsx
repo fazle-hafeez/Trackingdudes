@@ -5,10 +5,11 @@ import PageHeader from '../../src/components/PageHeader';
 import Ionicons from "@expo/vector-icons/Ionicons";
 import Feather from '@expo/vector-icons/Feather';
 import FontAwesome6 from '@expo/vector-icons/FontAwesome6';
-import { Link } from 'expo-router';
+import { Link,useRouter } from 'expo-router';
 const MyProjects = () => {
   const tabs = ['Enabled', 'Disbled']
   const [activeTab, setActiveTab] = useState('Enabled')
+  const router = useRouter();
   return (
     <SafeAreaView className="flex-1">
       <PageHeader routes="My Projects" />
@@ -20,7 +21,8 @@ const MyProjects = () => {
               Add a projects
             </Link>
           </View>
-          <TouchableOpacity>
+          <TouchableOpacity
+          onPress={()=>router.push("/otherPages/addingProject")}>
             <Ionicons name="add-circle" size={26} color="#10b981" />
           </TouchableOpacity>
         </View>

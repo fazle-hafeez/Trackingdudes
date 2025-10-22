@@ -17,7 +17,8 @@ const MyVehicles = () => {
              Add a vehicle 
              </Link>
           </View>
-          <TouchableOpacity>
+          <TouchableOpacity
+          activeOpacity={0.6}>
             <Ionicons name="add-circle" size={26} color="#10b981" />
           </TouchableOpacity>
         </View>
