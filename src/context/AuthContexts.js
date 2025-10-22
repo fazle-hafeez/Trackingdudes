@@ -5,7 +5,7 @@ export const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(null);
+  const [tokens, setTokens] = useState(null); //  store both access & refresh
   const [loading, setLoading] = useState(true);
 
   //  Modal state
@@ -16,77 +16,77 @@ export const AuthProvider = ({ children }) => {
   //  Global loading
   const [globalLoading, setGlobalLoading] = useState(false);
 
-  //  Load user on app start
+  //  Load stored session on app start
   useEffect(() => {
-    const loadUser = async () => {
+    const loadSession = async () => {
       try {
         const storedUser = await AsyncStorage.getItem("user");
-        const storedToken = await AsyncStorage.getItem("token");
+        const storedTokens = await AsyncStorage.getItem("tokens");
         const keepLoggedIn = await AsyncStorage.getItem("keepLoggedIn");
 
-        if (storedUser && storedToken && keepLoggedIn === "true") {
+        if (storedUser && storedTokens && keepLoggedIn === "true") {
           setUser(JSON.parse(storedUser));
-          setToken(storedToken);
+          setTokens(JSON.parse(storedTokens));
         }
       } catch (err) {
-        console.warn("Error loading user/token", err);
+        console.warn("Error loading stored session:", err);
       } finally {
         setLoading(false);
-        setModalVisible(false);
-        setModalMessage("");
-        setModalType("");
       }
     };
-    loadUser();
+    loadSession();
   }, []);
 
-  //  Login
-  const login = async (userData, accessToken, { remember, keepLoggedIn }) => {
-    setUser(userData);
-    setToken(accessToken || null);
+  // 🔹 Login handler (after API success)
+  const login = async (userData, tokenResponse, { remember, keepLoggedIn }) => {
+    if (!tokenResponse) return;
 
-    if (userData) {
-      await AsyncStorage.setItem("user", JSON.stringify(userData));
-    }
+    const newTokens = {
+      access: tokenResponse?.access,
+      refreshToken: tokenResponse?.refresh,
+      accessExpires: tokenResponse?.accessExpires,
+      refreshExpires: tokenResponse?.refreshExpires,
+      issuedAt:tokenResponse?.issuedAt
+    };
 
-    if (accessToken) {
-      await AsyncStorage.setItem("token", accessToken);
-    } else {
-      await AsyncStorage.removeItem("token");
-    }
+    setUser(userData || null);
+    setTokens(newTokens);
 
+    // Store in AsyncStorage
+    await AsyncStorage.multiSet([
+      ["user", JSON.stringify(userData)],
+      ["tokens", JSON.stringify(newTokens)],
+      ["keepLoggedIn", keepLoggedIn ? "true" : "false"],
+    ]);
+
+    // Remember username (optional)
     if (remember && userData?.username) {
       await AsyncStorage.setItem("rememberedUserName", userData.username);
     } else {
       await AsyncStorage.removeItem("rememberedUserName");
     }
-
-    if (keepLoggedIn) {
-      await AsyncStorage.setItem("keepLoggedIn", "true");
-    } else {
-      await AsyncStorage.removeItem("keepLoggedIn");
-    }
   };
 
-  // Logout
+  //  Logout
   const logout = async () => {
     setUser(null);
-    setToken(null);
+    setTokens(null);
     await AsyncStorage.multiRemove([
       "user",
-      "token",
+      "tokens",
       "keepLoggedIn",
       "rememberedUserName",
     ]);
   };
 
-  //  Global modal helpers
+  //  Show modal
   const showModal = (message, type = "success") => {
     setModalMessage(message);
     setModalType(type);
     setModalVisible(true);
   };
 
+  //  Hide modal
   const hideModal = () => {
     setModalVisible(false);
     setModalMessage("");
@@ -100,11 +100,12 @@ export const AuthProvider = ({ children }) => {
     }
   }, [modalVisible, modalType]);
 
+  //  Expose everything to context consumers
   return (
     <AuthContext.Provider
       value={{
         user,
-        token,
+        tokens,
         login,
         logout,
         loading,

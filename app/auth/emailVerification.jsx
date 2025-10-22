@@ -106,19 +106,20 @@ const EmailVerification = () => {
     try {
       const response = await post("/register/verify-email/", { code });
       console.log(response);
-
       if (response.status === "success") {
         setTimeout(() => {
           showModal(response.data || "Email verified successfully!", "success");
         }, 0);
 
         const tokens = {
-          accessToken: response?.tokens?.access,
+          access: response?.tokens?.access,
           accessExpires: response?.tokens?.accessExpires,
           issuedAt: response?.tokens?.issuedAt,
         };
         if (tokens) {
           await AsyncStorage.setItem("tokens", JSON.stringify(tokens));
+          console.log("✅ Tokens saved:", tokens);
+
         } else {
           await AsyncStorage.removeItem("tokens");
         }

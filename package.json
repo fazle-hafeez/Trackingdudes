@@ -17,6 +17,7 @@
     "expo-linking": "^8.0.8",
     "expo-router": "~6.0.12",
     "expo-status-bar": "~3.0.8",
+    "js-base64": "^3.7.8",
     "nativewind": "^4.2.1",
     "react": "19.1.0",
     "react-dom": "^19.1.0",

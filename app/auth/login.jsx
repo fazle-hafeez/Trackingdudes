@@ -11,7 +11,7 @@ import LoadingComponent from "../../src/components/LoadingComponent";
 import PasswordInputField from "../../src/components/ToggleField";
 import { useApi } from "../../src/hooks/useApi";
 import { useAuth } from "../../src/context/UseAuth";
-
+import { useLocalSearchParams } from "expo-router";
 const Login = () => {
   const [username, setUserName] = useState("");
   const [usernameError, setUserNameError] = useState("");
@@ -20,34 +20,40 @@ const Login = () => {
   const [remember, setRemember] = useState(true);
   const [keepLoggedIn, setKeepLoggedIn] = useState(true);
   const [lastTriedUser, setLastTriedUser] = useState("");
+  const { userName: routeUserName } = useLocalSearchParams()
 
   const router = useRouter();
-  const { post,put} = useApi();
-  const { showModal, hideModal, modalVisible, modalMessage, modalType, setGlobalLoading, globalLoading, } = useAuth();
-
-  //  Load saved username
-  useEffect(() => {
-    (async () => {
-      try {
-        const savedName = await AsyncStorage.getItem("rememberedUserName");
-        if (savedName) setUserName(savedName);
-      } catch (err) {
-        console.warn("Failed to load remembered username:", err);
-      }
-    })();
-  }, []);
+  const { post, put } = useApi();
+  const { showModal, hideModal, modalVisible, modalMessage, modalType, setGlobalLoading, globalLoading, login } = useAuth();
 
   useEffect(() => {
     (async () => {
       try {
-        const savedName = await AsyncStorage.getItem("user");
-        const parsed = JSON.parse(savedName)
-        if (parsed) setUserName(parsed.username);
+        // If keepLoggedIn data exists, load both fields
+        const savedCreds = await AsyncStorage.getItem("keepLoginCreds");
+        if (savedCreds) {
+          const { savedName, savedPass } = JSON.parse(savedCreds);
+          setUserName(savedName || "");
+          setPassword(savedPass || "");
+          setKeepLoggedIn(true);
+        } else {
+          // Otherwise just load remembered username
+          const savedName = await AsyncStorage.getItem("rememberedUserName");
+          if (savedName) setUserName(savedName);
+        }
       } catch (err) {
-        console.warn("Failed to load remembered username:", err);
+        console.warn("Failed to load saved credentials:", err);
       }
     })();
   }, []);
+
+  // handle param username
+  useEffect(() => {
+    if (routeUserName) {
+      setUserName(routeUserName);
+    }
+  }, [routeUserName]);
+
   // Handle Login
   const handleLogin = async () => {
     let hasError = false;
@@ -61,24 +67,46 @@ const Login = () => {
       hasError = true;
       return
     }
-    
+
     if (hasError) return;
 
     setGlobalLoading(true);
 
     try {
-      const cleanUsername = username.trim().replace(/\s+/g, "");
+      // const cleanUsername = username.trim().replace(/\s+/g, "");
+      const cleanUsername = username.trim()
       const payload = {
         username: cleanUsername,
-        password,
+        password: password,
         keep_logged_in: keepLoggedIn,
       };
 
-      const result = await put("/tokens/refresh/", payload);
-
+      const result = await post(
+        "/tokens/new/",
+        payload,
+        false,
+        false,
+        { useBasicAuth: true }
+      );
       if (result?.status === "success") {
         await AsyncStorage.setItem("tokens", JSON.stringify(result.tokens));
+        const userData = result?.user || { username: cleanUsername };
 
+        //  Call global login handler
+        await login(userData, result.tokens, {
+          remember,
+          keepLoggedIn
+        });
+
+        // Manage remembered username
+        if (keepLoggedIn) {
+          await AsyncStorage.setItem(
+            "keepLoginCreds",
+            JSON.stringify({ savedName: cleanUsername, savedPass: password })
+          );
+        } else {
+          await AsyncStorage.removeItem("keepLoginCreds");
+        }
         if (remember) {
           await AsyncStorage.setItem("rememberedUserName", cleanUsername);
         } else {

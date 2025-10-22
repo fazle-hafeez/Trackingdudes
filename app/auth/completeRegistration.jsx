@@ -21,7 +21,6 @@ const CompleteRegistration = () => {
     modalType,
     setGlobalLoading,
     globalLoading,
-    login
   } = useAuth();
   const [username, setUsername] = useState("");
   const [usernameError, setUsernameError] = useState("");
@@ -29,8 +28,11 @@ const CompleteRegistration = () => {
   const [passError, setPassError] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [confirmPassError, setConfirmPassError] = useState("");
+  //Register the user
   const handleRegister = async () => {
     let hasError = false;
+
+    // Validation
     if (!username.trim()) {
       setUsernameError("Field is required");
       hasError = true;
@@ -38,29 +40,34 @@ const CompleteRegistration = () => {
     if (!password.trim()) {
       setPassError("Field is required");
       hasError = true;
-    }
-     if (password.trim().length < 8) {
-      setPassError("Password must be at least 8 characters long.", "error");
+    } else if (password.trim().length < 8) {
+      setPassError("Password must be at least 8 characters long.");
       hasError = true;
-    }
-    else if (!password.trim().match("^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]{8,}$")) {
-      showModal("Password must include at least one uppercase letter, one lowercase letter, one digit, and one special character (e.g., @, $, !, %).", "error");
+    } else if (
+      !password.trim().match(
+        /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&]).{8,}$/
+      )
+    ) {
+      showModal(
+        "Password must include at least one uppercase letter, one lowercase letter, one digit, and one special character (e.g., @, $, !, %).",
+        "error"
+      );
       hasError = true;
     } else {
       setPassError("");
-      hasError = false;
     }
+
     if (!confirmPassword.trim()) {
       setConfirmPassError("Field is required");
       hasError = true;
-    }
-    if (password && confirmPassword && password !== confirmPassword) {
-      setConfirmPassError("Password and Confirm Password doesn't match");
+    } else if (password !== confirmPassword) {
+      setConfirmPassError("Password and Confirm Password don't match");
       hasError = true;
     }
 
     if (hasError) return;
-    setGlobalLoading(true)
+    setGlobalLoading(true);
+
     try {
       const cleanUsername = username.trim().replace(/\s+/g, "");
       const result = await post(
@@ -70,44 +77,36 @@ const CompleteRegistration = () => {
           password: password.trim(),
           confirm_password: confirmPassword.trim(),
         },
-        true // use token
+       { useBearerAuth:true} // use token
       );
-
+   console.log("complete registration result :", result);
+   
       if (result.status === "success") {
-        await login(
-          { username },
-          result?.tokens ?? null,
-          { remember: false, keepLoggedIn: false }
-        );
-
-        setTimeout(() => {
-          showModal(result?.data || "User created successfully!", "success");
-        }, 0);
+        showModal(result.data || "User created successfully!", "success");
         setTimeout(() => {
           hideModal();
-          router.push("/auth/login");
+          router.push({
+            pathname:"/auth/login",
+            params:{userName:cleanUsername}
+          });
         }, 3000);
-      } else if (result.restart === true) {
-        setTimeout(() => {
-          showModal(result?.data || "Please log in again.", "error");
-        }, 0);
-        setTimeout(() => {
-          setModalVisibility(false);
-          router.push("/auth/login");
-        }, 2000);
-      } else {
-        setTimeout(() => {
-          showModal(result?.data || "Something went wrong. Please try again later.", "error")
 
-        }, 0);
+      } else if (result.restart === true) {
+        showModal(result?.data || "Please log in again.", "error");
+        setTimeout(() => router.push("/auth/login"), 2000);
+      } else {
+        showModal(
+          result?.data || "Something went wrong. Please try again later.",
+          "error"
+        );
       }
     } catch (error) {
-      showModal(error.error || "Network error occurred.");
-
-    }finally{
-      setGlobalLoading(false)
+      showModal(error?.error || "Network error occurred.", "error");
+    } finally {
+      setGlobalLoading(false);
     }
   };
+
 
   return (
     <SafeAreaView className="flex-1 bg-white">

@@ -5,7 +5,7 @@ import { AuthProvider, AuthContext } from "../src/context/AuthContexts";
 import "../global.css";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 function RootLayoutContent() {
-  const { user, loading } = useContext(AuthContext);
+  const { tokens, loading } = useContext(AuthContext);
 
   if (loading) {
     return (
@@ -18,7 +18,7 @@ function RootLayoutContent() {
   //  Show different stacks depending on auth state
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      {user ? (
+      {tokens ? (
         // When logged in → go to dashboard layout
         <Stack.Screen name="dashboard" />
       ) : (
