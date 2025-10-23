@@ -11,8 +11,8 @@ import { useApi } from "../../src/hooks/useApi";
 import { useAuth } from "../../src/context/UseAuth";
 
 const AddingProject = () => {
-    const { post,get} = useApi();
-      const {showModal, hideModal, modalVisibel,modalMessage, modalType,setGlobalLoading,globalLoading,} = useAuth();
+  const { post, get } = useApi();
+  const { showModal, hideModal, modalVisible, modalMessage, modalType, setGlobalLoading, globalLoading, } = useAuth();
   const [inShift, setInShift] = useState(true);
   const [shiftInput, setShiftInput] = useState("In Shift");
   const [inTrips, setInTrips] = useState(true);
@@ -22,40 +22,90 @@ const AddingProject = () => {
   const [inExpenses, setInExpenses] = useState(true);
   const [inExpensesInput, setInExpensesInput] = useState("In Expenses");
   const [projectName, setProjectName] = useState("");
+  const [debouncedName, setDebouncedName] = useState("");
   const [modalVisiblity, setModalVisible] = useState(false);
   const [textArea, setTextArea] = useState("");
-   const [message, setMessage] = useState("");
-   const [messageStatus,setmessStatus] = useState(false)
-//   GET /apis/my-projects/check-project-availability?project=Weekly%20Reports
-// Authorization: Bearer <access_token>
- const handleChange = async (text) => {
-    setProjectName(text);
+  const [message, setMessage] = useState("");
+  const [messageStatus, setmessStatus] = useState(false)
+  //   GET /apis/my-projects/check-project-availability?project=Weekly%20Reports
+  // Authorization: Bearer <access_token>
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedName(projectName.trim());
+    }, 600); // wait 600ms after typing stops
+    return () => clearTimeout(timer);
+  }, [projectName]);
 
-    if (text.trim() === "") {
-      setMessage("");
-      return;
-    }
-
-    try {
-      const res = await get(
-        `/my-projects/check-project-availability?project=${encodeURIComponent(text)}`,
-        { useBearerAuth:true}
-      );
-  console.log(res);
-      if (res?.status === "success") {
-        setMessage( res.data||" Available");
-        setmessStatus(false)
-      } else {
-        setMessage( res.data ||"Already exists");
-        setmessStatus(true)
+  useEffect(() => {
+    const checkAvailability = async () => {
+      if (!debouncedName) {
+        setMessage("");
+        return;
       }
-    } catch (err) {
-      console.log(err);
-      setMessage("Error checking name");
-      setMessage(true)
-    }
-  };
+      setMessage("Checking...");
+      try {
+        const res = await get(
+          `/my-projects/check-project-availability?project=${encodeURIComponent(debouncedName)}`,
+          { useBearerAuth: true }
+        );
+        if (res?.status === "success") {
+          setMessage(res.data || "Available");
+          setmessStatus(false);
+        } else {
+          setMessage(res.data || "Already exists");
+          setmessStatus(true);
+        }
+      } catch (err) {
+        setMessage("Error checking name");
+        setmessStatus(true);
+      }
+    };
 
+    checkAvailability();
+  }, [debouncedName]);
+
+  const handleCreateProject = async () => {
+    let hasError = false;
+    if (!projectName.trim()) {
+      setMessage("Field is required")
+      setmessStatus(true)
+      hasError = true
+      return
+    }
+
+    if (hasError) return;
+    setGlobalLoading(true)
+    try {
+      const payload = {
+        project: projectName,
+        show_in_trips: inTrips,
+        show_in_shifts: inShift,
+        show_in_times: inTimes,
+        show_in_expenses: inExpenses,
+        suggestions: textArea
+      }
+      const result = await post(
+        "/my-projects/create-project/",
+        payload,
+        { useBearerAuth: true }
+      );
+      console.log(result);
+      if (result.status === "success") {
+        showModal(result.data || "Project created successfully!", "success")
+        setProjectName("")
+        setTextArea("")
+
+      }
+      else {
+        showModal(result.data || "You have already used the project name before. Please, try another name... ", "error")
+        setProjectName("")
+      }
+    } catch (error) {
+      showModal(error.error || " A server error accoured plz try again ", "error")
+    } finally {
+      setGlobalLoading(false)
+    }
+  }
   return (
     <SafeAreaView className="flex-1">
       <PageHeader routes="Add Project" />
@@ -68,17 +118,17 @@ const AddingProject = () => {
           </View>
 
           <TextInput
-            className="rounded-lg border border-gray-400 my-2 px-3 py-3 text-lg"
+            className="rounded-lg border border-gray-400 mt-2 px-3 py-3 text-lg"
             placeholder="Project name for easy reference"
             value={projectName}
-            onChangeText={handleChange}
+            onChangeText={setProjectName}
           />
           {message ? (
-        <Text className={`${messageStatus ? 'text-red-500' :'text-green-500'}`}>{message}</Text>
-      ) : null}
+            <Text className={`mt-1 ${messageStatus ? "text-red-500" : "text-green-500"}`}>{message}</Text>
+          ) : null}
 
           {/* Suggest Section */}
-          <View className="flex-row items-center my-3 px-2">
+          <View className="flex-row items-center my-3 px-2 mt-4">
             <FontAwesome name="lightbulb-o" size={26} color="black" />
             <Text className="text-xl ml-2 font-medium pt-1">
               Where to suggest this project
@@ -140,13 +190,13 @@ const AddingProject = () => {
             />
           </View>
 
-          <Button title="Save" onClickEvent={() => console.log("Save clicked")} />
+          <Button title="Save" onClickEvent={handleCreateProject} />
         </View>
 
         <Text className="p-3 text-lg leading-6">
-            Saving a project allows you to select it from the list of saved projects. 
-            This is useful in tracking shifts, trips, 
-            time, as well as fuel consumption or other expenses.</Text>
+          Saving a project allows you to select it from the list of saved projects.
+          This is useful in tracking shifts, trips,
+          time, as well as fuel consumption or other expenses.</Text>
       </View>
 
       <InfoModal
@@ -154,6 +204,14 @@ const AddingProject = () => {
         onClose={() => setModalVisible(false)}
         message="This input allows you to save commonly used words or phrases for project notes. Each word or phrase should be separated by the | character."
       />
+
+      <ModalComponent
+        visible={modalVisible}
+        onClose={hideModal}
+        message={modalMessage}
+        errorType={modalType}
+      />
+      <LoadingComponent visible={globalLoading} />
     </SafeAreaView>
   );
 };
@@ -178,7 +236,7 @@ const LabeledInput = ({ checkVal, setCheckVal, inputValue, setInputVal }) => {
         className="border border-gray-400 rounded-lg pl-5 pr-3 py-2 text-base flex-1"
         value={inputValue}
         onChangeText={setInputVal}
-        editable={false} 
+        editable={false}
       />
     </View>
   );

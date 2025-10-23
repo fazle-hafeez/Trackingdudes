@@ -1,19 +1,17 @@
 import React, { createContext, useState, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { router } from "expo-router";
 
 export const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [tokens, setTokens] = useState(null); //  store both access & refresh
+  const [tokens, setTokens] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  //  Modal state
   const [modalVisible, setModalVisible] = useState(false);
   const [modalMessage, setModalMessage] = useState("");
   const [modalType, setModalType] = useState("info");
-
-  //  Global loading
   const [globalLoading, setGlobalLoading] = useState(false);
 
   //  Load stored session on app start
@@ -29,7 +27,7 @@ export const AuthProvider = ({ children }) => {
           setTokens(JSON.parse(storedTokens));
         }
       } catch (err) {
-        console.warn("Error loading stored session:", err);
+        console.warn("Error loading session:", err);
       } finally {
         setLoading(false);
       }
@@ -37,29 +35,27 @@ export const AuthProvider = ({ children }) => {
     loadSession();
   }, []);
 
-  // 🔹 Login handler (after API success)
+  //  Login — save user + tokens
   const login = async (userData, tokenResponse, { remember, keepLoggedIn }) => {
     if (!tokenResponse) return;
 
     const newTokens = {
       access: tokenResponse?.access,
-      refreshToken: tokenResponse?.refresh,
-      accessExpires: tokenResponse?.accessExpires,
-      refreshExpires: tokenResponse?.refreshExpires,
-      issuedAt:tokenResponse?.issuedAt
+      refresh: tokenResponse?.refresh,
+      accessExpires: tokenResponse?.accessExpires * 1000,
+      refreshExpires: tokenResponse?.refreshExpires * 1000,
+      issuedAt: tokenResponse?.issuedAt ? tokenResponse.issuedAt * 1000 : Date.now(),
     };
 
     setUser(userData || null);
     setTokens(newTokens);
 
-    // Store in AsyncStorage
     await AsyncStorage.multiSet([
       ["user", JSON.stringify(userData)],
       ["tokens", JSON.stringify(newTokens)],
       ["keepLoggedIn", keepLoggedIn ? "true" : "false"],
     ]);
 
-    // Remember username (optional)
     if (remember && userData?.username) {
       await AsyncStorage.setItem("rememberedUserName", userData.username);
     } else {
@@ -67,8 +63,9 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  //  Logout
+  //  Logout — clear everything and go to login screen
   const logout = async () => {
+    console.log(" User logged out");
     setUser(null);
     setTokens(null);
     await AsyncStorage.multiRemove([
@@ -77,30 +74,26 @@ export const AuthProvider = ({ children }) => {
       "keepLoggedIn",
       "rememberedUserName",
     ]);
+    router.replace("/auth/login");
   };
 
-  //  Show modal
+  //  Modal helpers
   const showModal = (message, type = "success") => {
     setModalMessage(message);
     setModalType(type);
     setModalVisible(true);
   };
-
-  //  Hide modal
-  const hideModal = () => {
-    setModalVisible(false);
-    setModalMessage("");
-  };
+  const hideModal = () => setModalVisible(false);
 
   //  Auto-hide success modals
   useEffect(() => {
     if (modalVisible && modalType === "success") {
-      const timer = setTimeout(() => hideModal(), 2000);
+      const timer = setTimeout(() => hideModal(), 2500);
       return () => clearTimeout(timer);
     }
   }, [modalVisible, modalType]);
 
-  //  Expose everything to context consumers
+
   return (
     <AuthContext.Provider
       value={{
