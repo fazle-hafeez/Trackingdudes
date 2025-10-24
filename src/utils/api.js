@@ -4,19 +4,18 @@ import { router } from "expo-router";
 
 const BASE_URL = "https://trackingdudes.com/apis";
 let isRefreshing = false;
-const TRAILING_SLASH = "/";
 
 /**
- * Join base URL + endpoint safely
+ * Join base URL + endpoint safely, ensuring trailing slash
  */
 const joinUrl = (endpoint) => {
   if (!endpoint.startsWith("/")) endpoint = "/" + endpoint;
-  if (!endpoint.endsWith("/")) endpoint += TRAILING_SLASH;
+  if (!endpoint.endsWith("/")) endpoint += "/";
   return `${BASE_URL}${endpoint}`;
 };
 
 /**
- * Check if token timestamp (in seconds) is expired
+ * Check if token (in seconds) is expired
  */
 const isExpired = (timestamp) => {
   if (!timestamp) return true;
@@ -24,16 +23,26 @@ const isExpired = (timestamp) => {
 };
 
 /**
- * Logout user and clear tokens
+ * TokenError: used as a signal for centralized logout handling
+ */
+class TokenError extends Error {
+  constructor(message = "Session expired") {
+    super(message);
+    this.name = "TokenError";
+  }
+}
+
+/**
+ * Secure logout: removes only token data
  */
 const handleLogout = async () => {
-  console.warn("Logging out user — tokens invalid or expired");
-  await AsyncStorage.multiRemove(["tokens", "user", "keepLoggedIn"]);
+  console.warn("Logging out — token invalid or expired");
+  await AsyncStorage.removeItem("tokens");
   router.replace("/auth/login");
 };
 
 /**
- * Refresh tokens using refresh token
+ * Refresh tokens; throws TokenError if refresh fails
  */
 const refreshTokens = async () => {
   if (isRefreshing) return null;
@@ -41,25 +50,18 @@ const refreshTokens = async () => {
 
   try {
     const stored = await AsyncStorage.getItem("tokens");
-    const keepLoggedIn = (await AsyncStorage.getItem("keepLoggedIn")) === "true";
+    if (!stored) throw new TokenError();
 
-    if (!stored) return null;
     const tokens = JSON.parse(stored);
-
-    // Validate refresh token
+    const keepLoggedIn = (await AsyncStorage.getItem("keepLoggedIn")) === "true";
     const now = Math.floor(Date.now() / 1000);
-    if (
-      !tokens.refresh ||
-      isExpired(tokens.refreshExpires) ||
-      now < tokens.issuedAt
-    ) {
-      console.warn("Refresh token expired or invalid → logout");
-      await handleLogout();
-      return null;
+
+    if (!tokens.refresh || isExpired(tokens.refreshExpires) || now < tokens.issuedAt) {
+      throw new TokenError("Refresh token expired or invalid");
     }
 
-    console.log("Refreshing tokens via /tokens/refresh/...");
-    const res = await fetch(`${BASE_URL}/tokens/refresh/`, {
+    console.log("Refreshing tokens...");
+    const res = await fetch(joinUrl("tokens/refresh"), {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
@@ -68,11 +70,7 @@ const refreshTokens = async () => {
       body: JSON.stringify({ keep_logged_in: keepLoggedIn }),
     });
 
-    if (!res.ok) {
-      console.warn("Refresh failed:", res.status);
-      await handleLogout();
-      return null;
-    }
+    if (!res.ok) throw new TokenError(`Refresh failed (${res.status})`);
 
     const data = await res.json();
     if (data?.status === "success" && data?.tokens) {
@@ -86,24 +84,22 @@ const refreshTokens = async () => {
       };
 
       await AsyncStorage.setItem("tokens", JSON.stringify(newTokens));
-      console.log(" Tokens successfully refreshed");
+      console.log("✅ Tokens refreshed successfully");
       return newTokens.access;
     }
 
-    console.warn("Unexpected refresh response:", data);
-    await handleLogout();
-    return null;
+    throw new TokenError("Unexpected token refresh response");
   } catch (err) {
-    console.error("Refresh error:", err);
-    await handleLogout();
-    return null;
+    if (err instanceof TokenError) throw err;
+    console.error("Token refresh error:", err);
+    throw new TokenError("Unable to refresh tokens");
   } finally {
     isRefreshing = false;
   }
 };
 
 /**
- * Core API function
+ * Unified API request handler
  */
 export const apiRequest = async (
   endpoint,
@@ -118,71 +114,65 @@ export const apiRequest = async (
 
   if (!isFormData) headers["Content-Type"] = "application/json";
 
-  // --- BASIC AUTH (Login only) ---
-  const isLoginEndpoint = endpoint.includes("/tokens/new/");
-  const isRefreshEndpoint = endpoint.includes("/tokens/refresh/");
-
-  if ((options.useBasicAuth || isLoginEndpoint) && body?.username && body?.password) {
-    const credentials = `${body.username}:${body.password}`;
-    const encoded = Base64.encode(credentials);
-    headers["Authorization"] = `Basic ${encoded}`;
-  } else if ((options.useBasicAuth || isLoginEndpoint) && (!body?.username || !body?.password)) {
-    return { error: "FieldRequired", message: "Username and password are required!" };
-  }
-
-  // --- BEARER AUTH (Protected routes) ---
-  else if (useAuth && !isLoginEndpoint && !isRefreshEndpoint) {
-    const stored = await AsyncStorage.getItem("tokens");
-    if (!stored) {
-      await handleLogout();
-      return { error: "SessionExpired", message: "Please login again" };
-    }
-
-    const tokens = JSON.parse(stored);
-    if (!tokens.access || isExpired(tokens.accessExpires)) {
-      console.log("Access token expired → attempting refresh...");
-      const newAccess = await refreshTokens();
-      if (!newAccess) {
-        return { error: "SessionExpired", message: "Please login again" };
-      }
-      headers["Authorization"] = `Bearer ${newAccess}`;
-    } else {
-      headers["Authorization"] = `Bearer ${tokens.access}`;
-    }
-  }
-
-  const requestOptions = {
-    method,
-    headers,
-    body: body ? (isFormData ? body : JSON.stringify(body)) : undefined,
-  };
+  const isLogin = endpoint.includes("tokens/new/");
+  const isRefresh = endpoint.includes("tokens/refresh/");
 
   try {
-    let response = await fetch(url, requestOptions);
+    // BASIC AUTH (for login)
+    if ((options.useBasicAuth || isLogin) && body?.username && body?.password) {
+      const credentials = `${body.username}:${body.password}`;
+      headers["Authorization"] = `Basic ${Base64.encode(credentials)}`;
+    } else if ((options.useBasicAuth || isLogin) && (!body?.username || !body?.password)) {
+      return { error: "FieldRequired", message: "Username and password required" };
+    }
 
-    // Retry once on 401 if token refresh works
-    if (response.status === 401 && useAuth) {
-      console.warn("401 detected → retrying after refresh...");
-      const newAccess = await refreshTokens();
-      if (newAccess) {
+    // BEARER AUTH (for protected endpoints)
+    else if (useAuth && !isLogin && !isRefresh) {
+      const stored = await AsyncStorage.getItem("tokens");
+      if (!stored) throw new TokenError();
+
+      const tokens = JSON.parse(stored);
+      if (!tokens.access || isExpired(tokens.accessExpires)) {
+        const newAccess = await refreshTokens();
+        if (!newAccess) throw new TokenError("Refresh failed");
         headers["Authorization"] = `Bearer ${newAccess}`;
-        response = await fetch(url, { ...requestOptions, headers });
       } else {
-        await handleLogout();
-        return { error: "SessionExpired", message: "Please login again" };
+        headers["Authorization"] = `Bearer ${tokens.access}`;
       }
     }
 
-    const text = await response.text();
+    const config = {
+      method,
+      headers,
+      body: body ? (isFormData ? body : JSON.stringify(body)) : undefined,
+    };
+
+    let res = await fetch(url, config);
+
+    // Retry once if unauthorized
+    if (res.status === 401 && useAuth) {
+      console.warn("401 detected — retrying after token refresh");
+      const newAccess = await refreshTokens();
+      if (!newAccess) throw new TokenError();
+      headers["Authorization"] = `Bearer ${newAccess}`;
+      res = await fetch(url, { ...config, headers });
+    }
+
+    const text = await res.text();
     let data;
     try {
       data = text ? JSON.parse(text) : null;
     } catch {
-      data = text;
+      data = text; // fallback for non-JSON response
     }
 
     return data;
   } catch (err) {
+    if (err instanceof TokenError) {
+      await handleLogout(); // single centralized logout
+      return { error: "SessionExpired", message: "Please login again" };
+    }
+
     console.error("Network/API error:", err);
     return {
       status: "error",
@@ -193,7 +183,7 @@ export const apiRequest = async (
 };
 
 /**
- * Helper shortcuts
+ * API Shorthand Methods
  */
 export const apiGet = (endpoint, useAuth = false) =>
   apiRequest(endpoint, "GET", null, useAuth);
