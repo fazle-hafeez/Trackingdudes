@@ -86,7 +86,7 @@ const refreshTokens = async () => {
       };
 
       await AsyncStorage.setItem("tokens", JSON.stringify(newTokens));
-      console.log("✅ Tokens successfully refreshed");
+      console.log(" Tokens successfully refreshed");
       return newTokens.access;
     }
 
