@@ -4,18 +4,27 @@ import { router } from "expo-router";
 
 const BASE_URL = "https://trackingdudes.com/apis";
 let isRefreshing = false;
+const TRAILING_SLASH = "/";
 
 /**
- * Check if token timestamp is expired (with small buffer)
+ * Join base URL + endpoint safely
  */
-const isExpired = (timestamp) => {
-  if (!timestamp) return true;
-  const time = timestamp > 9999999999 ? timestamp : timestamp * 1000;
-  return Date.now() >= time - 5000; // 5 seconds buffer
+const joinUrl = (endpoint) => {
+  if (!endpoint.startsWith("/")) endpoint = "/" + endpoint;
+  if (!endpoint.endsWith("/")) endpoint += TRAILING_SLASH;
+  return `${BASE_URL}${endpoint}`;
 };
 
 /**
- * Handle logout and clear all tokens
+ * Check if token timestamp (in seconds) is expired
+ */
+const isExpired = (timestamp) => {
+  if (!timestamp) return true;
+  return Math.floor(Date.now() / 1000) >= timestamp - 5; // 5s buffer
+};
+
+/**
+ * Logout user and clear tokens
  */
 const handleLogout = async () => {
   console.warn("Logging out user — tokens invalid or expired");
@@ -37,8 +46,14 @@ const refreshTokens = async () => {
     if (!stored) return null;
     const tokens = JSON.parse(stored);
 
-    if (!tokens.refresh || isExpired(tokens.refreshExpires)) {
-      console.warn("Refresh token expired → logout");
+    // Validate refresh token
+    const now = Math.floor(Date.now() / 1000);
+    if (
+      !tokens.refresh ||
+      isExpired(tokens.refreshExpires) ||
+      now < tokens.issuedAt
+    ) {
+      console.warn("Refresh token expired or invalid → logout");
       await handleLogout();
       return null;
     }
@@ -60,19 +75,18 @@ const refreshTokens = async () => {
     }
 
     const data = await res.json();
-
     if (data?.status === "success" && data?.tokens) {
       const t = data.tokens;
       const newTokens = {
         access: t.access,
         refresh: t.refresh,
-        accessExpires: t.accessExpires * 1000,
-        refreshExpires: t.refreshExpires * 1000,
-        issuedAt: t.issuedAt ? t.issuedAt * 1000 : Date.now(),
+        accessExpires: t.accessExpires,
+        refreshExpires: t.refreshExpires,
+        issuedAt: t.issuedAt || Math.floor(Date.now() / 1000),
       };
 
       await AsyncStorage.setItem("tokens", JSON.stringify(newTokens));
-      console.log(" Tokens successfully refreshed");
+      console.log("✅ Tokens successfully refreshed");
       return newTokens.access;
     }
 
@@ -99,22 +113,25 @@ export const apiRequest = async (
   isFormData = false,
   options = {}
 ) => {
-  const url = `${BASE_URL}${endpoint}`;
+  const url = joinUrl(endpoint);
   const headers = {};
 
   if (!isFormData) headers["Content-Type"] = "application/json";
 
-  const isLogin = endpoint.includes("/tokens/new/");
-  const isRefresh = endpoint.includes("/tokens/refresh/");
+  // --- BASIC AUTH (Login only) ---
+  const isLoginEndpoint = endpoint.includes("/tokens/new/");
+  const isRefreshEndpoint = endpoint.includes("/tokens/refresh/");
 
-  //  Basic Auth for login only
-  if (isLogin && body?.username && body?.password) {
-    const encoded = Base64.encode(`${body.username}:${body.password}`);
+  if ((options.useBasicAuth || isLoginEndpoint) && body?.username && body?.password) {
+    const credentials = `${body.username}:${body.password}`;
+    const encoded = Base64.encode(credentials);
     headers["Authorization"] = `Basic ${encoded}`;
+  } else if ((options.useBasicAuth || isLoginEndpoint) && (!body?.username || !body?.password)) {
+    return { error: "FieldRequired", message: "Username and password are required!" };
   }
 
-  //  Bearer Auth for all protected endpoints
-  else if (useAuth || isRefresh) {
+  // --- BEARER AUTH (Protected routes) ---
+  else if (useAuth && !isLoginEndpoint && !isRefreshEndpoint) {
     const stored = await AsyncStorage.getItem("tokens");
     if (!stored) {
       await handleLogout();
@@ -122,7 +139,6 @@ export const apiRequest = async (
     }
 
     const tokens = JSON.parse(stored);
-
     if (!tokens.access || isExpired(tokens.accessExpires)) {
       console.log("Access token expired → attempting refresh...");
       const newAccess = await refreshTokens();
@@ -144,8 +160,8 @@ export const apiRequest = async (
   try {
     let response = await fetch(url, requestOptions);
 
-    // Handle expired access retry (401) once
-    if (response.status === 401 && (useAuth || isRefresh)) {
+    // Retry once on 401 if token refresh works
+    if (response.status === 401 && useAuth) {
       console.warn("401 detected → retrying after refresh...");
       const newAccess = await refreshTokens();
       if (newAccess) {

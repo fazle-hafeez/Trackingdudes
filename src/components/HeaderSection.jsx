@@ -20,7 +20,7 @@ const getRandomImage = () => {
     return images[randomIndex];
 };
 
-const HeroSection = () => {
+const HeaderSection = () => {
     const [randomImage] = useState(getRandomImage);
 
     return (
@@ -38,4 +38,4 @@ const HeroSection = () => {
     );
 };
 
-export default HeroSection;
+export default HeaderSection;

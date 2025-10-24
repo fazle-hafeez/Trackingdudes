@@ -2,7 +2,7 @@ import { Link, useLocalSearchParams, useRouter } from "expo-router";
 import React, { useState, useEffect } from "react";
 import { View, Text, TextInput, TouchableOpacity, StatusBar, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import HeroSection from "../../src/components/HeroSection";
+import HeaderSection from "../../src/components/HeaderSection";
 import Button from "../../src/components/Button";
 import LoadingComponent from "../../src/components/LoadingComponent";
 import ModalComponent from "../../src/components/ModalComponent";
@@ -210,7 +210,7 @@ const EmailVerification = () => {
   return (
     <SafeAreaView className="flex-1 bg-white">
       <StatusBar barStyle="light-content" backgroundColor="#0000ff" />
-      <HeroSection />
+      <HeaderSection />
 
       <View className="p-4 mx-auto bg-white">
         <View

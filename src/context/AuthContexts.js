@@ -8,21 +8,24 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [tokens, setTokens] = useState(null);
   const [loading, setLoading] = useState(true);
-
+  const [keepLoggedIn, setKeepLoggedIn] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [modalMessage, setModalMessage] = useState("");
   const [modalType, setModalType] = useState("info");
   const [globalLoading, setGlobalLoading] = useState(false);
 
-  //  Load stored session on app start
+  //  Load stored session when app starts
   useEffect(() => {
     const loadSession = async () => {
       try {
         const storedUser = await AsyncStorage.getItem("user");
         const storedTokens = await AsyncStorage.getItem("tokens");
-        const keepLoggedIn = await AsyncStorage.getItem("keepLoggedIn");
+        const storedKeep = await AsyncStorage.getItem("keepLoggedIn");
 
-        if (storedUser && storedTokens && keepLoggedIn === "true") {
+        setKeepLoggedIn(storedKeep === "true");
+
+        //  Always restore session if tokens exist (until expired)
+        if (storedUser && storedTokens) {
           setUser(JSON.parse(storedUser));
           setTokens(JSON.parse(storedTokens));
         }
@@ -35,20 +38,21 @@ export const AuthProvider = ({ children }) => {
     loadSession();
   }, []);
 
-  //  Login — save user + tokens
+  //  Login handler
   const login = async (userData, tokenResponse, { remember, keepLoggedIn }) => {
     if (!tokenResponse) return;
 
     const newTokens = {
       access: tokenResponse?.access,
       refresh: tokenResponse?.refresh,
-      accessExpires: tokenResponse?.accessExpires * 1000,
-      refreshExpires: tokenResponse?.refreshExpires * 1000,
-      issuedAt: tokenResponse?.issuedAt ? tokenResponse.issuedAt * 1000 : Date.now(),
+      accessExpires: tokenResponse?.accessExpires,
+      refreshExpires: tokenResponse?.refreshExpires,
+      issuedAt: tokenResponse.issuedAt || Math.floor(Date.now() / 1000),
     };
 
     setUser(userData || null);
     setTokens(newTokens);
+    setKeepLoggedIn(keepLoggedIn);
 
     await AsyncStorage.multiSet([
       ["user", JSON.stringify(userData)],
@@ -56,6 +60,7 @@ export const AuthProvider = ({ children }) => {
       ["keepLoggedIn", keepLoggedIn ? "true" : "false"],
     ]);
 
+    // Optional: remember username
     if (remember && userData?.username) {
       await AsyncStorage.setItem("rememberedUserName", userData.username);
     } else {
@@ -63,17 +68,20 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  //  Logout — clear everything and go to login screen
+  //  Logout handler
   const logout = async () => {
-    console.log(" User logged out");
+    console.log("👋 User logged out");
     setUser(null);
     setTokens(null);
+    setKeepLoggedIn(false);
+
     await AsyncStorage.multiRemove([
       "user",
       "tokens",
       "keepLoggedIn",
       "rememberedUserName",
     ]);
+
     router.replace("/auth/login");
   };
 
@@ -85,14 +93,13 @@ export const AuthProvider = ({ children }) => {
   };
   const hideModal = () => setModalVisible(false);
 
-  //  Auto-hide success modals
+  //  Auto-hide success messages
   useEffect(() => {
     if (modalVisible && modalType === "success") {
       const timer = setTimeout(() => hideModal(), 2500);
       return () => clearTimeout(timer);
     }
   }, [modalVisible, modalType]);
-
 
   return (
     <AuthContext.Provider
@@ -102,6 +109,7 @@ export const AuthProvider = ({ children }) => {
         login,
         logout,
         loading,
+        keepLoggedIn,
         showModal,
         hideModal,
         modalVisible,

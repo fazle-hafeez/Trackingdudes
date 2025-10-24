@@ -27,8 +27,6 @@ const AddingProject = () => {
   const [textArea, setTextArea] = useState("");
   const [message, setMessage] = useState("");
   const [messageStatus, setmessStatus] = useState(false)
-  //   GET /apis/my-projects/check-project-availability?project=Weekly%20Reports
-  // Authorization: Bearer <access_token>
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedName(projectName.trim());
@@ -45,9 +43,9 @@ const AddingProject = () => {
       setMessage("Checking...");
       try {
         const res = await get(
-          `/my-projects/check-project-availability?project=${encodeURIComponent(debouncedName)}`,
+          `my-projects/check-project-availability?project=${encodeURIComponent(debouncedName)}`,
           { useBearerAuth: true }
-        );
+        );    
         if (res?.status === "success") {
           setMessage(res.data || "Available");
           setmessStatus(false);
@@ -82,7 +80,8 @@ const AddingProject = () => {
         show_in_shifts: inShift,
         show_in_times: inTimes,
         show_in_expenses: inExpenses,
-        suggestions: textArea
+        suggestions: textArea,
+        status:'enabled'
       }
       const result = await post(
         "/my-projects/create-project/",

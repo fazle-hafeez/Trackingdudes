@@ -4,7 +4,7 @@ import Checkbox from "expo-checkbox";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Link, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import HeroSection from "../../src/components/HeroSection";
+import HeaderSection from "../../src/components/HeaderSection";
 import Button from "../../src/components/Button";
 import ModalComponent from "../../src/components/ModalComponent";
 import LoadingComponent from "../../src/components/LoadingComponent";
@@ -82,7 +82,7 @@ const Login = () => {
       };
 
       const result = await post(
-        "/tokens/new/",
+        "tokens/new/",
         payload,
         false,
         false,
@@ -143,7 +143,7 @@ const Login = () => {
   return (
     <SafeAreaView className="flex-1 bg-white">
       <StatusBar barStyle="light-content" backgroundColor="#0000ff" />
-      <HeroSection />
+      <HeaderSection />
 
       <View className="flex-1 p-4">
         <View

@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { View, Text, TextInput, StatusBar, Platform } from "react-native";
-import HeroSection from "../../src/components/HeroSection";
+import HeaderSection from "../../src/components/HeaderSection";
 import Button from "../../src/components/Button";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -28,7 +28,7 @@ const ChangePasswordPage = () => {
     return (
         <SafeAreaView className="flex-1 ">
             <StatusBar barStyle="light-content" backgroundColor="#0000ff" />
-            <HeroSection />
+            <HeaderSection />
             <View className=" flex-1 p-4 ">
                 <View className={`bg-[rgba(255,255,255,0.9)] rounded-xl p-6 ${Platform.OS === "ios" ? " shadow-sm" : ''
                     }`}

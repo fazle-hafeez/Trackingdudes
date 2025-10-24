@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import {View,Text,TextInput,StatusBar,TouchableOpacity,Platform} from "react-native";
 import { Link, useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import HeroSection from "../../src/components/HeroSection";
+import HeaderSection from "../../src/components/HeaderSection";
 import Button from "../../src/components/Button";
 import ModalComponent from "../../src/components/ModalComponent";
 import LoadingComponent from "../../src/components/LoadingComponent";
@@ -107,7 +107,7 @@ const SignUp = () => {
   return (
     <SafeAreaView className="flex-1 bg-white">
       <StatusBar barStyle="light-content" backgroundColor="#0000ff" />
-      <HeroSection />
+      <HeaderSection />
 
       <View className="h-full mx-auto p-4 w-full">
         <View
