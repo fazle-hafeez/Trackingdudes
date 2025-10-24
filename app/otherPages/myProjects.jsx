@@ -16,6 +16,9 @@ const MyProjects = () => {
   const [projects, setProjects] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(false);
+  const [selectionMode, setSelectionMode] = useState(false); // when user taps a card
+  const [selectedProjects, setSelectedProjects] = useState([]); // selected project IDs
+  const [selectAll, setSelectAll] = useState(false);
   const router = useRouter();
 
   // Fetch projects
@@ -23,10 +26,7 @@ const MyProjects = () => {
     try {
       setLoading(true);
       const result = await get(`my-projects/`, { useBearerAuth: true });
-      console.log(result);
-
       if (result?.status === "success") {
-        // Convert "1"/"0" to booleans for checkboxes
         const parsedProjects = result.data.map((p) => ({
           ...p,
           inShift: p.show_in_shifts === "1",
@@ -53,6 +53,29 @@ const MyProjects = () => {
   const filteredProjects = projects.filter((item) =>
     item.project.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const toggleProjectSelect = (id) => {
+    if (selectedProjects.includes(id)) {
+      setSelectedProjects(selectedProjects.filter((pid) => pid !== id));
+    } else {
+      setSelectedProjects([...selectedProjects, id]);
+    }
+  };
+
+  const handleSelectAll = (value) => {
+    setSelectAll(value);
+    if (value) {
+      setSelectedProjects(filteredProjects.map((p) => p.id));
+    } else {
+      setSelectedProjects([]);
+    }
+  };
+
+  const handleCancel = () => {
+    setSelectionMode(false);
+    setSelectedProjects([]);
+    setSelectAll(false);
+  };
 
   return (
     <SafeAreaView className="flex-1 bg-gray-100">
@@ -81,12 +104,16 @@ const MyProjects = () => {
           {tabs.map((tab) => (
             <TouchableOpacity
               key={tab}
-              onPress={() => setActiveTab(tab)}
+              onPress={() => {
+                setActiveTab(tab);
+                handleCancel(); // reset on tab change
+              }}
               className={`pb-1 ${activeTab === tab ? "border-b-2 border-[#007bff]" : ""}`}
             >
               <Text
-                className={`text-lg ${activeTab === tab ? "text-[#007bff]" : "text-gray-600"
-                  }`}
+                className={`text-lg ${
+                  activeTab === tab ? "text-[#007bff]" : "text-gray-600"
+                }`}
               >
                 {tab}
               </Text>
@@ -106,6 +133,18 @@ const MyProjects = () => {
           />
         </View>
 
+        {/* Select All checkbox (top) */}
+        {selectionMode && filteredProjects.length > 0 && (
+          <View className="flex-row items-center mb-3 bg-white rounded-lg shadow-sm p-3">
+            <Checkbox
+              value={selectAll}
+              onValueChange={handleSelectAll}
+              color={selectAll ? "#0550ff" : undefined}
+            />
+            <Text className="ml-2 text-lg font-medium text-gray-800">Select All</Text>
+          </View>
+        )}
+
         {/* List */}
         {loading ? (
           <View className="bg-white rounded-md shadow-md p-5 mt-3">
@@ -115,8 +154,69 @@ const MyProjects = () => {
           <FlatList
             data={filteredProjects}
             keyExtractor={(item) => item.id.toString()}
-            contentContainerStyle={{ paddingBottom: 10 }}
-            renderItem={RenterItems}
+            contentContainerStyle={{ paddingBottom: 40 }}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => {
+                  if (!selectionMode) {
+                    setSelectionMode(true);
+                    setSelectedProjects([item.id]);
+                  } else {
+                    toggleProjectSelect(item.id);
+                  }
+                }}
+              >
+                <View className="bg-white rounded-md shadow-md mb-3">
+                  {/* Project title with checkbox (only visible in selection mode) */}
+                  <View className="flex-row items-center border-b border-yellow-400 py-3 px-4">
+                    {selectionMode && (
+                      <Checkbox
+                        value={selectedProjects.includes(item.id)}
+                        onValueChange={() => toggleProjectSelect(item.id)}
+                        color={
+                          selectedProjects.includes(item.id)
+                            ? "#0550ff"
+                            : undefined
+                        }
+                      />
+                    )}
+                    <Text
+                      className={`${
+                        selectionMode ? "ml-2" : ""
+                      } text-lg font-semibold text-gray-800`}
+                    >
+                      {item.project}
+                    </Text>
+                  </View>
+
+                  {/* Settings sections (unchanged layout) */}
+                  <View className="flex-row my-2 px-3 pt-3">
+                    <View className="flex-row items-center">
+                      <Checkbox value={item.inShift} color={item.inShift ? "#10b981" : ""} />
+                      <Text className="ml-2 text-gray-700">In Shifts</Text>
+                    </View>
+
+                    <View className="flex-row items-center ml-12">
+                      <Checkbox value={item.inTrips} color={item.inTrips ? "#10b981" : ""} />
+                      <Text className="ml-2 text-gray-700">In Trips</Text>
+                    </View>
+                  </View>
+
+                  <View className="flex-row my-2 px-3 pb-3">
+                    <View className="flex-row items-center">
+                      <Checkbox value={item.inTimes} color={item.inTimes ? "#10b981" : ""} />
+                      <Text className="ml-2 text-gray-700">In Time</Text>
+                    </View>
+
+                    <View className="flex-row items-center ml-12 pl-1">
+                      <Checkbox value={item.inExpenses} color={item.inExpenses ? "#10b981" : ""} />
+                      <Text className="ml-2 text-gray-700">In Expenses</Text>
+                    </View>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            )}
           />
         ) : (
           <View className="bg-white rounded-md shadow-md px-4 py-5">
@@ -131,51 +231,28 @@ const MyProjects = () => {
           </View>
         )}
       </View>
+
+      {/* Bottom Action Bar */}
+      {selectionMode && (
+        <View className="absolute bottom-0 left-0 right-0 bg-white shadow-lg flex-row justify-around py-3 border-t border-gray-300">
+          <TouchableOpacity className="items-center">
+            <Ionicons name="create-outline" size={22} color="#007bff" />
+            <Text className="text-[#007bff]">Edit</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity className="items-center">
+            <Ionicons name="trash-outline" size={22} color="#dc2626" />
+            <Text className="text-[#dc2626]">Delete</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity onPress={handleCancel} className="items-center">
+            <Ionicons name="close-circle-outline" size={22} color="#6b7280" />
+            <Text className="text-gray-600">Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </SafeAreaView>
   );
 };
 
-
-
-const RenterItems = ({ item }) => {
-  return (
-    <View className="bg-white rounded-md shadow-md  mb-3 ">
-      {/* Project title with checkbox */}
-      <View className="flex-row items-center  border-b border-yellow-400 py-3 px-4">
-        <Checkbox
-          value={item.status === "a"} // active project
-          color={item.status === "a" ? "#10b981" : "#ffffff"}
-        />
-        <Text className="ml-2 text-lg font-semibold text-gray-800">
-          {item.project}
-        </Text>
-      </View>
-
-      {/* Settings sections */}
-      <View className="flex-row my-2 px-3 pt-3">
-        <View className="flex-row items-center">
-          <Checkbox value={item.inShift} color={item.inShift ? "#10b981" : ""} />
-          <Text className="ml-2 text-gray-700">In Shifts</Text>
-        </View>
-
-        <View className="flex-row items-center ml-12">
-          <Checkbox value={item.inTrips} color={item.inTrips ? "#10b981" : ""} />
-          <Text className="ml-2 text-gray-700">In Trips</Text>
-        </View>
-      </View>
-
-      <View className="flex-row my-2 px-3 pb-3">
-        <View className="flex-row items-center">
-          <Checkbox value={item.inTimes} color={item.inTimes ? "#10b981" : ""} />
-          <Text className="ml-2 text-gray-700">In Time</Text>
-        </View>
-
-        <View className="flex-row items-center ml-12 pl-1">
-          <Checkbox value={item.inExpenses} color={item.inExpenses ? "#10b981" : ""} />
-          <Text className="ml-2 text-gray-700">In Expenses</Text>
-        </View>
-      </View>
-    </View>
-  )
-}
 export default MyProjects;
