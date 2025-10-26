@@ -9,22 +9,27 @@ export const AuthProvider = ({ children }) => {
   const [tokens, setTokens] = useState(null);
   const [loading, setLoading] = useState(true);
   const [keepLoggedIn, setKeepLoggedIn] = useState(false);
+
+  // Global Loading
+  const [globalLoading, setGlobalLoading] = useState(false);
+
+  // Modal States
   const [modalVisible, setModalVisible] = useState(false);
   const [modalMessage, setModalMessage] = useState("");
   const [modalType, setModalType] = useState("info");
-  const [globalLoading, setGlobalLoading] = useState(false);
+  const [modalButtons, setModalButtons] = useState([]);
+  const [autoHide, setAutoHide] = useState(true);
+  const [modalTitle, setModalTitle] = useState(null); 
 
-  //  Load stored session when app starts
+  // Load user session on app start
   useEffect(() => {
     const loadSession = async () => {
       try {
         const storedUser = await AsyncStorage.getItem("user");
         const storedTokens = await AsyncStorage.getItem("tokens");
         const storedKeep = await AsyncStorage.getItem("keepLoggedIn");
-
         setKeepLoggedIn(storedKeep === "true");
 
-        //  Always restore session if tokens exist (until expired)
         if (storedUser && storedTokens) {
           setUser(JSON.parse(storedUser));
           setTokens(JSON.parse(storedTokens));
@@ -38,7 +43,7 @@ export const AuthProvider = ({ children }) => {
     loadSession();
   }, []);
 
-  //  Login handler
+  // Login handler
   const login = async (userData, tokenResponse, { remember, keepLoggedIn }) => {
     if (!tokenResponse) return;
 
@@ -60,7 +65,6 @@ export const AuthProvider = ({ children }) => {
       ["keepLoggedIn", keepLoggedIn ? "true" : "false"],
     ]);
 
-    // Optional: remember username
     if (remember && userData?.username) {
       await AsyncStorage.setItem("rememberedUserName", userData.username);
     } else {
@@ -68,9 +72,8 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  //  Logout handler
+  // Logout handler
   const logout = async () => {
-    console.log("👋 User logged out");
     setUser(null);
     setTokens(null);
     setKeepLoggedIn(false);
@@ -85,21 +88,49 @@ export const AuthProvider = ({ children }) => {
     router.replace("/auth/login");
   };
 
-  //  Modal helpers
-  const showModal = (message, type = "success") => {
-    setModalMessage(message);
-    setModalType(type);
-    setModalVisible(true);
-  };
-  const hideModal = () => setModalVisible(false);
+ 
+ /**
+ * showModal(message, type?, autoHide?, buttons?, title?)
+ * - If autoHide is omitted => defaults true only for success
+ * - If autoHide = false => never auto-hide, show buttons/close
+ * - Buttons optional, Title optional
+ */
+const showModal = (
+  message,
+  type = "success",
+  autoHideParam,
+  buttonsParam,
+  titleParam
+) => {
+  //  Determine auto-hide behavior clearly
+  let hideAutomatically;
+  if (autoHideParam === undefined) {
+    hideAutomatically = type === "success"; // only success auto-hides by default
+  } else {
+    hideAutomatically = !!autoHideParam;
+  }
 
-  //  Auto-hide success messages
-  useEffect(() => {
-    if (modalVisible && modalType === "success") {
-      const timer = setTimeout(() => hideModal(), 2500);
-      return () => clearTimeout(timer);
-    }
-  }, [modalVisible, modalType]);
+  //  Buttons
+  const buttons = Array.isArray(buttonsParam) ? buttonsParam : [];
+
+  //  Title
+  const title = titleParam || null;
+
+  //  Apply states
+  setModalMessage(message);
+  setModalType(type);
+  setAutoHide(hideAutomatically);
+  setModalButtons(buttons);
+  setModalTitle(title);
+  setModalVisible(true);
+};
+
+
+  const hideModal = () => {
+    setModalVisible(false);
+    setModalButtons([]);
+    setModalTitle(null);
+  };
 
   return (
     <AuthContext.Provider
@@ -110,13 +141,16 @@ export const AuthProvider = ({ children }) => {
         logout,
         loading,
         keepLoggedIn,
-        showModal,
-        hideModal,
+        globalLoading,
+        setGlobalLoading,
         modalVisible,
         modalMessage,
         modalType,
-        globalLoading,
-        setGlobalLoading,
+        autoHide,
+        modalButtons,
+        modalTitle, 
+        showModal,
+        hideModal,
       }}
     >
       {children}

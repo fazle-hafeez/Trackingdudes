@@ -15,7 +15,7 @@ const PageHeader = ({routes}) => {
             <TouchableOpacity
                 className=" bg-white w-6 h-6 flex-row justify-center items-center rounded-full mr-3"
             >
-                <Ionicons color="dark" name='arrow' size={15} />
+                <Ionicons name="help" size={15} color="black" />
             </TouchableOpacity>
         </View>
     )

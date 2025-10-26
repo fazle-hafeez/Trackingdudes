@@ -1,56 +1,56 @@
 import React, { useEffect } from "react";
-import { Modal, View, Text, TouchableOpacity, Image } from "react-native";
+import { Modal, View, Text, TouchableOpacity, Image, StyleSheet } from "react-native";
 
-const ModalComponent = ({ visible, onClose, message, errorType }) => {
+const ModalComponent = ({
+  visible,
+  onClose,
+  message,
+  errorType = "success",
+  buttons = [],
+  title,
+  autoHideProp 
+}) => {
   let imageSource;
-  let autoHide = false; 
+let autoHide = false;
 
-  switch (errorType) {
-    case "error":
-      imageSource = require("../../assets/images/cross-markup.png");
-      autoHide = false; 
-      break;
-    case "success":
-      imageSource = require("../../assets/images/check-markup.png");
-      autoHide = true; 
-      break;
-    case "warning":
-      imageSource = null;
-      autoHide = false; // manual close
-      break;
-    default:
-      imageSource = require("../../assets/images/check-markup.png");
-      autoHide = true;
+switch (errorType) {
+  case "error":
+    imageSource = require("../../assets/images/cross-markup.png");
+    break;
+
+  case "success":
+    imageSource = require("../../assets/images/check-markup.png");
+    autoHide = autoHideProp === undefined ? true : autoHideProp;
+    break;
+
+  case "warning":
+    imageSource = null;
+    break;
+
+  default:
+    imageSource = require("../../assets/images/check-markup.png");
+
+
   }
 
-  //  Auto-hide logic (for success only)
-  useEffect(() => {
-    let timer;
-    if (visible && autoHide) {
-      timer = setTimeout(() => {
-        onClose && onClose();
-      }, 2500); 
-    }
+ useEffect(() => {
+  if (visible && autoHide) {
+    const timer = setTimeout(() => {
+      onClose();
+    }, 2000);
     return () => clearTimeout(timer);
-  }, [visible, autoHide, onClose]);
+  }
+}, [visible, autoHide]);
+
 
   return (
-    <Modal transparent={true} visible={visible} animationType="fade">
+    <Modal transparent visible={visible} animationType="fade">
       <View className="flex-1 justify-center items-center bg-black/85">
-        <View className="bg-[rgba(255,255,255,0.9)] p-6 rounded-2xl w-11/12 max-w-sm items-center">
+        <View className="bg-[rgba(255,255,255,0.9)] p-4 rounded-2xl w-11/12 max-w-sm items-center">
+          {/* Icon */}
           <View className="mb-1">
             {errorType === "warning" ? (
-              <View
-                style={{
-                  width: 80,
-                  height: 80,
-                  borderRadius: 50,
-                  justifyContent: "center",
-                  alignItems: "center",
-                  borderWidth: 3,
-                  borderColor: "#FFA500",
-                }}
-              >
+              <View className="justify-center items-center mt-2 mb-4" style={styles.warningIcon}>
                 <Text style={{ fontSize: 48, color: "orange", fontWeight: "bold" }}>!</Text>
               </View>
             ) : (
@@ -58,24 +58,63 @@ const ModalComponent = ({ visible, onClose, message, errorType }) => {
             )}
           </View>
 
-          <Text className="text-2xl mb-3 text-headercolor font-normal text-center">
+          {/* Title */}
+          {title && (
+            <Text className="text-headercolor text-3xl font-medium text-center my-2">
+              {title}
+            </Text>
+          )}
+
+          {/* Message */}
+          <Text className="text-2xl mb-4 text-headercolor font-normal text-center">
             {message}
           </Text>
 
-          {/* Only show close button if NOT auto-hide */}
-          {!autoHide && (
-            <TouchableOpacity
-              onPress={onClose}
-              className="mt-2 w-full bg-blue p-3 rounded-md mb-1"
-              activeOpacity={0.6}
-            >
-              <Text className="font-semibold text-white text-center text-xl">Close</Text>
-            </TouchableOpacity>
+          {/* ✅ Button Logic */}
+          {buttons.length > 0 ? (
+            <View className="flex-row justify-between w-full mt-3 mb-2">
+              {buttons.map((btn, index) => (
+                <TouchableOpacity
+                  key={index}
+                  onPress={btn.onPress}
+                  className={`flex-1 p-3 rounded-md ${btn.bgColor || "bg-blue"} ${
+                    index > 0 ? "ml-3" : ""
+                  }`}
+                  activeOpacity={0.6}
+                >
+                  <Text className="font-semibold text-white text-center text-xl">
+                    {btn.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : (
+            // ✅ Only show default Close button when not auto-hiding
+            !autoHide && (
+              <TouchableOpacity
+                onPress={onClose}
+                className="mt-2 w-full bg-blue p-3 rounded-md mb-1"
+                activeOpacity={0.6}
+              >
+                <Text className="font-semibold text-white text-center text-xl">Close</Text>
+              </TouchableOpacity>
+            )
           )}
         </View>
       </View>
     </Modal>
   );
-};
+
+}
+
+const styles = StyleSheet.create({
+  warningIcon: {
+    width: 70,
+    height: 70,
+    borderRadius: 50,
+    borderWidth: 3,
+    borderColor: "#FFA500",
+  },
+});
 
 export default ModalComponent;

@@ -6,8 +6,6 @@ import { Link, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import HeaderSection from "../../src/components/HeaderSection";
 import Button from "../../src/components/Button";
-import ModalComponent from "../../src/components/ModalComponent";
-import LoadingComponent from "../../src/components/LoadingComponent";
 import PasswordInputField from "../../src/components/ToggleField";
 import { useApi } from "../../src/hooks/useApi";
 import { useAuth } from "../../src/context/UseAuth";
@@ -23,8 +21,8 @@ const Login = () => {
   const { userName: routeUserName } = useLocalSearchParams()
 
   const router = useRouter();
-  const { post, put } = useApi();
-  const { showModal, hideModal, modalVisible, modalMessage, modalType, setGlobalLoading, globalLoading, login } = useAuth();
+  const { post } = useApi();
+  const { showModal, setGlobalLoading, login } = useAuth();
 
   useEffect(() => {
     (async () => {
@@ -116,7 +114,6 @@ const Login = () => {
 
         showModal(result.data || "you are  Login successful!", "success");
         setTimeout(() => {
-          hideModal();
           router.push("/dashboard/dashboardPage");
         }, 2500);
       }
@@ -232,14 +229,6 @@ const Login = () => {
           </Text>
         </View>
       </View>
-
-      <ModalComponent
-        visible={modalVisible}
-        onClose={hideModal}
-        message={modalMessage}
-        errorType={modalType}
-      />
-      <LoadingComponent visible={globalLoading} />
     </SafeAreaView>
   );
 };

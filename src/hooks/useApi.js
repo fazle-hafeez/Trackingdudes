@@ -46,7 +46,7 @@ export const useApi = () => {
     [request]
   );
 
-  // ✅ Now includes options parameter (for Basic Auth etc.)
+  //  Now includes options parameter (for Basic Auth etc.)
   const post = useCallback(
     (endpoint, body = null, useToken = false, isFormData = false, options = {}) =>
       request(apiPost, endpoint, body, useToken, isFormData, options),
@@ -59,11 +59,13 @@ export const useApi = () => {
     [request]
   );
 
+
   const del = useCallback(
-    (endpoint, useToken = false) =>
-      request(apiDelete, endpoint, useToken),
-    [request]
-  );
+  (endpoint, body = null, useToken = false, options = {}) =>
+    request(apiDelete, endpoint, body, useToken, options),
+  [request]
+);
+
 
   return { get, post, put, del, error, data };
 };

@@ -194,5 +194,5 @@ export const apiPost = (endpoint, body, useAuth = false, isFormData = false, opt
 export const apiPut = (endpoint, body, useAuth = false, isFormData = false, options = {}) =>
   apiRequest(endpoint, "PUT", body, useAuth, isFormData, options);
 
-export const apiDelete = (endpoint, useAuth = false) =>
-  apiRequest(endpoint, "DELETE", null, useAuth);
+export const apiDelete = (endpoint, body = null, useAuth = false) =>
+  apiRequest(endpoint, "DELETE", body, useAuth);
