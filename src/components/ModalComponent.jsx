@@ -70,7 +70,7 @@ switch (errorType) {
             {message}
           </Text>
 
-          {/* ✅ Button Logic */}
+          {/*  Button Logic */}
           {buttons.length > 0 ? (
             <View className="flex-row justify-between w-full mt-3 mb-2">
               {buttons.map((btn, index) => (
@@ -89,7 +89,7 @@ switch (errorType) {
               ))}
             </View>
           ) : (
-            // ✅ Only show default Close button when not auto-hiding
+            //  Only show default Close button when not auto-hiding
             !autoHide && (
               <TouchableOpacity
                 onPress={onClose}
