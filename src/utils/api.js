@@ -123,13 +123,22 @@ export const apiRequest = async (
   isFormData = false,
   options = {}
 ) => {
+
+   if (endpoint.endsWith("/?") || endpoint.endsWith("/")  || endpoint.includes("?")) 
+   {
+    return {
+        status: "error",
+        message: "Invalid endpoint, it should not end with / or /? or contain /?",
+        error: "SementicError",
+      };
+   }
   const url = joinUrl(endpoint);
   const headers = {};
 
   if (!isFormData) headers["Content-Type"] = "application/json";
 
-  const isLogin = endpoint.includes("tokens/new/");
-  const isRefresh = endpoint.includes("tokens/refresh/");
+  const isLogin = endpoint.includes("tokens/new");
+  const isRefresh = endpoint.includes("tokens/refresh");
 
   try {
     // BASIC AUTH (for login)
