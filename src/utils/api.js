@@ -124,7 +124,7 @@ export const apiRequest = async (
   options = {}
 ) => {
 
-   if (endpoint.endsWith("/?") || endpoint.endsWith("/")  || endpoint.includes("?")) 
+   if (endpoint.endsWith("/?")  || endpoint.includes("/?") || endpoint.endsWith("/") ) 
    {
     return {
         status: "error",
