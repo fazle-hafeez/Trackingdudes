@@ -8,12 +8,26 @@ let isRefreshing = false;
 /**
  * Join base URL + endpoint safely, ensuring trailing slash
  */
-const joinUrl = (endpoint) => {
+const joinUrl = (endpoint) => 
+  {
   if (!endpoint.startsWith("/")) endpoint = "/" + endpoint;
-  if (!endpoint.endsWith("/")) endpoint += "/";
+
+  // Handle GET: if ends with "?", add "/?"
+  if (endpoint.endsWith("?")) 
+  {
+    endpoint = endpoint.replace(/\/\?$/, "?"); // Remove any trailing "/" before the "?" for uniform replacement code
+    endpoint = endpoint.replace(/\?$/, "/?"); //end goal adds /? at the end if the url ends with ?
+  } else if (endpoint.includes("?")) 
+  {
+    // Insert "/" before "?" if it's not already there
+    endpoint = endpoint.replace(/([^\/])(\?)/, "$1/$2");
+  } else if (!endpoint.endsWith("/")) 
+  {
+    endpoint += "/";
+  }
+
   return `${BASE_URL}${endpoint}`;
 };
-
 /**
  * Check if token (in seconds) is expired
  */
