@@ -199,13 +199,13 @@ const Login = () => {
           <View className="mt-2 items-center">
             <Text className="text-lg text-headercolor">
               No account yet?{" "}
-              <Link className="text-blue underline" href="/auth/signup">
+              <Link className="text-customBlue underline" href="/auth/signup">
                 Sign up
               </Link>
             </Text>
             <Text className="mt-1 text-lg text-headercolor">
               Forgot password?{" "}
-              <Link className="text-blue underline" href="/auth/resetPassword">
+              <Link className="text-customBlue underline" href="/auth/resetPassword">
                 Reset
               </Link>
             </Text>
@@ -214,12 +214,12 @@ const Login = () => {
 
         <View className="mt-3 pl-2">
           <View className="flex-row">
-            <Link href="/otherPages/home" className="text-blue underline text-lg">
+            <Link href="/otherPages/home" className="text-customBlue underline text-lg">
               Help
             </Link>
             <Link
               href="/otherPages/home"
-              className="text-blue underline ml-2 text-lg"
+              className="text-customBlue underline ml-2 text-lg"
             >
               Terms of use
             </Link>

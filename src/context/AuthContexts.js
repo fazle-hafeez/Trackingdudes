@@ -95,33 +95,44 @@ export const AuthProvider = ({ children }) => {
  * - If autoHide = false => never auto-hide, show buttons/close
  * - Buttons optional, Title optional
  */
-const showModal = (
-  message,
-  type = "success",
-  autoHideParam,
-  buttonsParam,
-  titleParam
-) => {
-  //  Determine auto-hide behavior clearly
-  let hideAutomatically;
-  if (autoHideParam === undefined) {
-    hideAutomatically = type === "success"; // only success auto-hides by default
-  } else {
-    hideAutomatically = !!autoHideParam;
+const showModal = (...args) => {
+  // Default values
+  let message = "";
+  let type = "success";
+  let title = null;
+  let autoHide = true;
+  let buttons = [];
+
+  // Basic extraction
+  message = args[0] ?? "";
+  type = args[1] ?? "success";
+
+  // Remaining flexible args
+  const rest = args.slice(2);
+
+  //  Smart auto-detection of parameters
+  for (const arg of rest) {
+    if (typeof arg === "string") {
+      // Title or message fallback
+      if (!title) title = arg;
+    } else if (typeof arg === "boolean") {
+      autoHide = arg;
+    } else if (Array.isArray(arg)) {
+      buttons = arg;
+    }
   }
 
-  //  Buttons
-  const buttons = Array.isArray(buttonsParam) ? buttonsParam : [];
+  // Default rule: success auto-hides if not explicitly set false
+  if (autoHide === undefined) {
+    autoHide = type === "success";
+  }
 
-  //  Title
-  const title = titleParam || null;
-
-  //  Apply states
+  //  Apply state updates
   setModalMessage(message);
   setModalType(type);
-  setAutoHide(hideAutomatically);
-  setModalButtons(buttons);
   setModalTitle(title);
+  setAutoHide(autoHide);
+  setModalButtons(buttons);
   setModalVisible(true);
 };
 

@@ -11,11 +11,11 @@ export default function Dashboard() {
   const router = useRouter();
 
   return (
-    <SafeAreaView className="flex-1 bg-[#eef3f9] relative">
+    <SafeAreaView className="flex-1 bg-blue-50 relative">
       <StatusBar barStyle="light-content" backgroundColor="#0000ff" />
       {/*  Fixed Header */}
       <View
-        className="flex-row items-center bg-blue px-4 py-3"
+        className="flex-row items-center bg-customBlue px-4 py-3"
         style={styles.menu}
       >
         <Entypo

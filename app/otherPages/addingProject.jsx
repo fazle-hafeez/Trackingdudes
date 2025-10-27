@@ -394,6 +394,7 @@ const AddingProject = () => {
         showModal(
           result.data || "Project created successfully!",
           "success",
+          "Yah!!",
           false,
           [
             {
@@ -403,7 +404,7 @@ const AddingProject = () => {
             },
             {
               label: "View All",
-              bgColor: "bg-blue",
+              bgColor: "bg-blue-600",
               onPress: () => {
                 hideModal();
                 router.replace("/otherPages/myProjects");
@@ -504,16 +505,17 @@ const AddingProject = () => {
             </Text>
             <TouchableOpacity
               activeOpacity={0.6}
-              className="ml-2"
+              className="ml-2  rounded-full bg-blue-700 w-7 h-7 flex justify-center items-center "
               onPress={() => setModalVisible(true)}
             >
-              <FontAwesome name="info-circle" size={24} color="blue" />
+              <FontAwesome name="info" size={15} color="white" />
             </TouchableOpacity>
           </View>
 
           <View className="my-2">
             <TextInput
-              className="border border-gray-400 rounded-lg p-3 text-lg pb-9"
+              className="border border-gray-400 rounded-lg p-3 text-lg"
+              style={{ textAlignVertical: "top" }}
               multiline
               onChangeText={setTextArea}
               value={textArea}
@@ -548,7 +550,19 @@ const LabeledInput = ({ checkVal, setCheckVal, inputValue, setInputVal }) => {
   return (
     <View className="flex-row items-center my-2 w-[49%] px-2">
       <View className="absolute -left-1 z-10">
-        <Checkbox value={checkVal} onValueChange={setCheckVal} color={checkVal ? "#2563eb" : ""} />
+        <Checkbox
+          value={checkVal}
+          onValueChange={setCheckVal}
+          color={checkVal ? "#2563eb" : undefined}
+          style={{
+            borderWidth: 2,
+            borderColor: checkVal ? "#2563eb" : "#9ca3af",
+            backgroundColor: checkVal ? "#2563eb" : "white",
+            borderRadius: 5,
+            width: 21,
+            height: 21,
+          }}
+        />
       </View>
 
       <TextInput
@@ -587,14 +601,14 @@ const InfoModal = ({ visible, onClose, message }) => {
           <View className="bg-white rounded-2xl">
             <View className="flex-row justify-between items-center p-3">
               <Text className="text-xl font-medium">About Regularly Typed Words</Text>
-              <TouchableOpacity className="border border-gray-400 rounded-lg p-1" onPress={onClose}>
+              <TouchableOpacity className=" p-1" onPress={onClose}>
                 <AntDesign name="close" size={20} color="black" />
               </TouchableOpacity>
             </View>
             <View className="border-b" />
-            <Text className="text-2xl font-normal p-3">{message}</Text>
+            <Text className="text-2xl font-normal px-3 py-8 text-gray-700">{message}</Text>
             <View className="border-b mb-3" />
-            <TouchableOpacity className="bg-gray-400 rounded-md py-2 px-5 self-end my-2 mx-3" onPress={onClose}>
+            <TouchableOpacity className="bg-gray-400 rounded-md py-2 px-6 self-end my-2 mx-3" onPress={onClose}>
               <Text className="text-white font-medium text-base">Close</Text>
             </TouchableOpacity>
           </View>

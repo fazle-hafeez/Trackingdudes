@@ -13,7 +13,7 @@ const Tabs = ({tabs=[],activeTab,setActiveTab,}) => {
             className={` pb-1 ${activeTab === tab ? 'border-b-2 border-blue' : ''}`}
           >
             <Text
-              className={`text-lg  ${activeTab === tab ? 'text-blue' : 'text-headercolor'}`}
+              className={`text-lg  ${activeTab === tab ? 'text-customBlue' : 'text-headercolor'}`}
             >
               {tab}
             </Text>

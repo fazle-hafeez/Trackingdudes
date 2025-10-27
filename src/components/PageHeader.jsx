@@ -6,7 +6,7 @@ import { useRouter } from 'expo-router'
 const PageHeader = ({routes}) => {
     const router = useRouter()
     return (
-        <View className="bg-blue flex-row justify-between items-center py-3 ">
+        <View className="bg-customBlue flex-row justify-between items-center py-3 ">
             <View className="flex-row items-center ">
                 <MaterialIcons name="keyboard-arrow-left" size={30} color="white" onPress={() => router.back()} />
                 <Text className="text-white text-lg ml-1">{routes}</Text>

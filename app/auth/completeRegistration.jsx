@@ -5,8 +5,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import HeaderSection from "../../src/components/HeaderSection";
 import Button from "../../src/components/Button";
-import ModalComponent from "../../src/components/ModalComponent";
-import LoadingComponent from "../../src/components/LoadingComponent";
 import PasswordInputField from "../../src/components/ToggleField";
 import { useApi } from "../../src/hooks/useApi";
 import { useAuth } from "../../src/context/UseAuth";
@@ -16,11 +14,7 @@ const CompleteRegistration = () => {
   const {
     showModal,
     hideModal,
-    modalVisible,
-    modalMessage,
-    modalType,
     setGlobalLoading,
-    globalLoading,
   } = useAuth();
   const [username, setUsername] = useState("");
   const [usernameError, setUsernameError] = useState("");
@@ -171,22 +165,10 @@ const CompleteRegistration = () => {
           <View className="border border-gray-200 my-2"></View>
           <View className="flex-row flex-nowrap">
             <Text className="text-xl font-medium text-headercolor">Already have an account? </Text>
-            <Link href="/auth/signup" className="text-blue underline text-xl">Login</Link>
+            <Link href="/auth/signup" className="text-customBlue underline text-xl">Login</Link>
           </View>
         </View>
       </View>
-
-      {/* Modal */}
-      <ModalComponent
-        visible={modalVisible}
-        onClose={hideModal}
-        message={modalMessage}
-        errorType={modalType}
-      />
-      {/*loading modal */}
-      <LoadingComponent
-        visible={globalLoading}
-      />
     </SafeAreaView>
   );
 };

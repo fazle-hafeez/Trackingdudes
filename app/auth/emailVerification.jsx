@@ -4,8 +4,6 @@ import { View, Text, TextInput, TouchableOpacity, StatusBar, Platform } from "re
 import { SafeAreaView } from "react-native-safe-area-context";
 import HeaderSection from "../../src/components/HeaderSection";
 import Button from "../../src/components/Button";
-import LoadingComponent from "../../src/components/LoadingComponent";
-import ModalComponent from "../../src/components/ModalComponent";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useApi } from "../../src/hooks/useApi";
 import { useAuth } from "../../src/context/UseAuth";
@@ -16,11 +14,7 @@ const EmailVerification = () => {
   const {
     showModal,
     hideModal,
-    modalVisible,
-    modalMessage,
-    modalType,
     setGlobalLoading,
-    globalLoading,
   } = useAuth();
 
   const { trimmedEmail, changePassword, enableBtn, reastartEmail, resetEmail } =
@@ -118,7 +112,6 @@ const EmailVerification = () => {
         };
         if (tokens) {
           await AsyncStorage.setItem("tokens", JSON.stringify(tokens));
-          console.log("✅ Tokens saved:", tokens);
 
         } else {
           await AsyncStorage.removeItem("tokens");
@@ -270,7 +263,7 @@ const EmailVerification = () => {
             >
               <Text
                 className={`p-2 ${
-                  canResend || enableBtn ? "text-blue" : "text-gray-400"
+                  canResend || enableBtn ? "text-customBlue" : "text-gray-400"
                 }`}
               >
                 Resend Email{" "}
@@ -287,7 +280,7 @@ const EmailVerification = () => {
             >
               <Text
                 className={`p-2 ${
-                  canRestart || enableBtn ? "text-blue" : "text-gray-400"
+                  canRestart || enableBtn ? "text-customBlue" : "text-gray-400"
                 }`}
               >
                 Restart {!enableBtn && !canRestart && `| in ${formatTime(restartTimer)}`}
@@ -304,7 +297,7 @@ const EmailVerification = () => {
               onPress={() => router.push("/otherPages/home")}
               className="pt-2"
             >
-              <Text className="text-blue underline text-xl">Login here</Text>
+              <Text className="text-customBlue underline text-xl">Login here</Text>
             </TouchableOpacity>
           </Text>
         </View>
@@ -319,15 +312,6 @@ const EmailVerification = () => {
           </Text>
         </View>
       </View>
-
-      <LoadingComponent visible={globalLoading} />
-
-      <ModalComponent
-        visible={modalVisible}
-        onClose={hideModal}
-        message={modalMessage}
-        errorType={modalType}
-      />
     </SafeAreaView>
   );
 };

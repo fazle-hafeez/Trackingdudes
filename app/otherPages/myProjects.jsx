@@ -1,5 +1,5 @@
 import { View, Text, TouchableOpacity, TextInput, FlatList } from "react-native";
-import React, { useEffect, useState } from "react";
+import React, { act, useEffect, useState } from "react";
 import { useFocusEffect } from "@react-navigation/native";
 import { useCallback } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -7,11 +7,11 @@ import PageHeader from "../../src/components/PageHeader";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import Feather from "@expo/vector-icons/Feather";
 import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
-import { Link, useRouter } from "expo-router";
+import { Link, router } from "expo-router";
 import { useApi } from "../../src/hooks/useApi";
 import { useAuth } from "../../src/context/UseAuth";
 import Checkbox from "expo-checkbox";
-
+import CheckBox from "../../src/components/CheckBox";
 const MyProjects = () => {
   const { get, del } = useApi();
   const { showModal, setGlobalLoading, hideModal } = useAuth();
@@ -24,13 +24,13 @@ const MyProjects = () => {
   const [selectedProjects, setSelectedProjects] = useState([]); // selected project IDs
   const [selectAll, setSelectAll] = useState(false);
   const [dimProjectColors, setDimProjectColors] = useState(false);
-  const router = useRouter();
-
   // Fetch projects
   const fetchProjects = async () => {
     try {
-      setLoading(true);
-      const result = await get(`my-projects/`, { useBearerAuth: true });
+      const status = activeTab.toLowerCase()
+      const result = await get(`my-projects/?status=${status}&order=desc&limit=10&page=1/`, { useBearerAuth: true });
+      console.log(result);
+      
       if (result?.status === "success") {
         const parsedProjects = result.data.map((p) => ({
           ...p,
@@ -51,11 +51,16 @@ const MyProjects = () => {
     }
   };
 
-useFocusEffect(
-  useCallback(() => {
+  useFocusEffect(
+    useCallback(() => {
+      fetchProjects();
+    }, [])
+  );
+
+  useEffect(() => {
     fetchProjects();
-  }, [activeTab])
-);
+  }, [activeTab]);
+
 
 
   const filteredProjects = projects.filter((item) =>
@@ -72,42 +77,32 @@ useFocusEffect(
         updated = [...prevSelected, id];
       }
 
-      console.log('Updated Selected Projects:', updated);
-
       return updated;
     });
   };
 
 
-
-  const handleSelectAll = (value) => {
-    setSelectAll(value);
-
-    setSelectedProjects((value) => {
-      if (value) {
-        const allIds = filteredProjects.map((p) => p.id);
-        console.log("Select All IDs:", allIds);
-        return allIds;
-      } else {
-        return [];
-      }
+  const handleSelectAll = () => {
+    setSelectAll((prev) => {
+      const newValue = !prev;
+      setSelectedProjects(newValue ? projects.map((p) => p.id) : []);
+      return newValue;
     });
   };
 
-
-  const deleteProject =  () => {
+  const deleteProject = () => {
     if (selectedProjects.length === 0) {
       showModal("Please select at least one project to delete.", "error",);
       return;
     }
 
     showModal("You're about to permanently remove the selected projects....", "warning",
-      "Deleting the projects?" ,
+      "Deleting the projects?",
       [
         {
           label: "Delete",
           bgColor: "bg-red-600",
-          onPress: async() => {
+          onPress: async () => {
             hideModal()
             await DeleteProject()
           }
@@ -127,7 +122,7 @@ useFocusEffect(
 
   };
 
-  const DeleteProject = async() => {
+  const DeleteProject = async () => {
     setGlobalLoading(true);
 
     try {
@@ -156,14 +151,14 @@ useFocusEffect(
     setSelectedProjects([]);
     setSelectAll(false);
     setDimProjectColors(false);
-    
+
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-100">
+    <SafeAreaView className="flex-1 bg-blue-50">
       <PageHeader routes="My Projects" />
 
-      <View className="px-4 bg-gray-100 flex-1">
+      <View className="px-4  flex-1">
         {/* Add project button */}
         <View className="bg-white rounded-lg shadow-md flex-row justify-between p-4 my-4">
           <View className="flex-row items-center">
@@ -217,25 +212,24 @@ useFocusEffect(
         {/* Select All checkbox (top) */}
         {selectionMode && filteredProjects.length > 0 && (
           <View className="flex-row items-center mb-3 bg-white rounded-lg shadow-sm p-3">
-            <Checkbox
+            <CheckBox
               value={selectAll}
-              onValueChange={handleSelectAll}
-              color={selectAll ? "#0550ff" : undefined}
+              onClick={handleSelectAll}
             />
             <Text className="ml-2 text-lg font-medium text-gray-800">Select All</Text>
           </View>
         )}
 
         {/* List */}
-        {loading ? (
-          <View className="bg-white rounded-md shadow-md p-5 mt-3">
-            <Text className="text-lg text-gray-500 text-center">Loading...</Text>
-          </View>
-        ) : filteredProjects.length > 0 ? (
+        {filteredProjects.length > 0 ? (
           <FlatList
             data={filteredProjects}
             keyExtractor={(item) => item.id.toString()}
-            contentContainerStyle={{ paddingBottom: 40 }}
+            contentContainerStyle={{
+              paddingBottom: selectionMode ? 60 : 0,
+              elevation: 2
+            }}
+
             renderItem={({ item }) => (
               <TouchableOpacity
                 activeOpacity={0.8}
@@ -254,14 +248,9 @@ useFocusEffect(
                   {/* Project title with checkbox (only visible in selection mode) */}
                   <View className="flex-row items-center border-b border-yellow-400 py-3 px-4">
                     {selectionMode && (
-                      <Checkbox
+                      <CheckBox
                         value={selectedProjects.includes(item.id)}
-                        onValueChange={() => toggleProjectSelect(item.id)}
-                        color={
-                          selectedProjects.includes(item.id)
-                            ? "#0550ff"
-                            : undefined
-                        }
+                        onClick={() => toggleProjectSelect(item.id)}
                       />
                     )}
                     <Text
@@ -275,59 +264,71 @@ useFocusEffect(
                   {/* Settings sections (unchanged layout) */}
                   <View className="flex-row my-2 px-3 pt-3">
                     <View className="flex-row items-center">
-                      <Checkbox
+                      <CheckBox
                         value={item.inShift}
-                        color={
-                          dimProjectColors
-                            ? "#9ca3af"
-                            : item.inShift
-                              ? "#10b981"
-                              : undefined
-                        }
+                        color={'#10b981'}
+                        dimColor={dimProjectColors}
                       />
-                      <Text className={` ml-2 ${item.inShift ? 'text-green-600':'text-red-600'}`}>In Shifts</Text>
+                      <StatusLabel
+                        label="In Shifts"
+                        active={item.inShift}
+                        dimColor={dimProjectColors}
+                      />
+
                     </View>
 
                     <View className="flex-row items-center ml-12">
-                      <Checkbox
+                      <CheckBox
                         value={item.inTrips}
-                        color={
-                          dimProjectColors
-                            ? "#9ca3af"
-                            : item.inTrips
-                              ? "#10b981"
-                              : undefined
-                        }
+                        color={'#10b981'}
+                        dimColor={dimProjectColors}
                       />
-                      <Text className={` ml-2 ${item.inTrips ? 'text-green-600':'text-red-600'}`}>In Trips</Text>
+
+                      <StatusLabel
+                        label="In Trips"
+                        active={item.inTrips}
+                        dimColor={dimProjectColors}
+                      />
+
+
                     </View>
                   </View>
 
-                  <View className="flex-row my-2 px-3 pb-3">
+                  <View className="flex-row mt-2 px-3 pb-3">
                     <View className="flex-row items-center">
-                      <Checkbox value={item.inTimes}
-                        color={
-                          dimProjectColors
-                            ? "#9ca3af"
-                            : item.inTimes
-                              ? "#10b981"
-                              : undefined
-                        } />
-                      <Text className={` ml-2 ${item.inTimes ? 'text-green-600':'text-red-600'}`}>In Time</Text>
+                      <CheckBox
+                        value={item.inTimes}
+                        color={'#10b981'}
+                        dimColor={dimProjectColors}
+                      />
+                      <StatusLabel
+                        label="In Times"
+                        active={item.inTimes}
+                        dimColor={dimProjectColors}
+                      />
+
                     </View>
 
-                    <View className="flex-row items-center ml-12 pl-1">
-                      <Checkbox value={item.inExpenses}
-                        color={
-                          dimProjectColors
-                            ? "#9ca3af"
-                            : item.inExpenses
-                              ? "#10b981"
-                              : undefined
-                        } />
-                      <Text className={` ml-2 ${item.inExpenses ? 'text-green-600':'text-red-600'}`}>In Expenses</Text>
+                    <View className="flex-row items-center ml-11">
+                      <CheckBox
+                        value={item.inExpenses}
+                        color={'#10b981'}
+                        dimColor={dimProjectColors}
+                      />
+
+                      <StatusLabel
+                        label="In Expenses"
+                        active={item.inExpenses}
+                        dimColor={dimProjectColors}
+                      />
                     </View>
                   </View>
+
+                  {item.suggestions && (
+                    <Text className=" text-lg px-3 mb-3">
+                      {item.suggestions}
+                    </Text>
+                  )}
                 </View>
               </TouchableOpacity>
             )}
@@ -337,7 +338,7 @@ useFocusEffect(
             <Text className="text-lg">
               You have not saved any projects under the selected status.
             </Text>
-            <Text className="mt-4 text-lg text-gray-600">
+            <Text className="mt-4 text-lg">
               Saving a project allows you to select it from the list of saved
               projects. This is useful in tracking shifts, trips, time, as well
               as fuel consumption or other expenses.
@@ -371,4 +372,18 @@ useFocusEffect(
   );
 };
 
+const StatusLabel = ({ label, active = false, dimColor = false }) => {
+  return (
+    <Text
+      className={`ml-2 text-lg ${dimColor
+        ? "text-gray-800"
+        : active
+          ? "text-green-600"
+          : "text-red-600"
+        }`}
+    >
+      {label}
+    </Text>
+  );
+};
 export default MyProjects;

@@ -10,7 +10,7 @@ const FuelRefills = () => {
   const [activeTimeFilter, setActiveTimeFilter] = useState('this-week');
   const timeFilters = ['this-week', 'prev-week', 'this-month', 'others'];
   const FilterChip = ({ label, iconName }) => (
-    <View className="flex-row items-center bg-blue rounded-full px-4 py-2 mr-2 mb-2">
+    <View className="flex-row items-center bg-customBlue rounded-full px-4 py-2 mr-2 mb-2">
       {iconName && <Ionicons name={iconName} size={16} color="white" className="mr-1" />}
       <Text className="text-white text-sm font-semibold">{label}</Text>
     </View>
@@ -28,7 +28,7 @@ const FuelRefills = () => {
         </View>
         <View className="flex-row mb-3 items-center px-2">
           <FontAwesome6 name="sliders" size={20} color="#0000ff" />
-          <Text className="text-2xl font-semibold text-blue ml-2">Filters</Text>
+          <Text className="text-2xl font-semibold text-customBlue ml-2">Filters</Text>
         </View>
 
         <View className="flex-row flex-wrap">

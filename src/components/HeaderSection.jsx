@@ -29,7 +29,7 @@ const HeaderSection = () => {
             className="h-[400px] w-full"
             resizeMode={'cover'}
         >
-            <View className="bg-blue p-4" >
+            <View className="bg-customBlue p-4" >
                 <Text className="text-white text-2xl text-center font-semibold ">
                     TRACKING DUDES LLC
                 </Text>

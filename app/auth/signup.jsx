@@ -3,9 +3,7 @@ import {View,Text,TextInput,StatusBar,TouchableOpacity,Platform} from "react-nat
 import { Link, useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import HeaderSection from "../../src/components/HeaderSection";
-import Button from "../../src/components/Button";
-import ModalComponent from "../../src/components/ModalComponent";
-import LoadingComponent from "../../src/components/LoadingComponent";
+import Button from "../../src/components/Button"
 import { useApi } from "../../src/hooks/useApi";
 import { useAuth } from "../../src/context/UseAuth";
 
@@ -13,7 +11,7 @@ const SignUp = () => {
   const route = useLocalSearchParams();
   const router = useRouter();
   const { post} = useApi();
-  const {showModal, hideModal, modalVisible,modalMessage, modalType,setGlobalLoading,globalLoading,} = useAuth();
+  const {showModal, hideModal,setGlobalLoading,} = useAuth();
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -58,8 +56,6 @@ const SignUp = () => {
         { name, email: trimmedEmail },
         false
       );
-      console.log(response);
-
       if (response?.status === "success") {
         showModal(response.data || "Verification email sent successfully!", "success");
         setReceivedCode(true)
@@ -160,7 +156,7 @@ const SignUp = () => {
           <View className="mt-2 mb-2">
             <Text className="text-lg text-headercolor font-normal">
               Already have an account?
-              <Link href="/auth/login" className="text-blue underline">
+              <Link href="/auth/login" className="text-customBlue underline">
                 {" "}
                 Sign in
               </Link>
@@ -174,7 +170,7 @@ const SignUp = () => {
               I received the code?
             </Text>
             <TouchableOpacity onPress={receivedCode}>
-              <Text className="text-lg underline text-blue font-normal">
+              <Text className="text-lg underline text-customBlue font-normal">
                 {" "}
                 Verify now
               </Text>
@@ -182,15 +178,6 @@ const SignUp = () => {
           </View>
         )}
       </View>
-
-      {/* Global modal and loading */}
-      <ModalComponent
-        visible={modalVisible}
-        onClose={hideModal}
-        message={modalMessage}
-        errorType={modalType}
-      />
-      <LoadingComponent visible={globalLoading} />
     </SafeAreaView>
   );
 };

@@ -5,7 +5,7 @@ const Button = (props) => {
         <View>
             <TouchableOpacity
                 onPress={props.onClickEvent}
-                className="rounded-md bg-blue p-3 my-3 w-full h-14 mx-auto"
+                className="rounded-md bg-blue-700 p-3 my-3 w-full h-14 mx-auto"
                 activeOpacity={0.6}
             
             >
