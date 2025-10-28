@@ -28,16 +28,16 @@ const MyProjects = () => {
   const fetchProjects = async () => {
     try {
       const status = activeTab.toLowerCase()
-      const result = await get(`my-projects/?status=${status}&order=desc&limit=10&page=1/`, { useBearerAuth: true });
+      const result = await get(`my-projects?status=${status}&order=asc&limit=10&page=1`, { useBearerAuth: true });
       console.log(result);
       
       if (result?.status === "success") {
         const parsedProjects = result.data.map((p) => ({
           ...p,
-          inShift: p.show_in_shifts === "1",
-          inTrips: p.show_in_trips === "1",
-          inTimes: p.show_in_times === "1",
-          inExpenses: p.show_in_expenses === "1",
+          inShift: p.in_shifts === "1",
+          inTrips: p.in_trips === "1",
+          inTimes: p.in_times === "1",
+          inExpenses: p.in_expenses === "1",
         }));
         setProjects(parsedProjects);
       } else {
