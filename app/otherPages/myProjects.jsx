@@ -12,6 +12,8 @@ import { useApi } from "../../src/hooks/useApi";
 import { useAuth } from "../../src/context/UseAuth";
 import Checkbox from "expo-checkbox";
 import CheckBox from "../../src/components/CheckBox";
+import TickCrossIndicator from '../../src/components/TickCrossIndicator';
+
 const MyProjects = () => {
   const { get, del } = useApi();
   const { showModal, setGlobalLoading, hideModal } = useAuth();
@@ -263,72 +265,31 @@ const MyProjects = () => {
 
                   {/* Settings sections (unchanged layout) */}
                   <View className="flex-row my-2 px-3 pt-3">
+
                     <View className="flex-row items-center">
-                      <CheckBox
-                        value={item.inShift}
-                        color={'#10b981'}
-                        dimColor={dimProjectColors}
-                      />
-                      <StatusLabel
-                        label="In Shifts"
-                        active={item.inShift}
-                        dimColor={dimProjectColors}
-                      />
-
+                      <TickCrossIndicator checked={item.inShift} label="In Shifts" />
                     </View>
 
-                    <View className="flex-row items-center ml-12">
-                      <CheckBox
-                        value={item.inTrips}
-                        color={'#10b981'}
-                        dimColor={dimProjectColors}
-                      />
-
-                      <StatusLabel
-                        label="In Trips"
-                        active={item.inTrips}
-                        dimColor={dimProjectColors}
-                      />
-
-
-                    </View>
-                  </View>
-
-                  <View className="flex-row mt-2 px-3 pb-3">
                     <View className="flex-row items-center">
-                      <CheckBox
-                        value={item.inTimes}
-                        color={'#10b981'}
-                        dimColor={dimProjectColors}
-                      />
-                      <StatusLabel
-                        label="In Times"
-                        active={item.inTimes}
-                        dimColor={dimProjectColors}
-                      />
-
+                      <TickCrossIndicator checked={item.inTrips} label="In Trips" />
                     </View>
-
-                    <View className="flex-row items-center ml-11">
-                      <CheckBox
-                        value={item.inExpenses}
-                        color={'#10b981'}
-                        dimColor={dimProjectColors}
-                      />
-
-                      <StatusLabel
-                        label="In Expenses"
-                        active={item.inExpenses}
-                        dimColor={dimProjectColors}
-                      />
+                    
+                    <View className="flex-row items-center">
+                      <TickCrossIndicator checked={item.inTimes} label="In Times" />
                     </View>
-                  </View>
+                    
+                    <View className="flex-row items-center">
+                      <TickCrossIndicator checked={item.inExpenses} label="In Expenses" />
+                    </View>
+                </View>
+
 
                   {item.suggestions && (
                     <Text className=" text-lg px-3 mb-3">
                       {item.suggestions}
                     </Text>
                   )}
+                  
                 </View>
               </TouchableOpacity>
             )}
