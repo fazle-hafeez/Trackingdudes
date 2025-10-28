@@ -1,20 +1,35 @@
 // TickCrossIndicator.jsx
+import React from "react";
+import { View, Text, StyleSheet } from "react-native";
+
 const TickCrossIndicator = ({ checked, label }) => (
-  <div style={{ display: "flex", alignItems: "center", gap: "0.3em" }}>
-    <span
-      style={{
-        color: checked ? "green" : "red",
-        fontWeight: "bold",
-        fontSize: "1.2em",
-        userSelect: "none",
-      }}
-      aria-label={checked ? "Checked" : "Not checked"}
-      role="img"
+  <View style={styles.container}>
+    <Text
+      style={[
+        styles.icon,
+        { color: checked ? "green" : "red" }
+      ]}
+      accessibilityLabel={checked ? "Checked" : "Not checked"}
     >
       {checked ? "✔" : "✖"}
-    </span>
-    <span>{label}</span>
-  </div>
+    </Text>
+    <Text style={styles.label}>{label}</Text>
+  </View>
 );
+
+const styles = StyleSheet.create({
+  container: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5, 
+  },
+  icon: {
+    fontWeight: "bold",
+    fontSize: 20,
+  },
+  label: {
+    fontSize: 16,
+  },
+});
 
 export default TickCrossIndicator;
