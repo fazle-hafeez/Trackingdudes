@@ -75,12 +75,11 @@
 //     try {
 //       const payload = {
 //         project: projectName,
-//         show_in_trips: inTrips,
-//         show_in_shifts: inShift,
-//         show_in_times: inTimes,
-//         show_in_expenses: inExpenses,
-//         suggestions: textArea,
-//         status: 'enabled'
+//         in_trips: inTrips,
+//         in_shifts: inShift,
+//         in_times: inTimes,
+//         in_expenses: inExpenses,
+//         suggestions: textArea
 //       }
 //       const result = await post(
 //         "/my-projects/create-project/",
