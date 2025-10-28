@@ -65,7 +65,7 @@ const CompleteRegistration = () => {
     try {
       const cleanUsername = username.trim().replace(/\s+/g, "");
       const result = await post(
-        "/register/create-user/",
+        "/register/create-user",
         {
           username: cleanUsername,
           password: password.trim(),

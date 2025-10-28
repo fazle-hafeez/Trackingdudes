@@ -30,7 +30,7 @@ const EmailVerification = () => {
   const [canResend, setCanResend] = useState(false);
   const [canRestart, setCanRestart] = useState(false);
 
-  const isAllDisabled = isBlocked || globalLoading;
+  const isAllDisabled = isBlocked ;
 
   // Format mm:ss
   const formatTime = (seconds) => {
@@ -98,20 +98,16 @@ const EmailVerification = () => {
 
     setGlobalLoading(true);
     try {
-      const response = await post("/register/verify-email/", { code });
+      const response = await post("/register/verify-email", { code });
       console.log(response);
       if (response.status === "success") {
         setTimeout(() => {
           showModal(response.data || "Email verified successfully!", "success");
         }, 0);
 
-        const tokens = {
-          access: response?.tokens?.access,
-          accessExpires: response?.tokens?.accessExpires,
-          issuedAt: response?.tokens?.issuedAt,
-        };
-        if (tokens) {
-          await AsyncStorage.setItem("tokens", JSON.stringify(tokens));
+
+        if (response?.tokens) {
+          await AsyncStorage.setItem("tokens", JSON.stringify(response.tokens));
 
         } else {
           await AsyncStorage.removeItem("tokens");
@@ -172,7 +168,7 @@ const EmailVerification = () => {
   const sendEmailCode = async () => {
     setGlobalLoading(true);
     try {
-      const result = await put("/register/resend-email/");
+      const result = await put("/register/resend-email");
       if (result.status === "success") {
         setTimeout(() => {
           showModal(result.data || "Verification email sent successfully!", "success");

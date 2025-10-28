@@ -21,7 +21,7 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5, 
+    gap: 5, // use numeric value for spacing
   },
   icon: {
     fontWeight: "bold",

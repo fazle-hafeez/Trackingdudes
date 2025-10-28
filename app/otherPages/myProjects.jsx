@@ -28,11 +28,12 @@ const MyProjects = () => {
   const [dimProjectColors, setDimProjectColors] = useState(false);
   // Fetch projects
   const fetchProjects = async () => {
+    setGlobalLoading(true)
     try {
       const status = activeTab.toLowerCase()
-      const result = await get(`my-projects?status=${status}&order=asc&limit=10&page=1`, { useBearerAuth: true });
+      const result = await get(`my-projects`, { useBearerAuth: true });
       console.log(result);
-      
+
       if (result?.status === "success") {
         const parsedProjects = result.data.map((p) => ({
           ...p,
@@ -49,7 +50,7 @@ const MyProjects = () => {
       console.error("Error fetching projects:", error);
       setProjects([]);
     } finally {
-      setLoading(false);
+      setGlobalLoading(false);
     }
   };
 
@@ -66,8 +67,9 @@ const MyProjects = () => {
 
 
   const filteredProjects = projects.filter((item) =>
-    item.project.toLowerCase().includes(searchQuery.toLowerCase())
+    item?.project?.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
 
   const toggleProjectSelect = (id) => {
     setSelectedProjects((prevSelected) => {
@@ -129,7 +131,8 @@ const MyProjects = () => {
 
     try {
       const payload = { project_nos: selectedProjects };
-      const res = await del("my-projects/delete-projects", payload, true);
+      const res = await del("my-projects/delete-projects", payload, {useBearerAuth:true});
+      console.log('projects deleted : ',res);
 
       if (res?.status === "success") {
         showModal(res.data || "Projects were deleted successfully", "success");
@@ -213,7 +216,7 @@ const MyProjects = () => {
 
         {/* Select All checkbox (top) */}
         {selectionMode && filteredProjects.length > 0 && (
-          <View className="flex-row items-center mb-3 bg-white rounded-lg shadow-sm p-3">
+          <View className="flex-row items-center mb-3 bg-white rounded-lg shadow-sm p-3 px-4">
             <CheckBox
               value={selectAll}
               onClick={handleSelectAll}
@@ -246,9 +249,9 @@ const MyProjects = () => {
                 }}
 
               >
-                <View className="bg-white rounded-md shadow-md mb-3">
+                <View className="bg-white rounded-md shadow-md mb-3 ">
                   {/* Project title with checkbox (only visible in selection mode) */}
-                  <View className="flex-row items-center border-b border-yellow-400 py-3 px-4">
+                  <View className="flex-row items-center border-b border-yellow-400  px-2 py-3 mx-3">
                     {selectionMode && (
                       <CheckBox
                         value={selectedProjects.includes(item.id)}
@@ -259,29 +262,31 @@ const MyProjects = () => {
                       className={`${selectionMode ? "ml-2" : ""
                         } text-lg font-semibold text-gray-600`}
                     >
-                      {item.project}
+                      {item?.project || 'No name'}
                     </Text>
                   </View>
 
                   {/* Settings sections (unchanged layout) */}
-                  <View className="flex-row my-2 px-3 pt-3">
+                  <View className="flex-row flex-wrap my-2 px-3 pt-3 justify-between ">
 
-                    <View className="flex-row items-center">
+                    <View className="w-[48%] flex-row items-center mb-2">
                       <TickCrossIndicator checked={item.inShift} label="In Shifts" />
                     </View>
 
-                    <View className="flex-row items-center">
+                    <View className="w-[48%] flex-row items-center mb-2">
                       <TickCrossIndicator checked={item.inTrips} label="In Trips" />
                     </View>
-                    
-                    <View className="flex-row items-center">
+
+                    <View className="w-[48%] flex-row items-center">
                       <TickCrossIndicator checked={item.inTimes} label="In Times" />
                     </View>
-                    
-                    <View className="flex-row items-center">
+
+                    <View className="w-[48%] flex-row items-center">
                       <TickCrossIndicator checked={item.inExpenses} label="In Expenses" />
                     </View>
-                </View>
+
+                  </View>
+
 
 
                   {item.suggestions && (
@@ -289,7 +294,7 @@ const MyProjects = () => {
                       {item.suggestions}
                     </Text>
                   )}
-                  
+
                 </View>
               </TouchableOpacity>
             )}

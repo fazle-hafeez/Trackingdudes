@@ -52,7 +52,7 @@ const SignUp = () => {
 
     try {
       const response = await post(
-        "/register/register-email/",
+        "/register/register-email",
         { name, email: trimmedEmail },
         false
       );

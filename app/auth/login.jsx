@@ -80,13 +80,12 @@ const Login = () => {
       };
 
       const result = await post(
-        "tokens/new/",
+        "tokens/new",
         payload,
         false,
         false,
         { useBasicAuth: true }
       );
-      console.log(result)
       if (result?.status === "success") {
         await AsyncStorage.setItem("tokens", JSON.stringify(result.tokens));
         const userData = result?.user || { username: cleanUsername };

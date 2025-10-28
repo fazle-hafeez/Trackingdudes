@@ -1,3 +1,4 @@
+
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Base64 } from "js-base64";
 import { router } from "expo-router";
@@ -5,40 +6,37 @@ import { router } from "expo-router";
 const BASE_URL = "https://trackingdudes.com/apis";
 let isRefreshing = false;
 
-/**
- * Join base URL + endpoint safely, ensuring trailing slash
- */
-const joinUrl = (endpoint) => 
-  {
+/* -------------------------------------------------------------
+   Join base URL + endpoint safely
+------------------------------------------------------------- */
+const joinUrl = (endpoint) => {
   if (!endpoint.startsWith("/")) endpoint = "/" + endpoint;
 
   // Handle GET: if ends with "?", add "/?"
-  if (endpoint.endsWith("?")) 
-  {
+  if (endpoint.endsWith("?")) {
     endpoint = endpoint.replace(/\/\?$/, "?"); // Remove any trailing "/" before the "?" for uniform replacement code
     endpoint = endpoint.replace(/\?$/, "/?"); //end goal adds /? at the end if the url ends with ?
-  } else if (endpoint.includes("?")) 
-  {
+  } else if (endpoint.includes("?")) {
     // Insert "/" before "?" if it's not already there
     endpoint = endpoint.replace(/([^\/])(\?)/, "$1/$2");
-  } else if (!endpoint.endsWith("/")) 
-  {
+  } else if (!endpoint.endsWith("/")) {
     endpoint += "/";
   }
 
   return `${BASE_URL}${endpoint}`;
 };
-/**
- * Check if token (in seconds) is expired
- */
+
+/* -------------------------------------------------------------
+   Expiry check helper
+------------------------------------------------------------- */
 const isExpired = (timestamp) => {
   if (!timestamp) return true;
-  return Math.floor(Date.now() / 1000) >= timestamp - 5; // 5s buffer
+  return Math.floor(Date.now() / 1000) >= timestamp - 5;
 };
 
-/**
- * TokenError: used as a signal for centralized logout handling
- */
+/* -------------------------------------------------------------
+   Token error class
+------------------------------------------------------------- */
 class TokenError extends Error {
   constructor(message = "Session expired") {
     super(message);
@@ -46,18 +44,18 @@ class TokenError extends Error {
   }
 }
 
-/**
- * Secure logout: removes only token data
- */
+/* -------------------------------------------------------------
+   Secure logout
+------------------------------------------------------------- */
 const handleLogout = async () => {
   console.warn("Logging out — token invalid or expired");
   await AsyncStorage.removeItem("tokens");
   router.replace("/auth/login");
 };
 
-/**
- * Refresh tokens; throws TokenError if refresh fails
- */
+/* -------------------------------------------------------------
+   Refresh tokens
+------------------------------------------------------------- */
 const refreshTokens = async () => {
   if (isRefreshing) return null;
   isRefreshing = true;
@@ -96,9 +94,8 @@ const refreshTokens = async () => {
         refreshExpires: t.refreshExpires,
         issuedAt: t.issuedAt || Math.floor(Date.now() / 1000),
       };
-
       await AsyncStorage.setItem("tokens", JSON.stringify(newTokens));
-      console.log("✅ Tokens refreshed successfully");
+      console.log(" Tokens refreshed successfully");
       return newTokens.access;
     }
 
@@ -112,9 +109,9 @@ const refreshTokens = async () => {
   }
 };
 
-/**
- * Unified API request handler
- */
+/* -------------------------------------------------------------
+   Unified API Request
+------------------------------------------------------------- */
 export const apiRequest = async (
   endpoint,
   method = "GET",
@@ -123,15 +120,6 @@ export const apiRequest = async (
   isFormData = false,
   options = {}
 ) => {
-
-   if (endpoint.endsWith("/?")  || endpoint.includes("/?") || endpoint.endsWith("/") ) 
-   {
-    return {
-        status: "error",
-        message: "Invalid endpoint, it should not end with / or /? or contain /?",
-        error: "SementicError",
-      };
-   }
   const url = joinUrl(endpoint);
   const headers = {};
 
@@ -141,7 +129,7 @@ export const apiRequest = async (
   const isRefresh = endpoint.includes("tokens/refresh");
 
   try {
-    // BASIC AUTH (for login)
+    // BASIC AUTH
     if ((options.useBasicAuth || isLogin) && body?.username && body?.password) {
       const credentials = `${body.username}:${body.password}`;
       headers["Authorization"] = `Basic ${Base64.encode(credentials)}`;
@@ -149,7 +137,7 @@ export const apiRequest = async (
       return { error: "FieldRequired", message: "Username and password required" };
     }
 
-    // BEARER AUTH (for protected endpoints)
+    // BEARER AUTH
     else if (useAuth && !isLogin && !isRefresh) {
       const stored = await AsyncStorage.getItem("tokens");
       if (!stored) throw new TokenError();
@@ -164,15 +152,23 @@ export const apiRequest = async (
       }
     }
 
+
+
     const config = {
       method,
       headers,
       body: body ? (isFormData ? body : JSON.stringify(body)) : undefined,
     };
+    console.log("🔍 Request:", {
+      url,
+      method,
+      body,
+      headers,
+    });
 
     let res = await fetch(url, config);
 
-    // Retry once if unauthorized
+    // Retry on 401
     if (res.status === 401 && useAuth) {
       console.warn("401 detected — retrying after token refresh");
       const newAccess = await refreshTokens();
@@ -186,13 +182,13 @@ export const apiRequest = async (
     try {
       data = text ? JSON.parse(text) : null;
     } catch {
-      data = text; // fallback for non-JSON response
+      data = text;
     }
 
     return data;
   } catch (err) {
     if (err instanceof TokenError) {
-      await handleLogout(); // single centralized logout
+      await handleLogout();
       return { error: "SessionExpired", message: "Please login again" };
     }
 
@@ -205,11 +201,11 @@ export const apiRequest = async (
   }
 };
 
-/**
- * API Shorthand Methods
- */
-export const apiGet = (endpoint, useAuth = false) =>
-  apiRequest(endpoint, "GET", null, useAuth);
+/* -------------------------------------------------------------
+   Shorthand Methods (with fixed params)
+------------------------------------------------------------- */
+export const apiGet = (endpoint, useAuth = false, options = {}) =>
+  apiRequest(endpoint, "GET", null, useAuth, false, options);
 
 export const apiPost = (endpoint, body, useAuth = false, isFormData = false, options = {}) =>
   apiRequest(endpoint, "POST", body, useAuth, isFormData, options);
@@ -217,5 +213,5 @@ export const apiPost = (endpoint, body, useAuth = false, isFormData = false, opt
 export const apiPut = (endpoint, body, useAuth = false, isFormData = false, options = {}) =>
   apiRequest(endpoint, "PUT", body, useAuth, isFormData, options);
 
-export const apiDelete = (endpoint, body = null, useAuth = false) =>
-  apiRequest(endpoint, "DELETE", body, useAuth);
+export const apiDelete = (endpoint, body = null, useAuth = false, options = {}) =>
+  apiRequest(endpoint, "DELETE", body, useAuth, false, options);
