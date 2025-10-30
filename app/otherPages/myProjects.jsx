@@ -4,18 +4,15 @@ import { useFocusEffect } from "@react-navigation/native";
 import { useCallback } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import PageHeader from "../../src/components/PageHeader";
-import Ionicons from "@expo/vector-icons/Ionicons";
-import Feather from "@expo/vector-icons/Feather";
-import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
+import { FontAwesome6, AntDesign, Feather, Ionicons } from "@expo/vector-icons";
 import { Link, router } from "expo-router";
 import { useApi } from "../../src/hooks/useApi";
 import { useAuth } from "../../src/context/UseAuth";
-import Checkbox from "expo-checkbox";
 import CheckBox from "../../src/components/CheckBox";
 import TickCrossIndicator from '../../src/components/TickCrossIndicator';
-
+import Pagination from "../../src/components/Pagination";
 const MyProjects = () => {
-  const { get, del } = useApi();
+  const { get, del, put } = useApi();
   const { showModal, setGlobalLoading, hideModal } = useAuth();
   const tabs = ["Enabled", "Disabled"];
   const [activeTab, setActiveTab] = useState("Enabled");
@@ -25,14 +22,16 @@ const MyProjects = () => {
   const [selectionMode, setSelectionMode] = useState(false); // when user taps a card
   const [selectedProjects, setSelectedProjects] = useState([]); // selected project IDs
   const [selectAll, setSelectAll] = useState(false);
-  const [dimProjectColors, setDimProjectColors] = useState(false);
-  // Fetch projects
-  const fetchProjects = async () => {
-    setGlobalLoading(true)
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const fetchProjects = async (pageNumber = 1) => {
     try {
-      const status = activeTab.toLowerCase()
-      const result = await get(`my-projects`, { useBearerAuth: true });
-      console.log(result);
+      setLoading(true);
+      const status = activeTab.toLowerCase();
+      const result = await get(
+        `my-projects?status=${status}&order=asc&limit=2&page=${pageNumber}&_t=${Date.now()}`,
+        { useBearerAuth: true }
+      );
 
       if (result?.status === "success") {
         const parsedProjects = result.data.map((p) => ({
@@ -42,7 +41,10 @@ const MyProjects = () => {
           inTimes: p.in_times === "1",
           inExpenses: p.in_expenses === "1",
         }));
+
         setProjects(parsedProjects);
+        setPage(result.pagination?.current_page || 1);
+        setTotalPages(result.pagination?.total_pages || 1);
       } else {
         setProjects([]);
       }
@@ -50,26 +52,17 @@ const MyProjects = () => {
       console.error("Error fetching projects:", error);
       setProjects([]);
     } finally {
-      setGlobalLoading(false);
+      setLoading(false);
     }
   };
 
-  useFocusEffect(
-    useCallback(() => {
-      fetchProjects();
-    }, [])
-  );
-
   useEffect(() => {
-    fetchProjects();
+    fetchProjects(1);
   }, [activeTab]);
-
-
 
   const filteredProjects = projects.filter((item) =>
     item?.project?.toLowerCase().includes(searchQuery.toLowerCase())
   );
-
 
   const toggleProjectSelect = (id) => {
     setSelectedProjects((prevSelected) => {
@@ -96,7 +89,7 @@ const MyProjects = () => {
 
   const deleteProject = () => {
     if (selectedProjects.length === 0) {
-      showModal("Please select at least one project to delete.", "error",);
+      showModal("You must choose at least one project to carry out this action", "error",);
       return;
     }
 
@@ -120,24 +113,22 @@ const MyProjects = () => {
           },
         },
       ]
-
-
     )
 
   };
 
   const DeleteProject = async () => {
-    setGlobalLoading(true);
-
     try {
+      setGlobalLoading(true)
       const payload = { project_nos: selectedProjects };
-      const res = await del("my-projects/delete-projects", payload, {useBearerAuth:true});
-      console.log('projects deleted : ',res);
-
-      if (res?.status === "success") {
+      setSelectedProjects([])
+      const res = await del("my-projects/delete-projects", payload, { useBearerAuth: true });
+      if (res.status === "success") {
+        setProjects([])
         showModal(res.data || "Projects were deleted successfully", "success");
-        //  Refresh project list
-        await fetchProjects();
+        setTimeout(async () => {
+          await fetchProjects();
+        }, 2500);
       } else {
         showModal(res?.data || "Couldn't delete any project", "error");
       }
@@ -145,20 +136,93 @@ const MyProjects = () => {
       console.error(" Delete error:", err.response?.data || err.message);
       showModal("Something went wrong while deleting. Please try again.", "error");
     } finally {
-      setGlobalLoading(false);
+      setGlobalLoading(false)
       handleCancel()
     }
   }
 
+  const toggleProjectStatus = async () => {
+    if (selectedProjects.length <= 0) {
+      showModal("You must choose at least one project to carry out this action", "error");
+      return;
+    }
+    const isCurrentlyEnabled = activeTab.toLowerCase() === "enabled";
+    const newStatus = isCurrentlyEnabled ? "disabled" : "enabled";
+    const actionWord = isCurrentlyEnabled ? "Disable" : "Enable";
+
+    showModal(
+      `You're about to ${actionWord.toLowerCase()} the selected project(s). Do you want to continue?`,
+      "warning",
+      `${actionWord} the projects?`,
+      [
+        {
+          label: `Yes, ${actionWord}`,
+          bgColor: "bg-red-600",
+          onPress: async () => {
+            hideModal();
+            await changeProjectStatus(newStatus);
+          },
+        },
+        {
+          label: "Back",
+          bgColor: "bg-green-600",
+          onPress: () => {
+            hideModal();
+            handleCancel();
+          },
+        },
+      ]
+    );
+  };
+
+  const changeProjectStatus = async (status) => {
+    try {
+      setGlobalLoading(true)
+      const payload = {
+        status,
+        project_nos: selectedProjects,
+      }
+      setSelectedProjects([])
+      const result = await put("my-projects/mark-projects", payload, { useBearerAuth: true });
+      if (result.status === "success") {
+        setProjects([])
+        showModal(result.data || `Projects ${status} successfully.`, "success");
+        setTimeout(async () => {
+          await fetchProjects();
+        }, 2500);
+      } else {
+
+        showModal(result.data || "Failed to update project status.", "error");
+      }
+    } catch (error) {
+      console.log(error);
+      showModal("Something went wrong while updating. Please try again.", "error");
+    } finally {
+      setGlobalLoading(false)
+      handleCancel();
+    }
+  };
+
+  const editProjects = () => {
+    if (selectedProjects.length !== 1) {
+      showModal("Please select exactly one project to edit.", "error");
+      return;
+    }
+
+    const projectId = selectedProjects[0];
+    router.push({
+      pathname: "/otherPages/editProject",
+      params: { id: projectId },
+    });
+    handleCancel();
+  };
 
   const handleCancel = () => {
     setSelectionMode(false);
     setSelectedProjects([]);
     setSelectAll(false);
-    setDimProjectColors(false);
 
   };
-
   return (
     <SafeAreaView className="flex-1 bg-blue-50">
       <PageHeader routes="My Projects" />
@@ -226,7 +290,13 @@ const MyProjects = () => {
         )}
 
         {/* List */}
-        {filteredProjects.length > 0 ? (
+        {loading ? (
+          // Loading Card
+          <View className="bg-white rounded-md shadow-md px-4 py-6 items-center justify-center mt-3">
+            <Text className="text-lg font-medium text-gray-600">Loading your projects...</Text>
+            <Text className="text-base text-gray-500 mt-2">Please wait a moment</Text>
+          </View>
+        ) : filteredProjects.length > 0 ? (
           <FlatList
             data={filteredProjects}
             keyExtractor={(item) => item.id.toString()}
@@ -234,24 +304,20 @@ const MyProjects = () => {
               paddingBottom: selectionMode ? 60 : 0,
               elevation: 2
             }}
-
             renderItem={({ item }) => (
               <TouchableOpacity
                 activeOpacity={0.8}
                 onPress={() => {
                   if (!selectionMode) {
                     setSelectionMode(true);
-                    setDimProjectColors(true);
                     setSelectedProjects([]);
                   } else {
                     toggleProjectSelect(item.id);
                   }
                 }}
-
               >
                 <View className="bg-white rounded-md shadow-md mb-3 ">
-                  {/* Project title with checkbox (only visible in selection mode) */}
-                  <View className="flex-row items-center border-b border-yellow-400  px-2 py-3 mx-3">
+                  <View className="flex-row items-center border-b border-yellow-400 px-2 py-3 mx-3">
                     {selectionMode && (
                       <CheckBox
                         value={selectedProjects.includes(item.id)}
@@ -259,16 +325,13 @@ const MyProjects = () => {
                       />
                     )}
                     <Text
-                      className={`${selectionMode ? "ml-2" : ""
-                        } text-lg font-semibold text-gray-600`}
+                      className={`${selectionMode ? "ml-2" : ""} text-lg font-semibold text-gray-600`}
                     >
                       {item?.project || 'No name'}
                     </Text>
                   </View>
 
-                  {/* Settings sections (unchanged layout) */}
-                  <View className="flex-row flex-wrap my-2 px-3 pt-3 justify-between ">
-
+                  <View className="flex-row flex-wrap my-2 px-3 pt-3 justify-between">
                     <View className="w-[48%] flex-row items-center mb-2">
                       <TickCrossIndicator checked={item.inShift} label="In Shifts" />
                     </View>
@@ -284,17 +347,11 @@ const MyProjects = () => {
                     <View className="w-[48%] flex-row items-center">
                       <TickCrossIndicator checked={item.inExpenses} label="In Expenses" />
                     </View>
-
                   </View>
 
-
-
                   {item.suggestions && (
-                    <Text className=" text-lg px-3 mb-3">
-                      {item.suggestions}
-                    </Text>
+                    <Text className="text-lg px-3 mb-3">{item.suggestions}</Text>
                   )}
-
                 </View>
               </TouchableOpacity>
             )}
@@ -311,19 +368,50 @@ const MyProjects = () => {
             </Text>
           </View>
         )}
+
+
+        {/* Pagination Controls */}
+        {!loading && (
+          <Pagination
+          page={page}
+          totalPages={totalPages}
+          onPageChange={(newPage) => {
+            fetchProjects(newPage);
+          }}
+        />
+        )}
+
       </View>
 
       {/* Bottom Action Bar */}
       {selectionMode && (
         <View className="absolute bottom-0 left-0 right-0 bg-white shadow-lg flex-row justify-around py-3 border-t border-gray-300">
-          <TouchableOpacity className="items-center">
-            <Ionicons name="create-outline" size={22} color="#007bff" />
-            <Text className="text-[#007bff]">Edit</Text>
+
+          <TouchableOpacity
+            onPress={editProjects}
+            className="items-center">
+            <Ionicons name="create-outline" size={24} color="#16a34a" />
+            <Text className="text-[#16a34a]">Edit</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            className="items-center"
+            onPress={toggleProjectStatus}
+          >
+            <AntDesign
+              name={activeTab === "Enabled" ? "eye-invisible" : "eye"}
+              size={24}
+              color="#6b7280"
+            />
+            <Text className="text-[#6b7280]">
+              {activeTab === "Enabled" ? "Disable" : "Enable"}
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity className="items-center"
             onPress={deleteProject}>
-            <Ionicons name="trash-outline" size={22} color="#dc2626" />
+            <Ionicons
+              name="trash-outline" size={22} color="#dc2626" />
             <Text className="text-[#dc2626]">Delete</Text>
           </TouchableOpacity>
 
@@ -338,18 +426,5 @@ const MyProjects = () => {
   );
 };
 
-const StatusLabel = ({ label, active = false, dimColor = false }) => {
-  return (
-    <Text
-      className={`ml-2 text-lg ${dimColor
-        ? "text-gray-800"
-        : active
-          ? "text-green-600"
-          : "text-red-600"
-        }`}
-    >
-      {label}
-    </Text>
-  );
-};
+
 export default MyProjects;

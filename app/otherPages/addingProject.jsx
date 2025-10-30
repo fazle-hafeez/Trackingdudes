@@ -92,11 +92,12 @@ const AddingProject = () => {
       const result = await post("/my-projects/create-project", payload, {
         useBearerAuth: true,
       });
-
-      if (result.status === "success") {
+  console.log(result);
+  
+      if (result.status === "success" && result.action ==="Next") {
         // Show dynamic buttons using new modal system
         showModal(
-          result.data || "Project created successfully!",
+          "Project was  created successfully!",
           "success",
           "Yah!!",
           false,
@@ -111,7 +112,7 @@ const AddingProject = () => {
               bgColor: "bg-blue-600",
               onPress: () => {
                 hideModal();
-                router.replace("/otherPages/myProjects");
+                router.push("/otherPages/myProjects");
               },
             },
           ]
