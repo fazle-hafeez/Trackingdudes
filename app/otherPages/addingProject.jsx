@@ -1,51 +1,74 @@
-
-
-import { View, Text, TextInput, TouchableOpacity, Modal, Animated } from "react-native";
+import {View,Text,TextInput,TouchableOpacity,Modal,Animated,} from "react-native";
 import React, { useState, useRef, useEffect } from "react";
 import Checkbox from "expo-checkbox";
-import { FontAwesome6, FontAwesome, Entypo, AntDesign } from "@expo/vector-icons";
+import {FontAwesome6,FontAwesome,Entypo,AntDesign} from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import PageHeader from "../../src/components/PageHeader";
 import Button from "../../src/components/Button";
 import { useApi } from "../../src/hooks/useApi";
 import { useAuth } from "../../src/context/UseAuth";
-import { router } from "expo-router";
-
+import { useDebounce } from "../../src/hooks/useDebounce";
+import { router, useLocalSearchParams } from "expo-router";
 const AddingProject = () => {
-  const { post, get } = useApi();
+  const { get, post, put } = useApi();
   const { showModal, setGlobalLoading, hideModal } = useAuth();
+  const { id } = useLocalSearchParams();
 
-  const [inShift, setInShift] = useState(true);
-  const [shiftInput, setShiftInput] = useState("In Shift");
-  const [inTrips, setInTrips] = useState(true);
-  const [inTripsInput, setInTripsInput] = useState("In Trips");
-  const [inTimes, setInTimes] = useState(true);
-  const [inTimsInput, setInTimsInput] = useState("In Times");
-  const [inExpenses, setInExpenses] = useState(true);
-  const [inExpensesInput, setInExpensesInput] = useState("In Expenses");
+  //  Single project object state
+  const [project, setProject] = useState({
+    name: "",
+    in_shifts: true,
+    in_trips: true,
+    in_times: true,
+    in_expenses: true,
+    suggestions: "",
+  });
 
-  const [projectName, setProjectName] = useState("");
-  const [debouncedName, setDebouncedName] = useState("");
-  const [textArea, setTextArea] = useState("");
   const [message, setMessage] = useState("");
-  const [messageStatus, setMessStatus] = useState(false);
-  const [modalVisibility, setModalVisible] = useState(false);
+  const [messageStatus, setMessageStatus] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
 
-  // Debounce project name check
+  //  Debounce project name for API check
+  const debouncedName = useDebounce(project.name, 600);
+
+  //  Fetch existing project if editing
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedName(projectName.trim());
-    }, 600);
-    return () => clearTimeout(timer);
-  }, [projectName]);
+    if (id) fetchProjectDetail();
+  }, [id]);
 
-  // Check project name availability
+  const fetchProjectDetail = async () => {
+    setGlobalLoading(true);
+    try {
+      const res = await get(
+        `my-projects/project?project_no=${id}&_t=${Date.now()}`,
+        { useBearerAuth: true }
+      );
+      if (res?.status === "success" && res?.data) {
+        const p = res.data;
+        setProject({
+          name: p.project || "",
+          in_shifts: p.in_shifts === "1",
+          in_trips: p.in_trips === "1",
+          in_times: p.in_times === "1",
+          in_expenses: p.in_expenses === "1",
+          suggestions: p.suggestions || "",
+        });
+      }
+    } catch (err) {
+      showModal("Failed to load project details.", "error");
+    } finally {
+      setGlobalLoading(false);
+    }
+  };
+
+  //  Check project name availability
   useEffect(() => {
     const checkAvailability = async () => {
-      if (!debouncedName) {
+      if (!debouncedName.trim()) {
         setMessage("");
         return;
       }
+
       setMessage("Checking...");
       try {
         const res = await get(
@@ -54,50 +77,49 @@ const AddingProject = () => {
           )}`,
           { useBearerAuth: true }
         );
+
         if (res?.status === "success") {
           setMessage(res.data || "Available");
-          setMessStatus(false);
+          setMessageStatus(false);
         } else {
           setMessage(res.data || "Already exists");
-          setMessStatus(true);
+          setMessageStatus(true);
         }
-      } catch (err) {
+      } catch {
         setMessage("Error checking name");
-        setMessStatus(true);
+        setMessageStatus(true);
       }
     };
     checkAvailability();
   }, [debouncedName]);
 
-  // Handle project creation
+  //  Handle create
   const handleCreateProject = async () => {
-    if (!projectName.trim()) {
+    if (!project.name.trim()) {
       setMessage("Field is required");
-      setMessStatus(true);
+      setMessageStatus(true);
       return;
     }
 
     setGlobalLoading(true);
     try {
       const payload = {
-        project: projectName,
-        in_trips: inTrips,
-        in_shifts: inShift,
-        in_times: inTimes,
-        in_expenses: inExpenses,
-        suggestions: textArea,
+        project: project.name,
+        in_trips: project.in_trips,
+        in_shifts: project.in_shifts,
+        in_times: project.in_times,
+        in_expenses: project.in_expenses,
+        suggestions: project.suggestions,
         status: "enabled",
       };
 
       const result = await post("/my-projects/create-project", payload, {
         useBearerAuth: true,
       });
-  console.log(result);
-  
-      if (result.status === "success" && result.action ==="Next") {
-        // Show dynamic buttons using new modal system
+
+      if (result.status === "success" && result.action === "Next") {
         showModal(
-          "Project was  created successfully!",
+          "Project created successfully!",
           "success",
           "Yah!!",
           false,
@@ -117,22 +139,83 @@ const AddingProject = () => {
             },
           ]
         );
-        // setProjectName("")
-        // setInShift(true)
-        // setInExpenses(true)
-        // setInTimes(true)
-        // setInTrips(true)
-        // setTextArea("");
+        setProject({
+          name: "",
+          in_shifts: true,
+          in_trips: true,
+          in_times: true,
+          in_expenses: true,
+          suggestions: "",
+        });
       } else {
         showModal(
           result.data ||
           "You have already used the project name before. Please try another name...",
           "error"
         );
-        setProjectName("");
+        setProject((prev) => ({ ...prev, name: "" }));
       }
     } catch (error) {
-      showModal(error.error || "A server error occurred, please try again", "error");
+       
+      showModal(
+        error.error || "A server error occurred, please try again",
+        "error"
+      );
+    } finally {
+      setGlobalLoading(false);
+    }
+  };
+
+  //  Handle update
+  const handleSave = async () => {
+    if (!project.name.trim()) {
+      showModal("Project name cannot be empty.", "error");
+      return;
+    }
+
+    setGlobalLoading(true);
+    try {
+      const payload = {
+        project_no: id,
+        project: project.name,
+        in_shifts: project.in_shifts,
+        in_trips: project.in_trips,
+        in_times: project.in_times,
+        in_expenses: project.in_expenses,
+        suggestions: project.suggestions,
+      };
+
+      const res = await put("my-projects/update-project", payload, {
+        useBearerAuth: true,
+      });
+
+      if (res.status === "success") {
+        showModal("Project was updated successfully!", "success",false,
+           [
+            {
+              label: "View changes",
+              bgColor: "bg-green-600",
+              onPress: async() => {
+                hideModal(),
+                await fetchProjectDetail()
+              },
+            },
+            {
+              label: "View All",
+              bgColor: "bg-blue-600",
+              onPress: () => {
+                hideModal();
+                router.push("/otherPages/myProjects");
+              },
+            },
+          ]
+        );
+
+      } else {
+        showModal(res?.data || "Failed to update project.", "error");
+      }
+    } catch {
+      showModal("Something went wrong while saving.", "error");
     } finally {
       setGlobalLoading(false);
     }
@@ -140,7 +223,8 @@ const AddingProject = () => {
 
   return (
     <SafeAreaView className="flex-1">
-      <PageHeader routes="Add Project" />
+      <PageHeader routes={id ? "Edit Project" : "Add Project"} />
+
       <View className="flex-1 bg-gray-100 p-4">
         <View className="bg-white rounded-lg p-4" style={{ elevation: 5 }}>
           {/* Header */}
@@ -149,11 +233,14 @@ const AddingProject = () => {
             <Text className="text-xl ml-2 font-medium pt-1">Project</Text>
           </View>
 
+          {/* Project Name */}
           <TextInput
             className="rounded-lg border border-gray-400 mt-2 px-3 py-3 text-lg"
             placeholder="Project name for easy reference"
-            value={projectName}
-            onChangeText={setProjectName}
+            value={project.name}
+            onChangeText={(val) =>
+              setProject((prev) => ({ ...prev, name: val }))
+            }
           />
           {message ? (
             <Text
@@ -174,31 +261,35 @@ const AddingProject = () => {
 
           <Section>
             <LabeledInput
-              checkVal={inShift}
-              setCheckVal={setInShift}
-              inputValue={shiftInput}
-              setInputVal={setShiftInput}
+              label="In Shift"
+              value={project.in_shifts}
+              onChange={(val) =>
+                setProject((prev) => ({ ...prev, in_shifts: val }))
+              }
             />
             <LabeledInput
-              checkVal={inTrips}
-              setCheckVal={setInTrips}
-              inputValue={inTripsInput}
-              setInputVal={setInTripsInput}
+              label="In Trips"
+              value={project.in_trips}
+              onChange={(val) =>
+                setProject((prev) => ({ ...prev, in_trips: val }))
+              }
             />
           </Section>
 
           <Section>
             <LabeledInput
-              checkVal={inTimes}
-              setCheckVal={setInTimes}
-              inputValue={inTimsInput}
-              setInputVal={setInTimsInput}
+              label="In Times"
+              value={project.in_times}
+              onChange={(val) =>
+                setProject((prev) => ({ ...prev, in_times: val }))
+              }
             />
             <LabeledInput
-              checkVal={inExpenses}
-              setCheckVal={setInExpenses}
-              inputValue={inExpensesInput}
-              setInputVal={setInExpensesInput}
+              label="In Expenses"
+              value={project.in_expenses}
+              onChange={(val) =>
+                setProject((prev) => ({ ...prev, in_expenses: val }))
+              }
             />
           </Section>
 
@@ -210,77 +301,80 @@ const AddingProject = () => {
             </Text>
             <TouchableOpacity
               activeOpacity={0.6}
-              className="ml-2  rounded-full bg-blue-700 w-7 h-7 flex justify-center items-center "
+              className="ml-2 rounded-full bg-blue-700 w-7 h-7 flex justify-center items-center"
               onPress={() => setModalVisible(true)}
             >
               <FontAwesome name="info" size={15} color="white" />
             </TouchableOpacity>
           </View>
 
-          <View className="my-2">
-            <TextInput
-              className="border border-gray-400 rounded-lg p-3 text-lg"
-              style={{ textAlignVertical: "top" }}
-              multiline
-              onChangeText={setTextArea}
-              value={textArea}
-              placeholder="Save commonly used words or phrases for project notes. Separate each with | character."
-            />
-          </View>
+          <TextInput
+            className="border border-gray-400 rounded-lg p-3 text-lg"
+            style={{ textAlignVertical: "top" }}
+            multiline
+            value={project.suggestions}
+            onChangeText={(val) =>
+              setProject((prev) => ({ ...prev, suggestions: val }))
+            }
+            placeholder="This input allows you to save commonly used words or phrases for project notes. Each word or phrase should be separated by the | character."
+          />
 
-          <Button title="Save" onClickEvent={handleCreateProject} />
+          <Button
+            title={id ? "Update" : "Save"}
+            onClickEvent={id ? handleSave : handleCreateProject}
+          />
         </View>
 
-        <Text className="p-3 text-lg leading-6">
+        <Text className="p-3 text-lg leading-7">
           Saving a project allows you to select it from the list of saved projects.
-          This is useful in tracking shifts, trips, time, as well as fuel consumption or other expenses.
+           This is useful in tracking shifts, trips, time, as well as fuel consumption or other expenses.
         </Text>
       </View>
 
       <InfoModal
-        visible={modalVisibility}
+        visible={modalVisible}
         onClose={() => setModalVisible(false)}
-        message="This input allows you to save commonly used words or phrases for project notes. Each word or phrase should be separated by the | character."
+        message="You can save commonly used words or phrases for project notes here. 
+        Separate each one using the | character."
       />
     </SafeAreaView>
   );
 };
 
-// --- Section Component ---
+// --- Reusable Section ---
 const Section = ({ children }) => (
-  <View className="flex-row justify-between items-center gap-4">{children}</View>
+  <View className="flex-row justify-between items-center gap-4">
+    {children}
+  </View>
 );
 
-const LabeledInput = ({ checkVal, setCheckVal, inputValue, setInputVal }) => {
-  return (
-    <View className="flex-row items-center my-2 w-[49%] px-2">
-      <View className="absolute -left-1 z-10">
-        <Checkbox
-          value={checkVal}
-          onValueChange={setCheckVal}
-          color={checkVal ? "#2563eb" : undefined}
-          style={{
-            borderWidth: 2,
-            borderColor: checkVal ? "#2563eb" : "#9ca3af",
-            backgroundColor: checkVal ? "#2563eb" : "white",
-            borderRadius: 5,
-            width: 21,
-            height: 21,
-          }}
-        />
-      </View>
-
-      <TextInput
-        className="border border-gray-400 rounded-lg pl-5 pr-3 py-2 text-base flex-1"
-        value={inputValue}
-        onChangeText={setInputVal}
-        editable={false}
+// --- Checkbox Input ---
+const LabeledInput = ({ label, value, onChange }) => (
+  <View className="flex-row items-center my-2 w-[49%] px-2">
+    <View className="absolute -left-1 z-10">
+      <Checkbox
+        value={value}
+        onValueChange={onChange}
+        color={value ? "#2563eb" : undefined}
+        style={{
+          borderWidth: 2,
+          borderColor: value ? "#2563eb" : "#9ca3af",
+          backgroundColor: value ? "#2563eb" : "white",
+          borderRadius: 5,
+          width: 21,
+          height: 21,
+        }}
       />
     </View>
-  );
-};
+    <TextInput
+      className="border border-gray-400 rounded-lg pl-5 pr-3 py-2 text-base flex-1"
+      value={label}
+      editable={false}
+    />
+  </View>
+);
 
-// --- Centered Modal with Fade + Scale Animation ---
+// --- Info Modal ---
 const InfoModal = ({ visible, onClose, message }) => {
   const opacity = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(0.8)).current;
@@ -288,32 +382,55 @@ const InfoModal = ({ visible, onClose, message }) => {
   useEffect(() => {
     if (visible) {
       Animated.parallel([
-        Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
         Animated.spring(scale, { toValue: 1, useNativeDriver: true }),
       ]).start();
     } else {
       Animated.parallel([
-        Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: true }),
-        Animated.timing(scale, { toValue: 0.8, duration: 200, useNativeDriver: true }),
+        Animated.timing(opacity, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(scale, {
+          toValue: 0.8,
+          duration: 200,
+          useNativeDriver: true,
+        }),
       ]).start();
     }
   }, [visible]);
 
   return (
-    <Modal transparent visible={visible} animationType="none">
+    <Modal
+      transparent
+      visible={visible}
+      statusBarTranslucent
+      animationType="none"
+      onRequestClose={onClose}
+    >
       <View className="flex-1 bg-black/80 justify-center items-center px-3">
         <Animated.View style={{ opacity, transform: [{ scale }], width: "100%" }}>
           <View className="bg-white rounded-2xl">
             <View className="flex-row justify-between items-center p-3">
-              <Text className="text-xl font-medium">About Regularly Typed Words</Text>
-              <TouchableOpacity className=" p-1" onPress={onClose}>
+              <Text className="text-xl font-medium">
+                About Regularly Typed Words
+              </Text>
+              <TouchableOpacity className="p-1" onPress={onClose}>
                 <AntDesign name="close" size={20} color="black" />
               </TouchableOpacity>
             </View>
             <View className="border-b" />
-            <Text className="text-2xl font-normal px-3 py-8 text-gray-700">{message}</Text>
+            <Text className="text-lg px-3 py-8 text-gray-700">{message}</Text>
             <View className="border-b mb-3" />
-            <TouchableOpacity className="bg-gray-400 rounded-md py-2 px-6 self-end my-2 mx-3" onPress={onClose}>
+            <TouchableOpacity
+              className="bg-gray-400 rounded-md py-2 px-6 self-end my-2 mx-3"
+              onPress={onClose}
+            >
               <Text className="text-white font-medium text-base">Close</Text>
             </TouchableOpacity>
           </View>

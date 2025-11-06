@@ -1,6 +1,13 @@
-import { Link, useLocalSearchParams, useRouter } from "expo-router";
+import { Link, useLocalSearchParams, router } from "expo-router";
 import React, { useState, useEffect } from "react";
-import { View, Text, TextInput, TouchableOpacity, StatusBar, Platform } from "react-native";
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StatusBar,
+  Platform,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import HeaderSection from "../../src/components/HeaderSection";
 import Button from "../../src/components/Button";
@@ -9,37 +16,59 @@ import { useApi } from "../../src/hooks/useApi";
 import { useAuth } from "../../src/context/UseAuth";
 
 const EmailVerification = () => {
-  const router = useRouter();
   const { post, put } = useApi();
-  const {
-    showModal,
-    hideModal,
-    setGlobalLoading,
-  } = useAuth();
-
-  const { trimmedEmail, changePassword, enableBtn, reastartEmail, resetEmail } =
-    useLocalSearchParams();
+  const { showModal, hideModal, setGlobalLoading } = useAuth();
+  const { trimmedEmail, changePassword, enableBtn, reastartEmail, resetEmail } = useLocalSearchParams();
 
   const [code, setCode] = useState("");
   const [otpError, setOtpError] = useState("");
   const [wrongAttempts, setWrongAttempts] = useState(0);
   const [isBlocked, setIsBlocked] = useState(false);
-  const [blockTimer, setBlockTimer] = useState(180);
+  const [blockTimer, setBlockTimer] = useState(0);
+  const [lockoutEndTime, setLockoutEndTime] = useState(null);
   const [resendTimer, setResendTimer] = useState(60);
   const [restartTimer, setRestartTimer] = useState(30);
   const [canResend, setCanResend] = useState(false);
   const [canRestart, setCanRestart] = useState(false);
 
-  const isAllDisabled = isBlocked ;
+  const isAllDisabled = isBlocked;
 
-  // Format mm:ss
+  // Format time mm:ss
   const formatTime = (seconds) => {
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
     return `${m}:${s < 10 ? "0" : ""}${s}`;
   };
 
-  // Timers
+  //  Load lockout state on mount
+  useEffect(() => {
+    const loadLockoutState = async () => {
+      const storedEndTime = await AsyncStorage.getItem("lockoutEndTime");
+      if (storedEndTime) {
+        const endTime = parseInt(storedEndTime);
+        const remaining = Math.max(0, Math.ceil((endTime - Date.now()) / 1000));
+        if (remaining > 0) {
+          setIsBlocked(true);
+          setLockoutEndTime(endTime);
+          setBlockTimer(remaining);
+        } else {
+          await AsyncStorage.removeItem("lockoutEndTime");
+        }
+      }
+    };
+    loadLockoutState();
+  }, []);
+
+  // Save lockoutEndTime when blocked
+  useEffect(() => {
+    if (lockoutEndTime && isBlocked) {
+      AsyncStorage.setItem("lockoutEndTime", lockoutEndTime.toString());
+    } else if (!isBlocked) {
+      AsyncStorage.removeItem("lockoutEndTime");
+    }
+  }, [isBlocked, lockoutEndTime]);
+
+  // Resend timer
   useEffect(() => {
     const resendInterval = setInterval(() => {
       setResendTimer((prev) => {
@@ -54,6 +83,7 @@ const EmailVerification = () => {
     return () => clearInterval(resendInterval);
   }, []);
 
+  // Restart timer
   useEffect(() => {
     const restartInterval = setInterval(() => {
       setRestartTimer((prev) => {
@@ -68,25 +98,24 @@ const EmailVerification = () => {
     return () => clearInterval(restartInterval);
   }, []);
 
-  // 3-min block timer
+  // Lockout countdown
   useEffect(() => {
     let interval;
-    if (isBlocked) {
+    if (isBlocked && lockoutEndTime) {
       interval = setInterval(() => {
-        setBlockTimer((prev) => {
-          if (prev <= 1) {
-            clearInterval(interval);
-            setIsBlocked(false);
-            setWrongAttempts(0);
-            setBlockTimer(180);
-            return 180;
-          }
-          return prev - 1;
-        });
+        const remaining = Math.max(0, Math.ceil((lockoutEndTime - Date.now()) / 1000));
+        setBlockTimer(remaining);
+        if (remaining <= 0) {
+          clearInterval(interval);
+          setIsBlocked(false);
+          setWrongAttempts(0);
+          setLockoutEndTime(null);
+          AsyncStorage.removeItem("lockoutEndTime");
+        }
       }, 1000);
     }
     return () => clearInterval(interval);
-  }, [isBlocked]);
+  }, [isBlocked, lockoutEndTime]);
 
   //  Submit OTP
   const submitCode = async () => {
@@ -98,22 +127,19 @@ const EmailVerification = () => {
 
     setGlobalLoading(true);
     try {
-      const response = await post("/register/verify-email", { code });
-      console.log(response);
-      if (response.status === "success") {
-        setTimeout(() => {
-          showModal(response.data || "Email verified successfully!", "success");
-        }, 0);
+      const response = await post("register/verify-email", { code });
+      const msg = response?.data || response?.message || "Unexpected response.";
 
+      if (response?.status === "success") {
+        showModal(msg, "success");
 
         if (response?.tokens) {
           await AsyncStorage.setItem("tokens", JSON.stringify(response.tokens));
-
         } else {
           await AsyncStorage.removeItem("tokens");
         }
 
-        if (response.action === "Next") {
+        if (response?.action === "Next") {
           setTimeout(() => {
             hideModal();
             router.push({
@@ -122,44 +148,48 @@ const EmailVerification = () => {
                 : "/auth/completeRegistration",
               params: { trimmedEmail: changePassword ? resetEmail : trimmedEmail },
             });
-          }, 2500);
+          }, 2000);
         }
-      } else if (response.status === "error") {
-        setWrongAttempts((prev) => {
-          const next = prev + 1;
-          if (next >= 3) {
-            setIsBlocked(true);
-            setTimeout(() => {
+      } else if (response?.status === "error") {
+        if (response?.action === "LockOut") {
+          const duration = response?.lockoutDuration || 180;
+          setIsBlocked(true);
+          setLockoutEndTime(Date.now() + duration * 1000);
+          showModal(
+            response?.data || `You are locked out. Try again in ${duration} seconds.`,
+            "error"
+          );
+        } else {
+          setWrongAttempts((prev) => {
+            const next = prev + 1;
+            if (next >= 3) {
+              const fallbackDuration = 180;
+              setIsBlocked(true);
+              setLockoutEndTime(Date.now() + fallbackDuration * 1000);
               showModal(
                 "You’ve entered the wrong code 3 times. Try again after 3 minutes.",
                 "error"
               );
-            }, 0);
-          } else {
-            setTimeout(() => {
-              showModal(response.data || "Invalid OTP. Please try again.", "error");
-            }, 0);
-          }
-          return next;
-        });
+            } else {
+              showModal(msg || "Invalid OTP. Please try again.", "error");
+            }
+            return next;
+          });
+        }
       } else {
-        setTimeout(() => {
-          showModal(response.data || "Unexpected response from server.", "error");
-        }, 0);
+        showModal(msg, "error");
       }
     } catch (error) {
-      setTimeout(() => {
-        showModal(error.message || "Something went wrong. Try again later.", "error");
-      }, 0);
+      showModal(error?.message || "Something went wrong. Try again later.", "error");
     } finally {
       setGlobalLoading(false);
     }
   };
 
-  // Restart
+  // Restart signup
   const restart = () => {
     router.push({
-      pathname: "/auth/signup",
+      pathname: "auth/signup",
       params: { show: true, trimmedEmail, resetEmail },
     });
   };
@@ -168,29 +198,23 @@ const EmailVerification = () => {
   const sendEmailCode = async () => {
     setGlobalLoading(true);
     try {
-      const result = await put("/register/resend-email");
-      if (result.status === "success") {
-        setTimeout(() => {
-          showModal(result.data || "Verification email sent successfully!", "success");
-        }, 0);
-      } else if (result.restart === true) {
+      const result = await put("register/resend-email");
+      const msg = result?.data || result?.message || "Unexpected response.";
+      if (result?.status === "success") {
+        showModal(msg, "success");
+      } else if (result?.restart === true) {
+        const duration = result?.lockoutDuration || 180;
         setIsBlocked(true);
-        setTimeout(() => {
-          showModal(
-            result.data ||
-              "You are making too many requests in a short time. Please wait a bit before trying again.",
-            "error"
-          );
-        }, 0);
+        setLockoutEndTime(Date.now() + duration * 1000);
+        showModal(
+          msg || "Too many resend attempts. Please wait before trying again.",
+          "error"
+        );
       } else {
-        setTimeout(() => {
-          showModal(result.data || "Failed to resend verification email.", "error");
-        }, 0);
+        showModal(msg, "error");
       }
     } catch (error) {
-      setTimeout(() => {
-        showModal("Failed to resend verification email. Try again later.", "error");
-      }, 0);
+      showModal(error?.message || "Failed to resend verification email.", "error");
     } finally {
       setGlobalLoading(false);
     }
@@ -201,22 +225,24 @@ const EmailVerification = () => {
       <StatusBar barStyle="light-content" backgroundColor="#0000ff" />
       <HeaderSection />
 
-      <View className="p-4 mx-auto bg-white">
+      <View style={{marginTop:-320}} className="p-4">
         <View
-          className={`bg-[rgba(255,255,255,0.9)] rounded-xl p-6 ${
-            Platform.OS === "ios" ? " shadow-sm" : ""
+          className={`bg-[rgba(255,255,255,0.9)] rounded-2xl p-6 mt-6 ${
+            Platform.OS === "ios" ? "shadow-sm" : ""
           }`}
-          style={{ marginTop: -300, elevation: 5 }}
+          style={{ elevation: 5 }}
         >
           <Text className="text-headercolor text-2xl font-medium mb-2">
             Verify your email address
           </Text>
           <Text className="text-md text-headercolor">
-            We've sent a 6-digit code to {trimmedEmail || reastartEmail || resetEmail} from
-            register@trackingdudes.com. Please enter it below.
+            We've sent a 6-digit code to{" "}
+            {trimmedEmail || reastartEmail || resetEmail} from{" "}
+            <Text className="font-medium">register@trackingdudes.com</Text>. Please
+            enter it below.
           </Text>
 
-          <Text className="text-2xl mt-4 mb-2 text-headercolor">Enter code here</Text>
+          <Text className="text-xl mt-4 mb-2 text-headercolor">Enter code here</Text>
           <TextInput
             autoFocus
             keyboardType="numeric"
@@ -234,48 +260,47 @@ const EmailVerification = () => {
           {otpError ? <Text className="text-red-500 text-sm mt-2">{otpError}</Text> : null}
 
           {isBlocked && (
-            <Text className="text-red-500 text-sm mt-1">
-              You are blocked for {formatTime(blockTimer)} due to too many failed attempts.
+            <Text className="text-red-500 text-sm mt-2">
+              You are locked out for {formatTime(blockTimer)}. Please wait.
             </Text>
           )}
 
-          <View className="mt-2">
+          <View className="mt-3">
             <Button title="Submit" onClickEvent={submitCode} disabled={isAllDisabled} />
           </View>
 
-          <View className="border border-gray-400 my-4"></View>
+          <View className="border border-gray-300 my-4"></View>
 
-          <Text className="text-2xl text-headercolor mb-2">
+          <Text className="text-xl text-headercolor mb-2">
             Didn't receive the email?
           </Text>
 
-          <View className="flex-row justify-between items-center">
+          <View className="flex-row justify-between">
             <TouchableOpacity
               disabled={isAllDisabled || (!canResend && !enableBtn)}
-              className={`border rounded-md h-12 pt-1 ${
+              onPress={sendEmailCode}
+              className={`border rounded-md h-12 justify-center px-3 ${
                 canResend || enableBtn ? "border-blue" : "border-gray-400"
               }`}
-              onPress={sendEmailCode}
             >
               <Text
-                className={`p-2 ${
+                className={`${
                   canResend || enableBtn ? "text-customBlue" : "text-gray-400"
                 }`}
               >
-                Resend Email{" "}
-                {!enableBtn && !canResend && `| in ${formatTime(resendTimer)}`}
+                Resend Email {!enableBtn && !canResend && `| in ${formatTime(resendTimer)}`}
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               disabled={isAllDisabled || (!canRestart && !enableBtn)}
               onPress={restart}
-              className={`border rounded-md h-12 pt-1 ${
+              className={`border rounded-md h-12 justify-center px-3 ${
                 canRestart || enableBtn ? "border-blue" : "border-gray-400"
               }`}
             >
               <Text
-                className={`p-2 ${
+                className={`${
                   canRestart || enableBtn ? "text-customBlue" : "text-gray-400"
                 }`}
               >
@@ -285,26 +310,13 @@ const EmailVerification = () => {
           </View>
         </View>
 
-        <View className="mt-3 px-3">
-          <Text className="text-2xl text-headercolor">
-            Already Registered?{" "}
-            <TouchableOpacity
-              disabled={isAllDisabled}
-              onPress={() => router.push("/otherPages/home")}
-              className="pt-2"
-            >
-              <Text className="text-customBlue underline text-xl">Login here</Text>
-            </TouchableOpacity>
-          </Text>
-        </View>
-
-        <View className="px-3 mt-2">
-          <Text>
-            Please ensure that your email service provider does not block our
-            emails. If you attempt to send emails from this page multiple times in
-            a short period of time, they may end up in your spam folder. Therefore,
-            please double-check all folders, including spam, before resending
-            another email. Thank you.
+        {/*  Info Text Below Card */}
+        <View className="mt-3">
+          <Text className="text-gray-600 text-lg leading-6 text-justify">
+            Please ensure that your email service provider does not block our emails. If
+            you attempt to send emails from this page multiple times in a short period,
+            they may end up in your spam folder. Therefore, please double-check all
+            folders, including spam, before resending another email. Thank you.
           </Text>
         </View>
       </View>

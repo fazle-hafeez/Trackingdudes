@@ -50,7 +50,9 @@ class TokenError extends Error {
 const handleLogout = async () => {
   console.warn("Logging out — token invalid or expired");
   await AsyncStorage.removeItem("tokens");
-  router.replace("/auth/login");
+  setTimeout(() => {
+    router.replace("/auth/login");
+  }, 2500);
 };
 
 /* -------------------------------------------------------------
@@ -159,15 +161,8 @@ export const apiRequest = async (
       headers,
       body: body ? (isFormData ? body : JSON.stringify(body)) : undefined,
     };
-    console.log("🔍 Request:", {
-      url,
-      method,
-      body,
-      headers,
-    });
-
+    
     let res = await fetch(url, config);
-
     // Retry on 401
     if (res.status === 401 && useAuth) {
       console.warn("401 detected — retrying after token refresh");
@@ -189,7 +184,7 @@ export const apiRequest = async (
   } catch (err) {
     if (err instanceof TokenError) {
       await handleLogout();
-      return { error: "SessionExpired", message: "Please login again" };
+      return { error: "SessionExpired", message: "Your session was expired  Please login again" };
     }
 
     console.error("Network/API error:", err);

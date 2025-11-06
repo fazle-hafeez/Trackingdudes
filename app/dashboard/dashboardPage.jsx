@@ -15,7 +15,7 @@ export default function Dashboard() {
       <StatusBar barStyle="light-content" backgroundColor="#0000ff" />
       {/*  Fixed Header */}
       <View
-        className="flex-row items-center bg-customBlue px-4 py-3"
+        className="flex-row items-center bg-customBlue px-5 py-3"
         style={styles.menu}
       >
         <Entypo
@@ -30,7 +30,7 @@ export default function Dashboard() {
       {/*  Scrollable content below */}
       <ScrollView
         className="flex-1"
-        contentContainerStyle={{ paddingTop: 60 }} // make room for the fixed header
+        contentContainerStyle={{ paddingTop: 60 }}
       >
         <Section title="Active features">
           <Feature
@@ -54,7 +54,7 @@ export default function Dashboard() {
           <Feature
             icon={<FontAwesome5 name="car" size={38} color="blue" />}
             label="My vehicles"
-            onPress={() => router.push("/otherPages/myVehicles")}
+            onPress={() => router.push("/otherPages/vehicles/myVehicles")}
           />
           <Feature
             icon={<FontAwesome5 name="file-alt" size={38} color="blue" />}

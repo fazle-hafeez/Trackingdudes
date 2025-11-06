@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, TextInput, FlatList } from "react-native";
+import { View, Text, TouchableOpacity, TextInput, FlatList, RefreshControl } from "react-native";
 import React, { act, useEffect, useState } from "react";
 import { useFocusEffect } from "@react-navigation/native";
 import { useCallback } from "react";
@@ -11,6 +11,7 @@ import { useAuth } from "../../src/context/UseAuth";
 import CheckBox from "../../src/components/CheckBox";
 import TickCrossIndicator from '../../src/components/TickCrossIndicator';
 import Pagination from "../../src/components/Pagination";
+import LoadingSkeleton from "../../src/components/LoadingSkeleton"
 const MyProjects = () => {
   const { get, del, put } = useApi();
   const { showModal, setGlobalLoading, hideModal } = useAuth();
@@ -24,12 +25,14 @@ const MyProjects = () => {
   const [selectAll, setSelectAll] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const fetchProjects = async (pageNumber = 1) => {
+  const [refreshing, setRefreshing] = useState(false);
+  const [order, setOrder] = useState("asc");
+  const fetchProjects = async (pageNumber = 1, currentOrder = order) => {
     try {
       setLoading(true);
       const status = activeTab.toLowerCase();
       const result = await get(
-        `my-projects?status=${status}&order=asc&limit=2&page=${pageNumber}&_t=${Date.now()}`,
+        `my-projects?status=${status}&order=${currentOrder}&limit=15&page=${pageNumber}&_t=${Date.now()}`,
         { useBearerAuth: true }
       );
 
@@ -54,11 +57,20 @@ const MyProjects = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }
 
-  useEffect(() => {
-    fetchProjects(1);
-  }, [activeTab]);
+  useFocusEffect(
+    useCallback(() => {
+      fetchProjects(1);
+    }, [activeTab, order])
+  );
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    setOrder("desc");
+    await fetchProjects(1, "desc");
+    setRefreshing(false);
+  };
 
   const filteredProjects = projects.filter((item) =>
     item?.project?.toLowerCase().includes(searchQuery.toLowerCase())
@@ -67,7 +79,6 @@ const MyProjects = () => {
   const toggleProjectSelect = (id) => {
     setSelectedProjects((prevSelected) => {
       let updated;
-
       if (prevSelected.includes(id)) {
         updated = prevSelected.filter((pid) => pid !== id);
       } else {
@@ -87,12 +98,11 @@ const MyProjects = () => {
     });
   };
 
-  const deleteProject = () => {
+  const deleteProject = async () => {
     if (selectedProjects.length === 0) {
       showModal("You must choose at least one project to carry out this action", "error",);
       return;
     }
-
     showModal("You're about to permanently remove the selected projects....", "warning",
       "Deleting the projects?",
       [
@@ -149,7 +159,6 @@ const MyProjects = () => {
     const isCurrentlyEnabled = activeTab.toLowerCase() === "enabled";
     const newStatus = isCurrentlyEnabled ? "disabled" : "enabled";
     const actionWord = isCurrentlyEnabled ? "Disable" : "Enable";
-
     showModal(
       `You're about to ${actionWord.toLowerCase()} the selected project(s). Do you want to continue?`,
       "warning",
@@ -191,11 +200,9 @@ const MyProjects = () => {
           await fetchProjects();
         }, 2500);
       } else {
-
         showModal(result.data || "Failed to update project status.", "error");
       }
     } catch (error) {
-      console.log(error);
       showModal("Something went wrong while updating. Please try again.", "error");
     } finally {
       setGlobalLoading(false)
@@ -203,21 +210,8 @@ const MyProjects = () => {
     }
   };
 
-  const editProjects = () => {
-    if (selectedProjects.length !== 1) {
-      showModal("Please select exactly one project to edit.", "error");
-      return;
-    }
-
-    const projectId = selectedProjects[0];
-    router.push({
-      pathname: "/otherPages/editProject",
-      params: { id: projectId },
-    });
-    handleCancel();
-  };
-
   const handleCancel = () => {
+    // await playSound("error")
     setSelectionMode(false);
     setSelectedProjects([]);
     setSelectAll(false);
@@ -292,32 +286,43 @@ const MyProjects = () => {
         {/* List */}
         {loading ? (
           // Loading Card
-          <View className="bg-white rounded-md shadow-md px-4 py-6 items-center justify-center mt-3">
-            <Text className="text-lg font-medium text-gray-600">Loading your projects...</Text>
-            <Text className="text-base text-gray-500 mt-2">Please wait a moment</Text>
-          </View>
+          <LoadingSkeleton />
         ) : filteredProjects.length > 0 ? (
           <FlatList
             data={filteredProjects}
             keyExtractor={(item) => item.id.toString()}
-            contentContainerStyle={{
-              paddingBottom: selectionMode ? 60 : 0,
-              elevation: 2
-            }}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: selectionMode ? 60 : 0, elevation: 2, }}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
             renderItem={({ item }) => (
               <TouchableOpacity
-                activeOpacity={0.8}
+                activeOpacity={0.7}
                 onPress={() => {
                   if (!selectionMode) {
-                    setSelectionMode(true);
-                    setSelectedProjects([]);
+                    router.push({
+                      pathname: "/otherPages/addingProject",
+                      params: { id: item.id },
+                    });
                   } else {
                     toggleProjectSelect(item.id);
                   }
                 }}
+                onLongPress={() => {
+                  if (!selectionMode) {
+                    setSelectionMode(true);
+                    setSelectedProjects([]);
+                  } else {
+                    setSelectedProjects([item.id]);
+                  }
+                }}
+                delayLongPress={1000} //  Long press after 1 sec
+                className="mb-3"
               >
-                <View className="bg-white rounded-md shadow-md mb-3 ">
-                  <View className="flex-row items-center border-b border-yellow-400 px-2 py-3 mx-3">
+                <View className="bg-white rounded-xl shadow p-4">
+                  {/* Header */}
+                  <View className="flex-row items-center border-b border-yellow-300 pb-2 mb-2">
                     {selectionMode && (
                       <CheckBox
                         value={selectedProjects.includes(item.id)}
@@ -325,37 +330,52 @@ const MyProjects = () => {
                       />
                     )}
                     <Text
-                      className={`${selectionMode ? "ml-2" : ""} text-lg font-semibold text-gray-600`}
+                      className={`text-lg font-semibold text-gray-700 ${selectionMode ? "ml-2" : ""
+                        }`}
                     >
-                      {item?.project || 'No name'}
+                      {item?.project || ""}
                     </Text>
                   </View>
 
-                  <View className="flex-row flex-wrap my-2 px-3 pt-3 justify-between">
+                  {/* Info Boxes */}
+                  <View className="flex-row flex-wrap justify-between">
                     <View className="w-[48%] flex-row items-center mb-2">
                       <TickCrossIndicator checked={item.inShift} label="In Shifts" />
                     </View>
-
                     <View className="w-[48%] flex-row items-center mb-2">
                       <TickCrossIndicator checked={item.inTrips} label="In Trips" />
                     </View>
-
-                    <View className="w-[48%] flex-row items-center">
+                    <View className="w-[48%] flex-row items-center mb-2">
                       <TickCrossIndicator checked={item.inTimes} label="In Times" />
                     </View>
-
-                    <View className="w-[48%] flex-row items-center">
+                    <View className="w-[48%] flex-row items-center mb-2">
                       <TickCrossIndicator checked={item.inExpenses} label="In Expenses" />
                     </View>
                   </View>
 
+                  {/* Suggestion Text */}
                   {item.suggestions && (
-                    <Text className="text-lg px-3 mb-3">{item.suggestions}</Text>
+                    <Text className="text-lg text-gray-600 mb-2 px-1">
+                      {item.suggestions}
+                    </Text>
                   )}
                 </View>
               </TouchableOpacity>
             )}
+            ListFooterComponent={
+              <View className="items-center ">
+                {/* Pagination */}
+                {!loading && (
+                  <Pagination
+                    page={page}
+                    totalPages={totalPages}
+                    onPageChange={(newPage) => fetchProjects(newPage)}
+                  />
+                )}
+              </View>
+            }
           />
+
         ) : (
           <View className="bg-white rounded-md shadow-md px-4 py-5">
             <Text className="text-lg">
@@ -368,32 +388,11 @@ const MyProjects = () => {
             </Text>
           </View>
         )}
-
-
-        {/* Pagination Controls */}
-        {!loading && (
-          <Pagination
-          page={page}
-          totalPages={totalPages}
-          onPageChange={(newPage) => {
-            fetchProjects(newPage);
-          }}
-        />
-        )}
-
       </View>
 
       {/* Bottom Action Bar */}
       {selectionMode && (
         <View className="absolute bottom-0 left-0 right-0 bg-white shadow-lg flex-row justify-around py-3 border-t border-gray-300">
-
-          <TouchableOpacity
-            onPress={editProjects}
-            className="items-center">
-            <Ionicons name="create-outline" size={24} color="#16a34a" />
-            <Text className="text-[#16a34a]">Edit</Text>
-          </TouchableOpacity>
-
           <TouchableOpacity
             className="items-center"
             onPress={toggleProjectStatus}

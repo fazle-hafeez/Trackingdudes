@@ -4,8 +4,8 @@
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "web": "expo start --web"
   },
   "dependencies": {
@@ -13,9 +13,13 @@
     "@react-native-community/checkbox": "^0.5.20",
     "@react-navigation/drawer": "^7.5.9",
     "expo": "54.0.13",
+    "expo-av": "~16.0.7",
     "expo-checkbox": "~5.0.7",
     "expo-linking": "^8.0.8",
+    "expo-navigation-bar": "~5.0.9",
     "expo-router": "~6.0.12",
+    "expo-secure-store": "~15.0.7",
+    "expo-splash-screen": "^31.0.10",
     "expo-status-bar": "~3.0.8",
     "js-base64": "^3.7.8",
     "nativewind": "^4.2.1",

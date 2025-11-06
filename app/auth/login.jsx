@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import { View, Text, TextInput, StatusBar, Platform, } from "react-native";
-import Checkbox from "expo-checkbox";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Link, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -10,6 +9,8 @@ import PasswordInputField from "../../src/components/ToggleField";
 import { useApi } from "../../src/hooks/useApi";
 import { useAuth } from "../../src/context/UseAuth";
 import { useLocalSearchParams } from "expo-router";
+import CheckBox from "../../src/components/CheckBox";
+import * as SecureStore from 'expo-secure-store';
 const Login = () => {
   const [username, setUserName] = useState("");
   const [usernameError, setUserNameError] = useState("");
@@ -19,31 +20,48 @@ const Login = () => {
   const [keepLoggedIn, setKeepLoggedIn] = useState(true);
   const [lastTriedUser, setLastTriedUser] = useState("");
   const { userName: routeUserName } = useLocalSearchParams()
-
   const router = useRouter();
   const { post } = useApi();
   const { showModal, setGlobalLoading, login } = useAuth();
-
   useEffect(() => {
-    (async () => {
+    const loadCredentials = async () => {
       try {
-        // If keepLoggedIn data exists, load both fields
-        const savedCreds = await AsyncStorage.getItem("keepLoginCreds");
-        if (savedCreds) {
-          const { savedName, savedPass } = JSON.parse(savedCreds);
-          setUserName(savedName || "");
-          setPassword(savedPass || "");
+        //  For "Keep Logged In"
+        const savedUsername = await AsyncStorage.getItem("savedUsername");
+        const savedPassword = await SecureStore.getItemAsync("savedPassword");
+
+        //  For "Remember Username"
+        const rememberedUserName = await AsyncStorage.getItem("rememberedUserName");
+
+        console.log("Saved username:", savedUsername);
+        console.log("Remembered username:", rememberedUserName);
+
+        if (savedUsername && savedPassword) {
+          //  User chose "Keep Logged In"
+          setUserName(savedUsername);
+          setPassword(savedPassword);
           setKeepLoggedIn(true);
+          setRemember(true);
+        } else if (rememberedUserName) {
+          //  User chose "Remember Username" only
+          setUserName(rememberedUserName);
+          setRemember(true);
+          setKeepLoggedIn(false);
         } else {
-          // Otherwise just load remembered username
-          const savedName = await AsyncStorage.getItem("rememberedUserName");
-          if (savedName) setUserName(savedName);
+          //  No saved info
+          setUserName("");
+          setPassword("");
+          setKeepLoggedIn(false);
+          setRemember(false);
         }
       } catch (err) {
-        console.warn("Failed to load saved credentials:", err);
+        console.log("Error loading stored credentials:", err);
       }
-    })();
+    };
+
+    loadCredentials();
   }, []);
+
 
   // handle param username
   useEffect(() => {
@@ -87,24 +105,24 @@ const Login = () => {
         { useBasicAuth: true }
       );
       if (result?.status === "success") {
-        await AsyncStorage.setItem("tokens", JSON.stringify(result.tokens));
         const userData = result?.user || { username: cleanUsername };
-
         //  Call global login handler
         await login(userData, result.tokens, {
           remember,
           keepLoggedIn
         });
-
         // Manage remembered username
+        // Manage remembered credentials securely
         if (keepLoggedIn) {
-          await AsyncStorage.setItem(
-            "keepLoginCreds",
-            JSON.stringify({ savedName: cleanUsername, savedPass: password })
-          );
+          // Username → AsyncStorage (safe enough)
+          await AsyncStorage.setItem("savedUsername", cleanUsername);
+          // Password → SecureStore (encrypted)
+          await SecureStore.setItemAsync("savedPassword", password);
         } else {
-          await AsyncStorage.removeItem("keepLoginCreds");
+          await AsyncStorage.removeItem("savedUsername");
+          await SecureStore.deleteItemAsync("savedPassword");
         }
+
         if (remember) {
           await AsyncStorage.setItem("rememberedUserName", cleanUsername);
         } else {
@@ -114,7 +132,7 @@ const Login = () => {
         showModal(result.data || "you are  Login successful!", "success");
         setTimeout(() => {
           router.push("/dashboard/dashboardPage");
-        }, 2500);
+        }, 3000);
       }
       else if (result?.status === "error") {
         if (lastTriedUser === cleanUsername) {
@@ -174,19 +192,17 @@ const Login = () => {
           />
 
           <View className="flex-row items-center my-3">
-            <Checkbox
+            <CheckBox 
               value={remember}
-              onValueChange={setRemember}
-              color={remember ? "#0000ff" : ""}
+              onClick={setRemember}
             />
             <Text className="text-lg ml-2 text-headercolor">Remember username</Text>
           </View>
 
           <View className="flex-row items-center">
-            <Checkbox
+            <CheckBox 
               value={keepLoggedIn}
-              onValueChange={setKeepLoggedIn}
-              color={keepLoggedIn ? "#0000ff" : ""}
+              onClick={setKeepLoggedIn}
             />
             <Text className="text-lg ml-2 text-headercolor">Keep logged in</Text>
           </View>

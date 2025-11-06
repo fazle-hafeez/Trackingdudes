@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Modal, View, Text, TouchableOpacity, Image, StyleSheet } from "react-native";
+import { playSound } from "../hooks/useSound";
 
 const ModalComponent = ({
   visible,
@@ -7,30 +8,42 @@ const ModalComponent = ({
   message,
   errorType = "success",
   buttons = [],
-  title , 
+  title,
   autoHideProp,
 }) => {
-  //  Decide image & autoHide once using useMemo
-  const { imageSource, autoHide } = useMemo(() => {
+  const [imageSource, setImageSource] = useState(null);
+  const [autoHide, setAutoHide] = useState(false);
+
+  // Handle image and sound based on errorType
+  useEffect(() => {
+    if (!visible) return; // Only play when modal opens
+
     let img, hide = false;
+
     switch (errorType) {
       case "error":
         img = require("../../assets/images/cross-markup.png");
+        playSound("error");
         break;
       case "success":
         img = require("../../assets/images/check-markup.png");
         hide = autoHideProp === undefined ? true : autoHideProp;
+        playSound("success");
         break;
       case "warning":
         img = null;
+        playSound("warning");
         break;
       default:
         img = require("../../assets/images/check-markup.png");
     }
-    return { imageSource: img, autoHide: hide };
-  }, [errorType, autoHideProp]);
 
-  //  Auto-hide only if enabled
+    setImageSource(img);
+    setAutoHide(hide);
+  }, [visible, errorType, autoHideProp]);
+
+
+  // Auto-hide logic
   useEffect(() => {
     if (visible && autoHide) {
       const timer = setTimeout(onClose, 2000);
@@ -51,11 +64,13 @@ const ModalComponent = ({
                 <Text style={{ fontSize: 48, color: "orange", fontWeight: "bold" }}>!</Text>
               </View>
             ) : (
-              <Image source={imageSource} style={{ width: 105, height: 105 }} />
+              imageSource && (
+                <Image source={imageSource} style={{ width: 105, height: 105 }} />
+              )
             )}
           </View>
 
-          {/*  title */}
+          {/* Title */}
           {title && (
             <Text className="text-headercolor text-3xl font-medium text-center my-2">
               {title}
@@ -76,9 +91,8 @@ const ModalComponent = ({
                 <TouchableOpacity
                   key={index}
                   onPress={btn.onPress}
-                  className={`flex-1 p-3 rounded-md ${btn.bgColor || "bg-customBlue"} ${
-                    index > 0 ? "ml-3" : ""
-                  }`}
+                  className={`flex-1 p-3 rounded-md ${btn.bgColor || "bg-customBlue"} ${index > 0 ? "ml-3" : ""
+                    }`}
                   activeOpacity={0.6}
                 >
                   <Text className="font-semibold text-white text-center text-xl">
