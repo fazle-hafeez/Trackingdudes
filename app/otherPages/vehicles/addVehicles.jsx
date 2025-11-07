@@ -119,6 +119,7 @@ const AddVehicles = () => {
       fuel_consumption_rate: parseFloat(addVehicles.fuelEcnomy),
       level_raise_per_unit: 1.2, // Default since UI doesn't capture this yet
       tank_capacity: parseFloat(addVehicles.tankCapacity),
+      status:'enabled'
     };
 
     try {
@@ -133,7 +134,7 @@ const AddVehicles = () => {
       
 
       if (res?.status === "success") {
-        showModal( res.data || 'vehicles was created successfully', 'success');
+        showModal( res.data || 'The vehicle was added successfully', 'success');
 
         // Reset form
         setAddVehicles({

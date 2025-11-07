@@ -3,11 +3,11 @@ import React, { useState, useRef, useEffect } from "react";
 import Checkbox from "expo-checkbox";
 import {FontAwesome6,FontAwesome,Entypo,AntDesign} from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
-import PageHeader from "../../src/components/PageHeader";
-import Button from "../../src/components/Button";
-import { useApi } from "../../src/hooks/useApi";
-import { useAuth } from "../../src/context/UseAuth";
-import { useDebounce } from "../../src/hooks/useDebounce";
+import PageHeader from "../../../src/components/PageHeader";
+import Button from "../../../src/components/Button";
+import { useApi } from "../../../src/hooks/useApi";
+import { useAuth } from "../../../src/context/UseAuth";
+import { useDebounce } from "../../../src/hooks/useDebounce";
 import { router, useLocalSearchParams } from "expo-router";
 const AddingProject = () => {
   const { get, post, put } = useApi();
@@ -134,7 +134,7 @@ const AddingProject = () => {
               bgColor: "bg-blue-600",
               onPress: () => {
                 hideModal();
-                router.push("/otherPages/myProjects");
+                router.back()
               },
             },
           ]

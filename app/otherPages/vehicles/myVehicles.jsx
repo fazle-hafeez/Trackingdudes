@@ -1,81 +1,49 @@
-// import { View, Text, TouchableOpacity,StatusBar } from 'react-native'
-// import React from 'react'
-// import { SafeAreaView } from "react-native-safe-area-context"
-// import PageHeader from '../../../src/components/PageHeader';
-// import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
-// import Ionicons from "@expo/vector-icons/Ionicons";
-// import { Link ,router } from 'expo-router';
-// const MyVehicles = () => {
-//   return (
-//     <SafeAreaView className="flex-1">
-//       <StatusBar barStyle="light-content" backgroundColor="#0000ff" />
-//       <PageHeader routes="My Vehicles" />
-//       <View className="px-4 bg-gray-100">
-//         <View className="bg-white rounded-lg shadow-md flex-row justify-between p-4 my-4">
-//           <View className="flex-row ">
-//             <FontAwesome5 name="car" size={24} color="#198754" />
-//             <Link href="/dashboard/dashboardPage" className='text-lg ml-3 font-medium text-[#198754]' >
-//              Add a vehicle 
-//              </Link>
-//           </View>
-//           <TouchableOpacity
-//           activeOpacity={0.6}>
-//             <Ionicons name="add-circle" size={26} color="#10b981" onPress={()=>router.push("/otherPages/vehicles/addVehicles")}/>
-//           </TouchableOpacity>
-//         </View>
-
-//          <View className="mb-2 px-2">
-//            <Text className="text-lg font-medium">Your vehicles</Text>
-//          </View>
-
-//          <View className="bg-white rounded-md shadow-md p-4">
-//            <Text className="text-lg">You have not saved any vehicles yet. Saving a vehicle allows you to select it from the list of saved vehicles, 
-//             enabling you to track trips as well as fuel consumption</Text>
-//          </View>
-//       </View>
-//     </SafeAreaView>
-//   )
-// }
-
-// export default MyVehicles
-
-
 import React, { useState, useCallback } from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  FlatList,
-  StatusBar,
-  Modal,
-} from "react-native";
+import {View,Text,TouchableOpacity,FlatList,StatusBar,TextInput} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { FontAwesome5, Ionicons, MaterialIcons,FontAwesome6 } from "@expo/vector-icons";
+import {FontAwesome5,Ionicons,FontAwesome6,Feather,AntDesign} from "@expo/vector-icons";
 import { useApi } from "../../../src/hooks/useApi";
 import { useAuth } from "../../../src/context/UseAuth";
 import { useFocusEffect } from "@react-navigation/native";
 import PageHeader from "../../../src/components/PageHeader";
 import LoadingSkeleton from "../../../src/components/LoadingSkeleton";
+import Pagination from "../../../src/components/Pagination";
+import CheckBox from "../../../src/components/CheckBox";
 import { router } from "expo-router";
+import Tabs from "../../../src/components/Tabs";
+import BottomActionBar from "../../../src/components/ActionBar";
 const MyVehicles = () => {
-  const { get } = useApi();
-  const { showModal } = useAuth();
+  const { get, put, del } = useApi();
+  const { showModal, hideModal, setGlobalLoading } = useAuth();
 
   const [vehicles, setVehicles] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [selectedVehicle, setSelectedVehicle] = useState(null);
-  const [actionModal, setActionModal] = useState(false);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedVehicles, setSelectedVehicles] = useState([]);
+  const [selectAll, setSelectAll] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeTab, setActiveTab] = useState("Enabled");
+  const tabs = ["Enabled", "Disabled"];
 
-  const fetchVehicles = async () => {
+  //  Fetch vehicles list
+  const fetchVehicles = async (pageNumber = 1) => {
     try {
       setLoading(true);
-      const result = await get(`my-vehicles?status=enabled&order=asc&limit=5&page=1&_t=${Date.now()}`, {
-        useBearerAuth: true,
-      });
-      console.log(result);
-      
-      if (result?.status === "success") setVehicles(result.data || []);
-      else setVehicles([]);
+      const status = activeTab.toLowerCase();
+      const result = await get(
+        `my-vehicles?status=${status}&order=asc&limit=15&page=${pageNumber}&_t=${Date.now()}`,
+        { useBearerAuth: true }
+      );
+
+      if (result?.status === "success") {
+        setVehicles(result.data || []);
+        setPage(result.pagination?.current_page || 1);
+        setTotalPages(result.pagination?.total_pages || 1);
+      } else {
+        setVehicles([]);
+      }
     } catch (err) {
       console.log("Error fetching vehicles:", err);
     } finally {
@@ -85,72 +53,222 @@ const MyVehicles = () => {
 
   useFocusEffect(
     useCallback(() => {
-      fetchVehicles();
-    }, [])
+      fetchVehicles(1);
+    }, [activeTab])
   );
 
-  const handleAction = (type) => {
-    setActionModal(false);
-    switch (type) {
-      case "edit":
-        showModal("Edit option clicked.", "success");
-        break;
-      case "delete":
-        showModal("Vehicle deleted successfully.", "success");
-        break;
-      default:
-        break;
+  //  Filter vehicles by search text
+  const filteredVehicles = vehicles.filter((item) =>
+    item?.vehicle?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  //  Select / Deselect all
+  const handleSelectAll = () => {
+    setSelectAll((prev) => {
+      const newValue = !prev;
+      setSelectedVehicles(newValue ? vehicles.map((v) => v.id) : []);
+      return newValue;
+    });
+  };
+
+  //  Toggle single selection
+  const toggleVehicleSelect = (id) => {
+    setSelectedVehicles((prev) =>
+      prev.includes(id)
+        ? prev.filter((vid) => vid !== id)
+        : [...prev, id]
+    );
+  };
+
+  //  Cancel selection mode
+  const handleCancel = () => {
+    setSelectionMode(false);
+    setSelectedVehicles([]);
+    setSelectAll(false);
+  };
+
+  //  Toggle enable/disable
+  const toggleVehicleStatus = async () => {
+    if (selectedVehicles.length <= 0) {
+      showModal("You must choose at least one vehicle.", "error");
+      return;
+    }
+
+    const isEnabled = activeTab.toLowerCase() === "enabled";
+    const newStatus = isEnabled ? "disabled" : "enabled";
+    const actionWord = isEnabled ? "Disable" : "Enable";
+
+    showModal(
+      `You're about to ${actionWord.toLowerCase()} the selected vehicles. Do you want to continue?`,
+      "warning",
+      `${actionWord} Vehicles`,
+      [
+        {
+          label: `Yes, ${actionWord}`,
+          bgColor: "bg-red-600",
+          onPress: async () => {
+            hideModal();
+            await changeVehicleStatus(newStatus);
+          },
+        },
+        {
+          label: "Back",
+          bgColor: "bg-green-600",
+          onPress: () => {
+            hideModal();
+            handleCancel();
+          },
+        },
+      ]
+    );
+  };
+
+  //  Change vehicle status (enable/disable)
+  const changeVehicleStatus = async (status) => {
+    try {
+      setGlobalLoading(true);
+      const payload = {
+        status,
+        vehicle_nos: selectedVehicles,
+      };
+      setSelectedVehicles([]);
+
+      const result = await put("my-vehicles/mark-vehicles", payload, {
+        useBearerAuth: true,
+      });
+
+      if (result.status === "success") {
+        showModal(result.data || `Vehicles ${status} successfully.`, "success");
+        setTimeout(() => fetchVehicles(), 2000);
+      } else {
+        showModal("Failed to update vehicle status.", "error");
+      }
+    } catch (error) {
+      showModal("Something went wrong. Please try again.", "error");
+    } finally {
+      setGlobalLoading(false);
+      handleCancel();
     }
   };
 
+  //  Delete selected vehicles
+  const deleteVehicles = async () => {
+    if (selectedVehicles.length === 0) {
+      showModal("Please select at least one vehicle to delete.", "error");
+      return;
+    }
+
+    showModal(
+      "You're about to permanently remove the selected vehicles...",
+      "warning",
+      "Deleting Vehicles?",
+      [
+        {
+          label: "Delete",
+          bgColor: "bg-red-600",
+          onPress: async () => {
+            hideModal();
+            await confirmDelete();
+          },
+        },
+        {
+          label: "Cancel",
+          bgColor: "bg-green-600",
+          onPress: () => {
+            hideModal();
+            handleCancel();
+          },
+        },
+      ]
+    );
+  };
+
+  const confirmDelete = async () => {
+    try {
+      setGlobalLoading(true);
+      const payload = { vehicle_nos: selectedVehicles };
+      const res = await del("my-vehicles/delete-vehicles", payload, {
+        useBearerAuth: true,
+      });
+
+      if (res.status === "success") {
+        showModal(res.data || "Vehicles deleted successfully.", "success");
+        setTimeout(() => fetchVehicles(), 2000);
+      } else {
+        showModal(res?.data || "Couldn't delete vehicles.", "error");
+      }
+    } catch (err) {
+      console.error("Delete error:", err);
+      showModal("Something went wrong while deleting.", "error");
+    } finally {
+      setGlobalLoading(false);
+      handleCancel();
+    }
+  };
+ 
+  const removeDecimal = (val) => {
+     return val ? parseFloat(val) : null
+  }
+  //  Vehicle item render
   const renderVehicle = ({ item }) => (
-    <View className="bg-white rounded-md shadow-sm p-4 mb-3">
-      {/* Top Row */}
-      <View className="flex-row justify-between items-center border-b border-yellow-300 pb-2 mb-2">
-        <View className="flex-row items-center">
-          <FontAwesome5 name="car" size={20} color="black" />
-          <Text className="text-lg font-semibold text-gray-700 ml-2">
-            {item.vehicle}
-          </Text>
+    <TouchableOpacity
+      onLongPress={() => {
+        if (!selectionMode) {
+          setSelectionMode(true);
+          setSelectedVehicles([]);
+        } else {
+          setSelectedVehicles([item.id]);
+        }
+      }}
+      activeOpacity={0.7}
+      delayLongPress={1000}
+      className="mb-3"
+    >
+      <View className="bg-white rounded-md shadow-sm p-4">
+        {/*  Title row */}
+        <View className="flex-row items-center border-b border-yellow-300 pb-2 mb-2">
+          <View className="flex-row items-center">
+            {selectionMode && (
+              <CheckBox
+                value={selectedVehicles.includes(item.id)}
+                onClick={() => toggleVehicleSelect(item.id)}
+              />
+            )}
+            <FontAwesome5 name="car" size={20} color="black" className="ml-2" />
+            <Text className="text-lg font-semibold text-gray-700 ml-2">
+              {item.vehicle}
+            </Text>
+          </View>
         </View>
 
-        <TouchableOpacity
-          onPress={() => {
-            setSelectedVehicle(item);
-            setActionModal(true);
-          }}
-        >
-          <MaterialIcons name="more-vert" size={22} color="#00000" />
-        </TouchableOpacity>
+        {/*  Vehicle Stats */}
+        <View className="flex-row justify-between items-center my-3">
+          <View className="items-center flex-1">
+            <FontAwesome5 name="leaf" size={20} color="#10b981" />
+            <Text className="text-xs text-gray-500 mt-1">Fuel economy</Text>
+            <Text className="text-base font-medium text-gray-700">
+              {removeDecimal(item.fuel_consumption_rate)} /ltr
+            </Text>
+          </View>
+
+          <View className="items-center flex-1">
+            <FontAwesome6 name="ankh" size={20} color="#3b82f6" />
+            <Text className="text-xs text-gray-500 mt-1">Tank capacity</Text>
+            <Text className="text-base font-medium text-gray-700">
+              {removeDecimal(item.tank_capacity)}
+            </Text>
+          </View>
+
+          <View className="items-center flex-1">
+            <Ionicons name="speedometer-outline" size={20} color="#a855f7" />
+            <Text className="text-xs text-gray-500 mt-1">Levels/ltr</Text>
+            <Text className="text-base font-medium text-gray-700">
+              {removeDecimal(item.level_raise_per_unit)}
+            </Text>
+          </View>
+        </View>
       </View>
-
-      {/* Vehicle Stats */}
-      <View className="flex-row justify-between items-center mt-1">
-        <View className="items-center flex-1">
-          <FontAwesome5 name="leaf" size={20} color="#10b981" />
-          <Text className="text-xs text-gray-500 mt-1">Fuel economy</Text>
-          <Text className="text-base font-medium text-gray-700">
-            {item.fuel_consumption_rate} /ltr
-          </Text>
-        </View>
-
-        <View className="items-center flex-1">
-          <FontAwesome6 name="ankh" size={20} color="#3b82f6" />
-          <Text className="text-xs text-gray-500 mt-1">Tank capacity</Text>
-          <Text className="text-base font-medium text-gray-700">
-            {item.tank_capacity}
-          </Text>
-        </View>
-
-        <View className="items-center flex-1">
-          <Ionicons name="speedometer-outline" size={20} color="#a855f7" />
-          <Text className="text-xs text-gray-500 mt-1">Levels/ltr</Text>
-          <Text className="text-base font-medium text-gray-700">
-            {item.level_raise_per_unit}
-          </Text>
-        </View>
-      </View>
-    </View>
+    </TouchableOpacity>
   );
 
   return (
@@ -158,88 +276,91 @@ const MyVehicles = () => {
       <StatusBar barStyle="light-content" backgroundColor="#0000ff" />
       <PageHeader routes="My Vehicles" />
 
-      {/* Add another vehicle */}
+      {/*  Add Vehicle */}
       <View className="bg-white rounded-md shadow-md flex-row justify-between items-center p-4 m-4">
         <View className="flex-row items-center">
           <FontAwesome5 name="car" size={20} color="black" />
-          <Text className="ml-2  text-lg font-medium">
-            Add another vehicle
-          </Text>
+          <Text className="ml-2 text-lg font-medium">Add another vehicle</Text>
         </View>
-        <TouchableOpacity>
-          <Ionicons name="add-circle" size={26} color="#198754" 
-          onPress={()=>router.push("otherPages/vehicles/addVehicles")}/>
+        <TouchableOpacity
+          onPress={() => router.push("otherPages/vehicles/addVehicles")}
+        >
+          <Ionicons name="add-circle" size={26} color="#198754" />
         </TouchableOpacity>
       </View>
 
-      {/* List */}
+      {/*  Vehicle List */}
       <View className="px-4 flex-1">
-        <Text className="text-gray-700 text-xl font-medium mb-2 px-3">
-          Your vehicles
-        </Text>
-        {loading ? (
-          <LoadingSkeleton /> 
-        ) : vehicles.length > 0 ? (
-          <FlatList
-            data={vehicles}
-            renderItem={renderVehicle}
-            keyExtractor={(item) => item.id.toString()}
+
+        {/* Tabs */}
+         <Tabs 
+             tabs={tabs}
+             activeTab={activeTab}
+             setActiveTab={setActiveTab}
+           />
+
+        {/* Search */}
+        <View className="flex-row items-center border border-gray-300 rounded-lg mb-3 bg-white px-3 mt-4">
+          <Feather name="search" size={20} color="#9ca3af" />
+          <TextInput
+            className="flex-1 ml-2 py-3 text-lg text-[#9ca3af]"
+            placeholder="Search vehicles..."
+            placeholderTextColor="#9ca3af"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
           />
-        ) : (
-          <View className="bg-white rounded-md shadow-md p-4">
-            <Text className="text-lg text-gray-700">
-              You have not saved any vehicles yet. Saving a vehicle allows you to
-              select it from the list of saved vehicles, enabling you to track trips
-              as well as fuel consumption.
+        </View>
+
+        {/* Select All (when active) */}
+        {selectionMode && filteredVehicles.length > 0 && (
+          <View className="flex-row items-center mb-3 bg-white rounded-lg shadow-sm p-3 px-4">
+            <CheckBox value={selectAll} onClick={handleSelectAll} />
+            <Text className="ml-2 text-lg font-medium text-gray-800">
+              Select All
             </Text>
           </View>
         )}
 
-
+        {/* Main List */}
+        {loading ? (
+          <LoadingSkeleton />
+        ) : filteredVehicles.length > 0 ? (
+          <FlatList
+            data={filteredVehicles}
+            renderItem={renderVehicle}
+            keyExtractor={(item) => item.id.toString()}
+            ListFooterComponent={
+              <View className="items-center">
+                <Pagination
+                  page={page}
+                  totalPages={totalPages}
+                  onPageChange={(newPage) => fetchVehicles(newPage)}
+                />
+              </View>
+            }
+          />
+        ) : (
+          <View className="bg-white rounded-md shadow-md p-4">
+            <Text className="text-lg text-gray-700">
+              You have not saved any vehicles yet. Saving a vehicle allows you
+              to select it from the list of saved vehicles, enabling you to
+              track trips and fuel consumption.
+            </Text>
+          </View>
+        )}
       </View>
 
-      {/* Action Dialog */}
-      <Modal
-        transparent
-        visible={actionModal}
-        animationType="fade"
-        onRequestClose={() => setActionModal(false)}
-      >
-        <TouchableOpacity
-          activeOpacity={1}
-          onPressOut={() => setActionModal(false)}
-          className="flex-1 bg-black/40 justify-end"
-        >
-          <View className="bg-white rounded-t-2xl p-4">
-            <Text className="text-lg font-semibold mb-3 text-gray-800">
-              Actions
-            </Text>
-
-            <TouchableOpacity
-              onPress={() => handleAction("edit")}
-              className="py-3 border-b border-gray-200"
-            >
-              <Text className="text-blue-600 text-base font-medium">Edit</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => handleAction("delete")}
-              className="py-3 border-b border-gray-200"
-            >
-              <Text className="text-red-600 text-base font-medium">Delete</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => setActionModal(false)}
-              className="py-3"
-            >
-              <Text className="text-gray-700 text-base font-medium">
-                Cancel
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      </Modal>
+      {/*  Bottom Action Bar */}
+      {selectionMode && (
+        <View className="absolute bottom-0 left-0 right-0 ">
+          <BottomActionBar
+           activeTab={activeTab}
+           toggleStatus={toggleVehicleStatus}
+           handleCancel={handleCancel}
+           handleDelete={deleteVehicles}
+          />  
+        </View>
+      )}
     </SafeAreaView>
   );
 };

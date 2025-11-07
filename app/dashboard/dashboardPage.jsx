@@ -59,7 +59,7 @@ export default function Dashboard() {
           <Feature
             icon={<FontAwesome5 name="file-alt" size={38} color="blue" />}
             label="My projects"
-            onPress={() => router.push("/otherPages/myProjects")}
+            onPress={() => router.push("/otherPages/projects/myProjects")}
           />
         </Section>
 

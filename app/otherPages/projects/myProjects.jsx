@@ -3,15 +3,21 @@ import React, { act, useEffect, useState } from "react";
 import { useFocusEffect } from "@react-navigation/native";
 import { useCallback } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
-import PageHeader from "../../src/components/PageHeader";
 import { FontAwesome6, AntDesign, Feather, Ionicons } from "@expo/vector-icons";
 import { Link, router } from "expo-router";
-import { useApi } from "../../src/hooks/useApi";
-import { useAuth } from "../../src/context/UseAuth";
-import CheckBox from "../../src/components/CheckBox";
-import TickCrossIndicator from '../../src/components/TickCrossIndicator';
-import Pagination from "../../src/components/Pagination";
-import LoadingSkeleton from "../../src/components/LoadingSkeleton"
+
+//Hooks
+import { useApi } from "../../../src/hooks/useApi";
+import { useAuth } from "../../../src/context/UseAuth";
+
+//components 
+import TickCrossIndicator from '../../../src/components/TickCrossIndicator';
+import CheckBox from "../../../src/components/CheckBox";
+import Pagination from "../../../src/components/Pagination";
+import LoadingSkeleton from "../../../src/components/LoadingSkeleton"
+import Tabs from "../../../src/components/Tabs";
+import PageHeader from "../../../src/components/PageHeader";
+
 const MyProjects = () => {
   const { get, del, put } = useApi();
   const { showModal, setGlobalLoading, hideModal } = useAuth();
@@ -27,6 +33,8 @@ const MyProjects = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [refreshing, setRefreshing] = useState(false);
   const [order, setOrder] = useState("asc");
+
+  //fetching the projects 
   const fetchProjects = async (pageNumber = 1, currentOrder = order) => {
     try {
       setLoading(true);
@@ -65,6 +73,7 @@ const MyProjects = () => {
     }, [activeTab, order])
   );
 
+  //when user pull down then call this one function
   const onRefresh = async () => {
     setRefreshing(true);
     setOrder("desc");
@@ -72,10 +81,13 @@ const MyProjects = () => {
     setRefreshing(false);
   };
 
+  //filter project name
   const filteredProjects = projects.filter((item) =>
     item?.project?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+
+  //toggle the project id's 
   const toggleProjectSelect = (id) => {
     setSelectedProjects((prevSelected) => {
       let updated;
@@ -89,7 +101,7 @@ const MyProjects = () => {
     });
   };
 
-
+ // handelselect 
   const handleSelectAll = () => {
     setSelectAll((prev) => {
       const newValue = !prev;
@@ -97,7 +109,8 @@ const MyProjects = () => {
       return newValue;
     });
   };
-
+ 
+  //delete the selected projects
   const deleteProject = async () => {
     if (selectedProjects.length === 0) {
       showModal("You must choose at least one project to carry out this action", "error",);
@@ -126,7 +139,9 @@ const MyProjects = () => {
     )
 
   };
+  
 
+  //confirm delete
   const DeleteProject = async () => {
     try {
       setGlobalLoading(true)
@@ -150,7 +165,8 @@ const MyProjects = () => {
       handleCancel()
     }
   }
-
+ 
+  //enabled and disbled the projects 
   const toggleProjectStatus = async () => {
     if (selectedProjects.length <= 0) {
       showModal("You must choose at least one project to carry out this action", "error");
@@ -184,6 +200,7 @@ const MyProjects = () => {
     );
   };
 
+  //confirm enabled or disbled
   const changeProjectStatus = async (status) => {
     try {
       setGlobalLoading(true)
@@ -210,8 +227,9 @@ const MyProjects = () => {
     }
   };
 
+
+//handelcancel
   const handleCancel = () => {
-    // await playSound("error")
     setSelectionMode(false);
     setSelectedProjects([]);
     setSelectAll(false);
@@ -234,34 +252,20 @@ const MyProjects = () => {
             </Link>
           </View>
 
-          <TouchableOpacity onPress={() => router.push("/otherPages/addingProject")}>
+          <TouchableOpacity onPress={() => router.push("/otherPages/projects/addingProject")}>
             <Ionicons name="add-circle" size={28} color="#10b981" />
           </TouchableOpacity>
         </View>
 
-        {/* Tabs */}
-        <View className="mb-4 flex-row justify-between bg-white p-4 items-center rounded-lg px-12">
-          {tabs.map((tab) => (
-            <TouchableOpacity
-              key={tab}
-              onPress={() => {
-                setActiveTab(tab);
-                handleCancel(); // reset on tab change
-              }}
-              className={`pb-1 ${activeTab === tab ? "border-b-2 border-[#007bff]" : ""}`}
-            >
-              <Text
-                className={`text-lg ${activeTab === tab ? "text-[#007bff]" : "text-gray-600"
-                  }`}
-              >
-                {tab}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+          {/* Tabs */}
+         <Tabs 
+             tabs={tabs}
+             activeTab={activeTab}
+             setActiveTab={setActiveTab}
+           />
 
         {/* Search */}
-        <View className="flex-row items-center border border-gray-300 rounded-lg mb-3 bg-white px-3">
+        <View className="flex-row items-center border border-gray-300 rounded-lg mb-3 bg-white px-3 mt-4">
           <Feather name="search" size={20} color="#9ca3af" />
           <TextInput
             className="flex-1  ml-2 py-3 text-lg text-[#9ca3af]"
@@ -302,7 +306,7 @@ const MyProjects = () => {
                 onPress={() => {
                   if (!selectionMode) {
                     router.push({
-                      pathname: "/otherPages/addingProject",
+                      pathname: "/otherPages/projects/addingProject",
                       params: { id: item.id },
                     });
                   } else {
