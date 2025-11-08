@@ -3,14 +3,20 @@ import { View, Text, TextInput, StatusBar, Platform, } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Link, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import HeaderSection from "../../src/components/HeaderSection";
-import Button from "../../src/components/Button";
-import PasswordInputField from "../../src/components/ToggleField";
+import * as SecureStore from 'expo-secure-store';
+import { useLocalSearchParams } from "expo-router";
+
+//Hooks
 import { useApi } from "../../src/hooks/useApi";
 import { useAuth } from "../../src/context/UseAuth";
-import { useLocalSearchParams } from "expo-router";
+
+//components
 import CheckBox from "../../src/components/CheckBox";
-import * as SecureStore from 'expo-secure-store';
+import Button from "../../src/components/Button";
+import PasswordInputField from "../../src/components/ToggleField";
+import HeaderSection from "../../src/components/HeaderSection";
+import Input from "../../src/components/Input";
+
 const Login = () => {
   const [username, setUserName] = useState("");
   const [usernameError, setUserNameError] = useState("");
@@ -159,28 +165,21 @@ const Login = () => {
       <StatusBar barStyle="light-content" backgroundColor="#0000ff" />
       <HeaderSection />
 
-      <View className="flex-1 p-4">
+      <View className="flex-1 p-3">
         <View
           className={`bg-[rgba(255,255,255,0.9)] rounded-xl p-6 ${Platform.OS === "ios" ? " shadow-sm" : ""
             }`}
           style={{ marginTop: -230, elevation: 5 }}
         >
           <Text className="text-xl mb-2 text-headercolor">Enter your user name</Text>
-          <TextInput
-            className={`rounded-md text-lg text-headercolor border ${usernameError ? "border-red-500" : "border-gray-400"
-              }`}
-            placeholder="Type your username here"
-            keyboardType="email-address"
-            autoCapitalize="none"
+          <Input
             value={username}
-            onChangeText={(val) => {
-              setUserName(val);
-              setUserNameError("");
-            }}
+            placeholder="Type your username here"
+            onchange={(val) => setUserName(val)}
+            inputError={usernameError}
+            setInputError={setUserNameError}
+
           />
-          {usernameError && (
-            <Text className="text-sm text-red-500 my-1">{usernameError}</Text>
-          )}
 
           <Text className="text-xl mb-2 text-headercolor mt-2">Enter your password</Text>
           <PasswordInputField
@@ -192,7 +191,7 @@ const Login = () => {
           />
 
           <View className="flex-row items-center my-3">
-            <CheckBox 
+            <CheckBox
               value={remember}
               onClick={setRemember}
             />
@@ -200,7 +199,7 @@ const Login = () => {
           </View>
 
           <View className="flex-row items-center">
-            <CheckBox 
+            <CheckBox
               value={keepLoggedIn}
               onClick={setKeepLoggedIn}
             />
@@ -214,13 +213,13 @@ const Login = () => {
           <View className="mt-2 items-center">
             <Text className="text-lg text-headercolor">
               No account yet?{" "}
-              <Link className="text-customBlue underline" href="/auth/signup">
+              <Link className="text-blue-600 underline" href="/auth/signup">
                 Sign up
               </Link>
             </Text>
             <Text className="mt-1 text-lg text-headercolor">
               Forgot password?{" "}
-              <Link className="text-customBlue underline" href="/auth/resetPassword">
+              <Link className="text-blue-600 underline" href="/auth/resetPassword">
                 Reset
               </Link>
             </Text>
@@ -229,12 +228,12 @@ const Login = () => {
 
         <View className="mt-3 pl-2">
           <View className="flex-row">
-            <Link href="/otherPages/home" className="text-customBlue underline text-lg">
+            <Link href="/otherPages/home" className="text-blue-600 underline text-lg">
               Help
             </Link>
             <Link
               href="/otherPages/home"
-              className="text-customBlue underline ml-2 text-lg"
+              className="text-blue-600 underline ml-2 text-lg"
             >
               Terms of use
             </Link>

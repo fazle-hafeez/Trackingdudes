@@ -1,19 +1,17 @@
 import { Link, useLocalSearchParams, router } from "expo-router";
 import React, { useState, useEffect } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StatusBar,
-  Platform,
-} from "react-native";
+import {View,Text,TextInput,TouchableOpacity, StatusBar,Platform} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import HeaderSection from "../../src/components/HeaderSection";
-import Button from "../../src/components/Button";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+
+//Hooks
 import { useApi } from "../../src/hooks/useApi";
 import { useAuth } from "../../src/context/UseAuth";
+
+//components
+import HeaderSection from "../../src/components/HeaderSection";
+import Button from "../../src/components/Button";
+
 
 const EmailVerification = () => {
   const { post, put } = useApi();
@@ -225,7 +223,7 @@ const EmailVerification = () => {
       <StatusBar barStyle="light-content" backgroundColor="#0000ff" />
       <HeaderSection />
 
-      <View style={{marginTop:-320}} className="p-4">
+      <View style={{marginTop:-320}} className="p-3">
         <View
           className={`bg-[rgba(255,255,255,0.9)] rounded-2xl p-6 mt-6 ${
             Platform.OS === "ios" ? "shadow-sm" : ""

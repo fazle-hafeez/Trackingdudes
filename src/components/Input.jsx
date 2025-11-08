@@ -1,7 +1,7 @@
 import { View, Text, TextInput } from 'react-native'
 import React from 'react'
 
-const Input = ({ value, onchange, inputError, setInputError, placeholder, keyboardType = "default", autoCapitalize = "sentences" }) => {
+const Input = ({ value, onchange, inputError, setInputError, placeholder, keyboardType = "default", autoCapitalize = "words" }) => {
     return (
         <View>
             <TextInput

@@ -1,17 +1,22 @@
 import React, { useState } from "react";
-import {View,Text,TextInput,StatusBar,TouchableOpacity,Platform} from "react-native";
+import { View, Text, StatusBar, TouchableOpacity, Platform } from "react-native";
 import { Link, useLocalSearchParams, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import HeaderSection from "../../src/components/HeaderSection";
-import Button from "../../src/components/Button"
+
+//Hooks
 import { useApi } from "../../src/hooks/useApi";
 import { useAuth } from "../../src/context/UseAuth";
+
+//components
+import HeaderSection from "../../src/components/HeaderSection";
+import Button from "../../src/components/Button"
+import Input from "../../src/components/Input";
 
 const SignUp = () => {
   const route = useLocalSearchParams();
   const router = useRouter();
-  const { post} = useApi();
-  const {showModal, hideModal,setGlobalLoading,} = useAuth();
+  const { post } = useApi();
+  const { showModal, hideModal, setGlobalLoading, } = useAuth();
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -19,6 +24,7 @@ const SignUp = () => {
   const [emailError, setEmailError] = useState("");
   const [lastSubmittedEmail, setLastSubmittedEmail] = useState("");
   const [receivedcode, setReceivedCode] = useState(false)
+
   const receivedCode = () => {
     router.push({
       pathname: "/auth/emailVerification",
@@ -71,30 +77,16 @@ const SignUp = () => {
         setLastSubmittedEmail("");
       } else if (response?.status === "error") {
         if (lastSubmittedEmail === trimmedEmail) {
-          setTimeout(() => {
-            showModal(
-              "You are making too many requests in a short time. Please wait a bit before trying again.",
-              "error"
-            );
-          }, 0)
+          showModal("You are making too many requests in a short time. Please wait a bit before trying again.", "error");
         } else {
-          setTimeout(() => {
-            showModal(
-              response?.data || "Another user is already registered with that email.",
-              "error"
-            );
-          }, 0);
+          showModal(response?.data || "Another user is already registered with that email.", "error");
           setLastSubmittedEmail(trimmedEmail);
         }
       } else {
-        setTimeout(() => {
-          showModal(response.message || "Something went wrong. Please try again.", "error");
-        }, 0);
+        showModal(response.message || "Something went wrong. Please try again.", "error");
       }
     } catch (error) {
-      setTimeout(() => {
-        showModal(error.error || "A server error occurred. Please try again later.", "error");
-      }, 0);
+      showModal(error.error || "A server error occurred. Please try again later.", "error");
     } finally {
       setGlobalLoading(false);
     }
@@ -105,7 +97,7 @@ const SignUp = () => {
       <StatusBar barStyle="light-content" backgroundColor="#0000ff" />
       <HeaderSection />
 
-      <View className="h-full mx-auto p-4 w-full">
+      <View className="flex-1 p-3">
         <View
           className={`bg-[rgba(255,255,255,0.9)] rounded-xl p-6 ${Platform.OS === "ios" ? "shadow-sm" : ""
             }`}
@@ -116,38 +108,28 @@ const SignUp = () => {
           </Text>
 
           <Text className="text-xl mb-2 text-headercolor">Enter your name</Text>
-          <TextInput
-            className={`border ${usernameError ? "border-red-500" : "border-gray-400"
-              } rounded-md text-lg text-headercolor px-3 py-3`}
-            placeholder="This is to call you with, in the email"
+          <Input
             value={name}
-            onChangeText={(val) => {
-              setName(val);
-              setUsernameError("");
-            }}
-          />
-          {usernameError ? (
-            <Text className="text-red-500 text-sm mt-1">{usernameError}</Text>
-          ) : null}
+            placeholder="This is to call you with, in the email"
+            onchange={(val) => setName(val)}
+            inputError={usernameError}
+            setInputError={setUsernameError}
 
-          <Text className="text-xl my-2 text-headercolor">
+          />
+
+          <Text className="text-xl my-3 text-headercolor">
             Enter your email address
           </Text>
-          <TextInput
-            className={`border ${emailError ? "border-red-500" : "border-gray-400"
-              } rounded-md text-lg text-headercolor px-3 py-3`}
+
+          <Input
             placeholder="You will use this for account recovery"
             keyboardType="email-address"
             autoCapitalize="none"
             value={email}
-            onChangeText={(text) => {
-              setEmail(text);
-              setEmailError("");
-            }}
+            onchange={(val) => setEmail(val)}
+            inputError={emailError}
+            setInputError={setEmailError}
           />
-          {emailError ? (
-            <Text className="text-red-500 text-sm mt-1">{emailError}</Text>
-          ) : null}
 
           <View className="mt-2">
             <Button title="Submit" onClickEvent={handleLogin} />
@@ -156,7 +138,7 @@ const SignUp = () => {
           <View className="mt-2 mb-2">
             <Text className="text-lg text-headercolor font-normal">
               Already have an account?
-              <Link href="/auth/login" className="text-customBlue underline">
+              <Link href="/auth/login" className="text-blue-600 underline">
                 {" "}
                 Sign in
               </Link>

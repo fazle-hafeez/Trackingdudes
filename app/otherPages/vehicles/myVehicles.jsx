@@ -220,7 +220,7 @@ const MyVehicles = () => {
           setSelectedVehicles([item.id]);
         }
       }}
-      activeOpacity={0.7}
+      activeOpacity={0.8}
       delayLongPress={1000}
       className="mb-3"
     >
@@ -279,8 +279,8 @@ const MyVehicles = () => {
       {/*  Add Vehicle */}
       <View className="bg-white rounded-md shadow-md flex-row justify-between items-center p-4 m-4">
         <View className="flex-row items-center">
-          <FontAwesome5 name="car" size={20} color="black" />
-          <Text className="ml-2 text-lg font-medium">Add another vehicle</Text>
+          <FontAwesome5 name="car" size={20} color="#198754" />
+          <Text className="ml-2 text-lg font-medium text-[#198754]">Add another vehicle</Text>
         </View>
         <TouchableOpacity
           onPress={() => router.push("otherPages/vehicles/addVehicles")}

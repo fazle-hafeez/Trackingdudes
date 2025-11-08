@@ -1,27 +1,29 @@
 import React, { useState } from "react";
 import { View, Text, TextInput, StatusBar, Platform } from "react-native";
-import { Link, useRouter } from "expo-router";
+import { Link, router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+//components
 import HeaderSection from "../../src/components/HeaderSection";
 import Button from "../../src/components/Button";
 import PasswordInputField from "../../src/components/ToggleField";
+import Input from "../../src/components/Input";
+
+//Hooks
 import { useApi } from "../../src/hooks/useApi";
 import { useAuth } from "../../src/context/UseAuth";
+
 const CompleteRegistration = () => {
-  const router = useRouter();
   const { post } = useApi();
-  const {
-    showModal,
-    hideModal,
-    setGlobalLoading,
-  } = useAuth();
+
+  const {showModal, hideModal,setGlobalLoading,} = useAuth();
   const [username, setUsername] = useState("");
   const [usernameError, setUsernameError] = useState("");
   const [password, setPassword] = useState("");
   const [passError, setPassError] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [confirmPassError, setConfirmPassError] = useState("");
+
   //Register the user
   const handleRegister = async () => {
     let hasError = false;
@@ -73,8 +75,6 @@ const CompleteRegistration = () => {
         },
        { useBearerAuth:true} // use token
       );
-   console.log("complete registration result :", result);
-   
       if (result.status === "success") {
         showModal(result.data || "User created successfully!", "success");
         setTimeout(() => {
@@ -120,22 +120,17 @@ const CompleteRegistration = () => {
           </View>
           {/* Username field */}
           <Text className="text-xl mb-2 text-headercolor">Enter your name</Text>
-          <TextInput
-            className={`rounded-md text-lg text-headercolor border ${usernameError ? "border-red-500" : "border-gray-400"
-              }`}
-            placeholder="Type your name here"
-            autoFocus
-            keyboardType="email-address"
-            autoCapitalize="none"
+          <Input
             value={username}
-            onChangeText={(val) => {
-              setUsername(val);
-              setUsernameError("");
-            }}
+            placeholder="Type your user name here"
+            onchange={(val) => setUsername(val)}
+            inputError={usernameError}
+             keyboardType="email-address"
+            autoCapitalize="none"
+            setInputError={setUsernameError}
+
           />
-          {usernameError ? (
-            <Text className="text-sm text-red-500 my-1">{usernameError}</Text>
-          ) : null}
+         
 
           {/* Password field */}
           <Text className="text-xl mb-2 text-headercolor mt-2">Enter your password</Text>

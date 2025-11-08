@@ -17,6 +17,7 @@ import Pagination from "../../../src/components/Pagination";
 import LoadingSkeleton from "../../../src/components/LoadingSkeleton"
 import Tabs from "../../../src/components/Tabs";
 import PageHeader from "../../../src/components/PageHeader";
+import BottomActionBar from "../../../src/components/ActionBar";
 
 const MyProjects = () => {
   const { get, del, put } = useApi();
@@ -101,7 +102,7 @@ const MyProjects = () => {
     });
   };
 
- // handelselect 
+  // handelselect 
   const handleSelectAll = () => {
     setSelectAll((prev) => {
       const newValue = !prev;
@@ -109,7 +110,7 @@ const MyProjects = () => {
       return newValue;
     });
   };
- 
+
   //delete the selected projects
   const deleteProject = async () => {
     if (selectedProjects.length === 0) {
@@ -139,7 +140,7 @@ const MyProjects = () => {
     )
 
   };
-  
+
 
   //confirm delete
   const DeleteProject = async () => {
@@ -165,7 +166,7 @@ const MyProjects = () => {
       handleCancel()
     }
   }
- 
+
   //enabled and disbled the projects 
   const toggleProjectStatus = async () => {
     if (selectedProjects.length <= 0) {
@@ -228,7 +229,7 @@ const MyProjects = () => {
   };
 
 
-//handelcancel
+  //handelcancel
   const handleCancel = () => {
     setSelectionMode(false);
     setSelectedProjects([]);
@@ -257,12 +258,12 @@ const MyProjects = () => {
           </TouchableOpacity>
         </View>
 
-          {/* Tabs */}
-         <Tabs 
-             tabs={tabs}
-             activeTab={activeTab}
-             setActiveTab={setActiveTab}
-           />
+        {/* Tabs */}
+        <Tabs
+          tabs={tabs}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+        />
 
         {/* Search */}
         <View className="flex-row items-center border border-gray-300 rounded-lg mb-3 bg-white px-3 mt-4">
@@ -396,32 +397,13 @@ const MyProjects = () => {
 
       {/* Bottom Action Bar */}
       {selectionMode && (
-        <View className="absolute bottom-0 left-0 right-0 bg-white shadow-lg flex-row justify-around py-3 border-t border-gray-300">
-          <TouchableOpacity
-            className="items-center"
-            onPress={toggleProjectStatus}
-          >
-            <AntDesign
-              name={activeTab === "Enabled" ? "eye-invisible" : "eye"}
-              size={24}
-              color="#6b7280"
-            />
-            <Text className="text-[#6b7280]">
-              {activeTab === "Enabled" ? "Disable" : "Enable"}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity className="items-center"
-            onPress={deleteProject}>
-            <Ionicons
-              name="trash-outline" size={22} color="#dc2626" />
-            <Text className="text-[#dc2626]">Delete</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity onPress={handleCancel} className="items-center">
-            <Ionicons name="close-circle-outline" size={22} color="#6b7280" />
-            <Text className="text-gray-600">Cancel</Text>
-          </TouchableOpacity>
+        <View className="absolute bottom-0 left-0 right-0 ">
+          <BottomActionBar
+            activeTab={activeTab}
+            toggleStatus={toggleProjectStatus}
+            handleCancel={handleCancel}
+            handleDelete={deleteProject}
+          />
         </View>
       )}
 
