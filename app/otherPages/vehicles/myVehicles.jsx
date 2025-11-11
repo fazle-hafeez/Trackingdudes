@@ -220,6 +220,12 @@ const MyVehicles = () => {
           setSelectedVehicles([item.id]);
         }
       }}
+      onPress={()=>{
+        router.push({
+          pathname:"/otherPages/vehicles/addVehicles",
+          params:{id:item.id}
+        })
+      }}
       activeOpacity={0.8}
       delayLongPress={1000}
       className="mb-3"

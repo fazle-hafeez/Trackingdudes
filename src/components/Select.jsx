@@ -1,6 +1,17 @@
-import React, { useState } from "react";
-import { View, Text, TouchableOpacity, Modal, FlatList } from "react-native";
+import React, { useState, useRef, useEffect } from "react";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  Modal,
+  FlatList,
+  Animated,
+  Easing,
+  Dimensions,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+
+const { height } = Dimensions.get("window");
 
 const Select = ({
   items = [],
@@ -13,13 +24,15 @@ const Select = ({
   emptyText = "No items found",
 }) => {
   const [open, setOpen] = useState(false);
+  const slideAnim = useRef(new Animated.Value(height)).current; // modal starts off-screen
+  const fadeAnim = useRef(new Animated.Value(0)).current; // background opacity
 
   const isSelected = (item) => value === item.value;
 
   const toggleItem = (item) => {
     if (disabled) return;
     onChange(item.value);
-    setOpen(false);
+    closeModal();
   };
 
   const selectedLabel = () => {
@@ -27,12 +40,45 @@ const Select = ({
     return sel ? sel.label : placeholder;
   };
 
+  const openModal = () => {
+    setOpen(true);
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 0.5,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 300,
+        easing: Easing.out(Easing.exp),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const closeModal = () => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: height,
+        duration: 200,
+        easing: Easing.in(Easing.exp),
+        useNativeDriver: true,
+      }),
+    ]).start(() => setOpen(false));
+  };
+
   return (
     <View className="mb-2">
       {/* Select Control */}
       <TouchableOpacity
         activeOpacity={0.8}
-        onPress={() => !disabled && setOpen(true)}
+        onPress={() => !disabled && openModal()}
         className={`border rounded-md px-3 py-3 flex-row justify-between items-center ${
           error
             ? "border-red-500"
@@ -50,7 +96,6 @@ const Select = ({
           {selectedLabel()}
         </Text>
 
-        {/* Arrow changes up/down */}
         <View className="ml-2">
           <Ionicons
             name={open ? "chevron-up" : "chevron-down"}
@@ -64,14 +109,34 @@ const Select = ({
         <Text className="text-red-500 text-sm mt-1">{error}</Text>
       ) : null}
 
-      {/* Modal */}
-      <Modal visible={open} transparent animationType="slide">
-        <View className="flex-1 bg-black/50 justify-end">
-          <View className="bg-white rounded-t-2xl p-4 max-h-[70%]">
+      {/* Animated Modal */}
+      {open && (
+        <Modal transparent visible={open} animationType="none">
+          <Animated.View
+            style={{
+              flex: 1,
+              backgroundColor: "black",
+              opacity: fadeAnim,
+            }}
+          />
+          <Animated.View
+            style={{
+              position: "absolute",
+              bottom: 0,
+              left: 0,
+              right: 0,
+              transform: [{ translateY: slideAnim }],
+              backgroundColor: "white",
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
+              maxHeight: "70%",
+              padding: 16,
+            }}
+          >
             {/* Header */}
             <View className="flex-row justify-between items-center mb-2">
               <Text className="text-lg font-semibold">{modalTitle}</Text>
-              <TouchableOpacity onPress={() => setOpen(false)}>
+              <TouchableOpacity onPress={closeModal}>
                 <Text className="text-blue-500 font-medium">Close</Text>
               </TouchableOpacity>
             </View>
@@ -109,9 +174,9 @@ const Select = ({
                 );
               }}
             />
-          </View>
-        </View>
-      </Modal>
+          </Animated.View>
+        </Modal>
+      )}
     </View>
   );
 };

@@ -1,3 +1,4 @@
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -6,9 +7,10 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
-import React, { useState, useEffect } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { FontAwesome5, FontAwesome6 } from "@expo/vector-icons";
+import { useLocalSearchParams } from "expo-router";
+import { router } from "expo-router";
 import PageHeader from "../../../src/components/PageHeader";
 import Input from "../../../src/components/Input";
 import Button from "../../../src/components/Button";
@@ -18,28 +20,25 @@ import { useApi } from "../../../src/hooks/useApi";
 import { useAuth } from "../../../src/context/UseAuth";
 
 const AddVehicles = () => {
-  const { get, post } = useApi();
+  const { id } = useLocalSearchParams();
+  const { get, post, put } = useApi();
   const { showModal, setGlobalLoading, hideModal } = useAuth();
 
-  const [addVehicles, setAddVehicles] = useState({
+  const [form, setForm] = useState({
     vehicleName: "",
     fuelEcnomy: "",
     tankCapacity: "",
     fuelType: "gs",
     fuelSolid: "gal",
-    distanceMeasurment: "mi",
+    distanceMeasurement: "mi",
+    level_raise_per_unit: 1.2,
   });
 
-  const debouncedName = useDebounce(addVehicles.vehicleName, 600);
   const [message, setMessage] = useState("");
-  const [messageStatus, setMessageStatus] = useState(false);
-  const [missFieldsError, setMissFieldError] = useState({
-    missVehicleName: "",
-    missFuelEcnomy: "",
-    missTankCapacity: "",
-  });
+  const [isError, setIsError] = useState(false);
+  const [errors, setErrors] = useState({});
+  const debouncedName = useDebounce(form.vehicleName, 600);
 
-  // --- Dropdown Options ---
   const fuelTypes = [
     { label: "Gas", value: "gs" },
     { label: "Diesel", value: "ds" },
@@ -47,25 +46,51 @@ const AddVehicles = () => {
     { label: "Other", value: "oth" },
   ];
 
-  const fuelSolidIn = [
+  const fuelUnits = [
     { label: "Gallons", value: "gal" },
     { label: "Liters", value: "ltr" },
     { label: "Other Unit", value: "unit" },
   ];
 
-  const distanceMeasuredIn = [
+  const distanceUnits = [
     { label: "Miles", value: "mi" },
     { label: "Kilometers", value: "km" },
   ];
 
-  // --- Check Vehicle Availability ---
+  // --- Fetch Vehicle (Edit Mode) ---
   useEffect(() => {
-    const checkAvailability = async () => {
-      if (!debouncedName.trim()) {
-        setMessage("");
-        return;
+    if (!id) return;
+    (async () => {
+      setGlobalLoading(true);
+      try {
+        const res = await get(`my-vehicles/vehicles?vehicles_no=${id}`, {
+          useBearerAuth: true,
+        });
+        if (res?.status === "success" && res.data) {
+          setForm({
+            vehicleName: res.vehicles || "",
+            fuelEcnomy: String(res.distance_per_unit_fuel || ""),
+            tankCapacity: String(res.tank_capacity || ""),
+            fuelType: res.fuel_type || "gs",
+            fuelSolid: res.fuel_unit || "gal",
+            distanceMeasurement: res.distance_unit || "mi",
+            level_raise_per_unit: res.level_raise_per_unit || 1.2,
+          });
+        }
+      } catch (err) {
+        console.error("Fetch error:", err);
+      } finally {
+        setGlobalLoading(false);
       }
+    })();
+  }, [id]);
 
+  // --- Check Vehicle Availability ---
+
+  useEffect(() => {
+    if (!debouncedName.trim()) return setMessage("");
+
+    (async () => {
       setMessage("Checking...");
       try {
         const res = await get(
@@ -74,91 +99,143 @@ const AddVehicles = () => {
           )}`,
           { useBearerAuth: true }
         );
-
-        if (res?.status === "success") {
-          setMessage(res.data || "Available");
-          setMessageStatus(false);
-        } else {
-          setMessage(res.data || "Already exists");
-          setMessageStatus(true);
-        }
+        const available = res?.status === "success";
+        // Safely render only a string
+        setMessage(
+          typeof res.data === "object"
+            ? res.data.vehicle || JSON.stringify(res.data)
+            : res.data || (available ? "Available" : "Already exists")
+        );
+        setIsError(!available);
       } catch {
         setMessage("Error checking name");
-        setMessageStatus(true);
+        setIsError(true);
       }
-    };
-    checkAvailability();
+    })();
   }, [debouncedName]);
 
-  // --- Handle Save Vehicle ---
-  const handleSave = async () => {
-    let hasError = false;
-    const updatedErrors = { ...missFieldsError };
+  // --- Handle Validation ---
+  const validateForm = () => {
+    const newErrors = {};
+    if (!form.vehicleName.trim()) newErrors.vehicleName = "Vehicle name is required";
+    if (!form.fuelEcnomy.trim()) newErrors.fuelEcnomy = "Fuel economy is required";
+    if (!form.tankCapacity.trim()) newErrors.tankCapacity = "Tank capacity is required";
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
 
-    if (!addVehicles.vehicleName.trim()) {
-      updatedErrors.missVehicleName = "Vehicle name is required";
-      hasError = true;
-    }
-    if (!addVehicles.fuelEcnomy.trim()) {
-      updatedErrors.missFuelEcnomy = "Fuel economy is required";
-      hasError = true;
-    }
-    if (!addVehicles.tankCapacity.trim()) {
-      updatedErrors.missTankCapacity = "Tank capacity is required";
-      hasError = true;
-    }
+  // --- Reset Form ---
+  const resetForm = () =>
+    setForm({
+      vehicleName: "",
+      fuelEcnomy: "",
+      tankCapacity: "",
+      fuelType: "gs",
+      fuelSolid: "gal",
+      distanceMeasurement: "mi",
+      level_raise_per_unit: 1.2,
+    });
 
-    setMissFieldError(updatedErrors);
-    if (hasError) return;
 
-    const payload = {
-      vehicle: addVehicles.vehicleName.trim(),
-      fuel_type: addVehicles.fuelType,
-      fuel_unit: addVehicles.fuelSolid,
-      distance_unit: addVehicles.distanceMeasurment,
-      fuel_consumption_rate: parseFloat(addVehicles.fuelEcnomy),
-      level_raise_per_unit: 1.2, // Default since UI doesn't capture this yet
-      tank_capacity: parseFloat(addVehicles.tankCapacity),
-      status:'enabled'
-    };
+  // --- Handle Save/Update ---
+  const handleSubmit = async () => {
+    if (!validateForm()) return;
 
+    setGlobalLoading(true);
     try {
-      setGlobalLoading(true);
-      console.log(payload);
-      
-      const res = await post("my-vehicles/create-vehicle", payload, {
-        useBearerAuth: true,
-      });
+      if (id) {
+        // ===== UPDATE VEHICLE =====
+        const tankCapacity = parseFloat(form.tankCapacity);
+        const payload = {
+          vehicle: form.vehicleName.trim(),
+          fuel_type: form.fuelType,
+          fuel_unit: form.fuelSolid,
+          distance_unit: form.distanceMeasurement,
+          distance_per_unit_fuel: parseFloat(form.fuelEcnomy),
+           level_raise_per_unit: tankCapacity ? 100 / tankCapacity : 0, // calculate here
+          tank_capacity: parseFloat(form.tankCapacity),
+          vehicle_no: id,
+        };
 
-      console.log(res);
-      
+        const res = await put("my-vehicles/update-vehicle", payload, { useBearerAuth: true });
+        const success = res?.status === "success";
 
-      if (res?.status === "success") {
-        showModal( res.data || 'The vehicle was added successfully', 'success');
+        const modalMessage = "Vehicle was updated successfully!";
+        const buttons = [
+          {
+            label: "View Changes",
+            bgColor: "bg-green-600",
+            onPress: async () => {
+              hideModal();
+              // navigate or fetch updated vehicle detail
+            },
+          },
+          {
+            label: "View All",
+            bgColor: "bg-blue-600",
+            onPress: () => {
+              hideModal();
+              router.back();
+            },
+          },
+        ];
 
-        // Reset form
-        setAddVehicles({
-          vehicleName: "",
-          fuelEcnomy: "",
-          tankCapacity: "",
-          fuelType: "gs",
-          fuelSolid: "gal",
-          distanceMeasurment: "mi",
-        });
+        showModal(modalMessage, success ? "success" : "error", success ? false : true, buttons);
+
       } else {
-        showModal(res.data || 'cant saved vehicles try again','error');
+        // ===== ADD NEW VEHICLE =====
+        const tankCapacity = parseFloat(form.tankCapacity);
+        const payload = {
+          vehicle: form.vehicleName.trim(),
+          fuel_type: form.fuelType,
+          fuel_unit: form.fuelSolid,
+          distance_unit: form.distanceMeasurement,
+          distance_per_unit_fuel: parseFloat(form.fuelEcnomy),
+          tank_capacity: tankCapacity,
+          level_raise_per_unit: tankCapacity ? 100 / tankCapacity : 0, // calculate here
+          status: "enabled", // default for new
+        };
+
+        const res = await post("my-vehicles/create-vehicle", payload, { useBearerAuth: true });
+        const success = res?.status === "success";
+
+        const modalMessage = success ? "Vehicle was added successfully!" : "Something went wrong try again latter";
+        const modalVisibility = success ? false : true
+        const buttons = [
+          {
+            label: "Add More",
+            bgColor: "bg-green-600",
+            onPress: () => {
+              hideModal();
+              resetForm();
+            },
+          },
+          {
+            label: "View All",
+            bgColor: "bg-blue-600",
+            onPress: () => {
+              hideModal();
+              router.back();
+            },
+          },
+        ];
+
+        const showButton = success ? buttons : []
+        showModal(modalMessage, success ? "success" : "error", modalVisibility, showButton);
+        if (success) resetForm();
       }
-    } catch (error) {
-      showModal(error.error || 'something went wrong try again latter')
+    } catch (err) {
+      showModal(err?.error || "Something went wrong, try again later", "error");
     } finally {
       setGlobalLoading(false);
     }
   };
 
+
   return (
     <SafeAreaView className="flex-1 bg-blue-50">
       <StatusBar barStyle="light-content" backgroundColor="#0000ff" />
-      <PageHeader routes="Adding Vehicles" />
+      <PageHeader routes={id ? "Edit Vehicle" : "Add Vehicle"} />
 
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -168,140 +245,101 @@ const AddVehicles = () => {
         <ScrollView
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{ flexGrow: 1, paddingBottom: 0 }}
+          contentContainerStyle={{ paddingBottom: 20 }}
         >
-          <View className="flex-1 px-4 py-2">
-            <View className="bg-white rounded-xl px-4 pb-4">
-              {/* Vehicle name */}
-              <Section
-                icon={<FontAwesome5 name="car" size={24} color="black" />}
-                label="Vehicle"
-                input={
-                  <Input
-                    value={addVehicles.vehicleName}
-                    onchange={(val) =>
-                      setAddVehicles({ ...addVehicles, vehicleName: val })
-                    }
-                    inputError={missFieldsError.missVehicleName}
-                    setInputError={(msg) =>
-                      setMissFieldError({
-                        ...missFieldsError,
-                        missVehicleName: msg,
-                      })
-                    }
-                    placeholder="Enter your vehicle name"
-                  />
-                }
-              />
-              {message ? (
-                <Text
-                  className={`mt-1 ${
-                    messageStatus ? "text-red-500" : "text-green-500"
+          <View className="p-4 bg-white rounded-xl mx-4 mt-2">
+            <Section
+              label="Vehicle"
+              icon={<FontAwesome5 name="car" size={22} color="black" />}
+              input={
+                <Input
+                  value={form.vehicleName}
+                  onchange={(val) => setForm({ ...form, vehicleName: val })}
+                  inputError={errors.vehicleName}
+                  placeholder="Enter your vehicle name"
+                />
+              }
+            />
+            {message ? (
+              <Text
+                className={` ${isError ? "text-red-500" : "text-green-500"
                   }`}
-                >
-                  {message}
-                </Text>
-              ) : null}
+              >
+                {message}
+              </Text>
+            ) : null}
 
-              {/* Fuel Type */}
-              <Section
-                icon={<FontAwesome6 name="gas-pump" size={24} color="black" />}
-                label="Fuel Type"
-                input={
-                  <Select
-                    items={fuelTypes}
-                    value={addVehicles.fuelType}
-                    onChange={(val) =>
-                      setAddVehicles({ ...addVehicles, fuelType: val })
-                    }
-                  />
-                }
+            <Section
+              label="Fuel Type"
+              icon={<FontAwesome6 name="gas-pump" size={22} color="black" />}
+              input={
+                <Select
+                  items={fuelTypes}
+                  value={form.fuelType}
+                  onChange={(val) => setForm({ ...form, fuelType: val })}
+                />
+              }
+            />
+
+            <Section
+              label="Fuel Unit"
+              icon={<FontAwesome5 name="oil-can" size={22} color="black" />}
+              input={
+                <Select
+                  items={fuelUnits}
+                  value={form.fuelSolid}
+                  onChange={(val) => setForm({ ...form, fuelSolid: val })}
+                />
+              }
+            />
+
+            <Section
+              label="Distance Unit"
+              icon={<FontAwesome6 name="code-compare" size={22} color="black" />}
+              input={
+                <Select
+                  items={distanceUnits}
+                  value={form.distanceMeasurement}
+                  onChange={(val) =>
+                    setForm({ ...form, distanceMeasurement: val })
+                  }
+                />
+              }
+            />
+
+            <Section
+              label="Fuel Consumption Rate"
+              icon={<FontAwesome5 name="leaf" size={22} color="black" />}
+              input={
+                <Input
+                  value={form.fuelEcnomy}
+                  onchange={(val) => setForm({ ...form, fuelEcnomy: val })}
+                  inputError={errors.fuelEcnomy}
+                  placeholder="Enter fuel rate"
+                  keyboardType="numeric"
+                />
+              }
+            />
+
+            <Section
+              label="Tank Capacity"
+              icon={<FontAwesome6 name="ankh" size={22} color="black" />}
+              input={
+                <Input
+                  value={form.tankCapacity}
+                  onchange={(val) => setForm({ ...form, tankCapacity: val })}
+                  inputError={errors.tankCapacity}
+                  placeholder="Enter tank capacity"
+                  keyboardType="numeric"
+                />
+              }
+            />
+
+            <View className="mt-2">
+              <Button
+                title={id ? "Update" : "Save"}
+                onClickEvent={handleSubmit}
               />
-
-              {/* Fuel Unit */}
-              <Section
-                icon={<FontAwesome5 name="oil-can" size={24} color="black" />}
-                label="Fuel Unit"
-                input={
-                  <Select
-                    items={fuelSolidIn}
-                    value={addVehicles.fuelSolid}
-                    onChange={(val) =>
-                      setAddVehicles({ ...addVehicles, fuelSolid: val })
-                    }
-                  />
-                }
-              />
-
-              {/* Distance Unit */}
-              <Section
-                icon={
-                  <FontAwesome6 name="code-compare" size={24} color="black" />
-                }
-                label="Distance Unit"
-                input={
-                  <Select
-                    items={distanceMeasuredIn}
-                    value={addVehicles.distanceMeasurment}
-                    onChange={(val) =>
-                      setAddVehicles({
-                        ...addVehicles,
-                        distanceMeasurment: val,
-                      })
-                    }
-                  />
-                }
-              />
-
-              {/* Fuel Economy */}
-              <Section
-                icon={<FontAwesome5 name="leaf" size={24} color="black" />}
-                label="Fuel Consumption Rate"
-                input={
-                  <Input
-                    value={addVehicles.fuelEcnomy}
-                    onchange={(val) =>
-                      setAddVehicles({ ...addVehicles, fuelEcnomy: val })
-                    }
-                    inputError={missFieldsError.missFuelEcnomy}
-                    setInputError={(msg) =>
-                      setMissFieldError({
-                        ...missFieldsError,
-                        missFuelEcnomy: msg,
-                      })
-                    }
-                    placeholder="Enter fuel rate"
-                    keyboardType="numeric"
-                  />
-                }
-              />
-
-              {/* Tank Capacity */}
-              <Section
-                icon={<FontAwesome6 name="ankh" size={24} color="black" />}
-                label="Tank Capacity"
-                input={
-                  <Input
-                    value={addVehicles.tankCapacity}
-                    onchange={(val) =>
-                      setAddVehicles({ ...addVehicles, tankCapacity: val })
-                    }
-                    inputError={missFieldsError.missTankCapacity}
-                    setInputError={(msg) =>
-                      setMissFieldError({
-                        ...missFieldsError,
-                        missTankCapacity: msg,
-                      })
-                    }
-                    placeholder="Enter tank capacity"
-                    keyboardType="numeric"
-                  />
-                }
-              />
-
-              <View className="my-2">
-                <Button title="Save" onClickEvent={handleSave} />
-              </View>
             </View>
           </View>
         </ScrollView>
@@ -310,9 +348,9 @@ const AddVehicles = () => {
   );
 };
 
-const Section = ({ label, icon, input, className }) => (
-  <View className={className}>
-    <View className="flex-row items-end my-3">
+const Section = ({ label, icon, input }) => (
+  <View className="my-1">
+    <View className="flex-row items-end mb-2">
       {icon}
       <Text className="text-lg font-medium ml-3">{label}</Text>
     </View>

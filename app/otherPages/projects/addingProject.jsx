@@ -189,7 +189,7 @@ const AddingProject = () => {
         useBearerAuth: true,
       });
 
-      if (res.status === "success") {
+      if (res.status === "success" && res.action ==="Next") {
         showModal("Project was updated successfully!", "success",false,
            [
             {
@@ -205,7 +205,7 @@ const AddingProject = () => {
               bgColor: "bg-blue-600",
               onPress: () => {
                 hideModal();
-                router.push("/otherPages/myProjects");
+                router.back();
               },
             },
           ]
