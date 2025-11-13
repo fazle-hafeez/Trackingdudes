@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from "react";
-import {View,Text,TouchableOpacity,FlatList,StatusBar,TextInput} from "react-native";
+import { View, Text, TouchableOpacity, FlatList, StatusBar, TextInput,RefreshControl } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import {FontAwesome5,Ionicons,FontAwesome6,Feather,AntDesign} from "@expo/vector-icons";
+import { FontAwesome5, Ionicons, FontAwesome6, Feather, AntDesign } from "@expo/vector-icons";
 import { useApi } from "../../../src/hooks/useApi";
 import { useAuth } from "../../../src/context/UseAuth";
 import { useFocusEffect } from "@react-navigation/native";
@@ -26,17 +26,19 @@ const MyVehicles = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState("Enabled");
   const tabs = ["Enabled", "Disabled"];
+  const [order, setOrder] = useState("asc");
+  const [refreshing, setRefreshing] = useState(false);
 
   //  Fetch vehicles list
-  const fetchVehicles = async (pageNumber = 1) => {
+  const fetchVehicles = async (pageNumber = 1, currentOrder = order) => {
     try {
       setLoading(true);
       const status = activeTab.toLowerCase();
       const result = await get(
-        `my-vehicles?status=${status}&order=asc&limit=15&page=${pageNumber}&_t=${Date.now()}`,
+        `my-vehicles?status=${status}&order=${currentOrder}&limit=15&page=${pageNumber}&_t=${Date.now()}`,
         { useBearerAuth: true }
       );
-
+      console.log(result)
       if (result?.status === "success") {
         setVehicles(result.data || []);
         setPage(result.pagination?.current_page || 1);
@@ -54,8 +56,16 @@ const MyVehicles = () => {
   useFocusEffect(
     useCallback(() => {
       fetchVehicles(1);
-    }, [activeTab])
+    }, [activeTab, order])
   );
+
+  //when user pull down then call this one function
+  const onRefresh = async () => {
+    setRefreshing(true);
+    setOrder("desc");
+    await fetchVehicles(1, "desc");
+    setRefreshing(false);
+  };
 
   //  Filter vehicles by search text
   const filteredVehicles = vehicles.filter((item) =>
@@ -205,10 +215,23 @@ const MyVehicles = () => {
       handleCancel();
     }
   };
- 
+
   const removeDecimal = (val) => {
-     return val ? parseFloat(val) : null
+    return val ? parseFloat(val) : null
   }
+
+  //convert to full name 
+
+  const convertToFullName = (item) => {
+    const map = {
+      gs: "gas",
+      ds: "diesel",
+      flx: "flex",
+      oth: "other fuel type",
+    };
+    return map[item] || null;
+  };
+
   //  Vehicle item render
   const renderVehicle = ({ item }) => (
     <TouchableOpacity
@@ -220,10 +243,10 @@ const MyVehicles = () => {
           setSelectedVehicles([item.id]);
         }
       }}
-      onPress={()=>{
+      onPress={() => {
         router.push({
-          pathname:"/otherPages/vehicles/addVehicles",
-          params:{id:item.id}
+          pathname: "/otherPages/vehicles/addVehicles",
+          params: { id: item.id }
         })
       }}
       activeOpacity={0.8}
@@ -253,7 +276,7 @@ const MyVehicles = () => {
             <FontAwesome5 name="leaf" size={20} color="#10b981" />
             <Text className="text-xs text-gray-500 mt-1">Fuel economy</Text>
             <Text className="text-base font-medium text-gray-700">
-              {removeDecimal(item.fuel_consumption_rate)} /ltr
+              {removeDecimal(item.distance_per_unit_fuel)} /ltr
             </Text>
           </View>
 
@@ -266,10 +289,10 @@ const MyVehicles = () => {
           </View>
 
           <View className="items-center flex-1">
-            <Ionicons name="speedometer-outline" size={20} color="#a855f7" />
-            <Text className="text-xs text-gray-500 mt-1">Levels/ltr</Text>
+            <FontAwesome6 name="gas-pump" size={20} color="black" />
+            <Text className="text-xs text-gray-500 mt-1">Fuel type</Text>
             <Text className="text-base font-medium text-gray-700">
-              {removeDecimal(item.level_raise_per_unit)}
+              {convertToFullName(item.fuel_type)}
             </Text>
           </View>
         </View>
@@ -299,11 +322,11 @@ const MyVehicles = () => {
       <View className="px-4 flex-1">
 
         {/* Tabs */}
-         <Tabs 
-             tabs={tabs}
-             activeTab={activeTab}
-             setActiveTab={setActiveTab}
-           />
+        <Tabs
+          tabs={tabs}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+        />
 
         {/* Search */}
         <View className="flex-row items-center border border-gray-300 rounded-lg mb-3 bg-white px-3 mt-4">
@@ -335,6 +358,9 @@ const MyVehicles = () => {
             data={filteredVehicles}
             renderItem={renderVehicle}
             keyExtractor={(item) => item.id.toString()}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
             ListFooterComponent={
               <View className="items-center">
                 <Pagination
@@ -360,11 +386,11 @@ const MyVehicles = () => {
       {selectionMode && (
         <View className="absolute bottom-0 left-0 right-0 ">
           <BottomActionBar
-           activeTab={activeTab}
-           toggleStatus={toggleVehicleStatus}
-           handleCancel={handleCancel}
-           handleDelete={deleteVehicles}
-          />  
+            activeTab={activeTab}
+            toggleStatus={toggleVehicleStatus}
+            handleCancel={handleCancel}
+            handleDelete={deleteVehicles}
+          />
         </View>
       )}
     </SafeAreaView>

@@ -138,7 +138,7 @@ const Login = () => {
         showModal(result.data || "you are  Login successful!", "success");
         setTimeout(() => {
           router.push("/dashboard/dashboardPage");
-        }, 3000);
+        }, 2500);
       }
       else if (result?.status === "error") {
         if (lastTriedUser === cleanUsername) {

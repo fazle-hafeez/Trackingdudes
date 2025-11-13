@@ -31,7 +31,6 @@ const AddVehicles = () => {
     fuelType: "gs",
     fuelSolid: "gal",
     distanceMeasurement: "mi",
-    level_raise_per_unit: 1.2,
   });
 
   const [message, setMessage] = useState("");
@@ -58,31 +57,41 @@ const AddVehicles = () => {
   ];
 
   // --- Fetch Vehicle (Edit Mode) ---
+  const fetchVehicleDetails = async () => {
+    setGlobalLoading(true);
+    try {
+      const res = await get(`my-vehicles/vehicle/?vehicle_no=${id}&_t=${Date.now()}`, {
+        useBearerAuth: true,
+      });
+      if (res?.status === "success" && res.data) {
+        const d = res.data;
+
+        const formatNumber = (val) => {
+          if (!val) return "";
+          const num = parseFloat(val);
+          return Number.isInteger(num) ? String(num) : String(num.toFixed(2));
+        };
+
+        setForm({
+          vehicleName: d.vehicle || "",
+          fuelEcnomy: formatNumber(d.distance_per_unit_fuel),
+          tankCapacity: formatNumber(d.tank_capacity),
+          fuelType: d.fuel_type || "gs",
+          fuelSolid: d.fuel_unit || "gal",
+          distanceMeasurement: d.distance_unit || "mi",
+        });
+      }
+
+    } catch (err) {
+      console.error("Fetch error:", err);
+    } finally {
+      setGlobalLoading(false);
+    }
+  }
+
   useEffect(() => {
     if (!id) return;
-    (async () => {
-      setGlobalLoading(true);
-      try {
-        const res = await get(`my-vehicles/vehicles?vehicles_no=${id}`, {
-          useBearerAuth: true,
-        });
-        if (res?.status === "success" && res.data) {
-          setForm({
-            vehicleName: res.vehicles || "",
-            fuelEcnomy: String(res.distance_per_unit_fuel || ""),
-            tankCapacity: String(res.tank_capacity || ""),
-            fuelType: res.fuel_type || "gs",
-            fuelSolid: res.fuel_unit || "gal",
-            distanceMeasurement: res.distance_unit || "mi",
-            level_raise_per_unit: res.level_raise_per_unit || 1.2,
-          });
-        }
-      } catch (err) {
-        console.error("Fetch error:", err);
-      } finally {
-        setGlobalLoading(false);
-      }
-    })();
+    fetchVehicleDetails();
   }, [id]);
 
   // --- Check Vehicle Availability ---
@@ -133,7 +142,6 @@ const AddVehicles = () => {
       fuelType: "gs",
       fuelSolid: "gal",
       distanceMeasurement: "mi",
-      level_raise_per_unit: 1.2,
     });
 
 
@@ -145,87 +153,88 @@ const AddVehicles = () => {
     try {
       if (id) {
         // ===== UPDATE VEHICLE =====
-        const tankCapacity = parseFloat(form.tankCapacity);
         const payload = {
           vehicle: form.vehicleName.trim(),
           fuel_type: form.fuelType,
           fuel_unit: form.fuelSolid,
           distance_unit: form.distanceMeasurement,
           distance_per_unit_fuel: parseFloat(form.fuelEcnomy),
-           level_raise_per_unit: tankCapacity ? 100 / tankCapacity : 0, // calculate here
           tank_capacity: parseFloat(form.tankCapacity),
           vehicle_no: id,
         };
 
         const res = await put("my-vehicles/update-vehicle", payload, { useBearerAuth: true });
-        const success = res?.status === "success";
+        if (res.status === "success" && res.action === "Next") {
+          showModal(res.message || "The vehicle was updated successfully!", "success", false,
+            [
+              {
+                label: "View Changes",
+                bgColor: "bg-green-600",
+                onPress: async () => {
+                  hideModal();
+                  await fetchVehicleDetails()
+                },
+              },
+              {
+                label: "View All",
+                bgColor: "bg-blue-600",
+                onPress: () => {
+                  hideModal();
+                  router.back();
+                },
+              },
+            ]
+          )
 
-        const modalMessage = "Vehicle was updated successfully!";
-        const buttons = [
-          {
-            label: "View Changes",
-            bgColor: "bg-green-600",
-            onPress: async () => {
-              hideModal();
-              // navigate or fetch updated vehicle detail
-            },
-          },
-          {
-            label: "View All",
-            bgColor: "bg-blue-600",
-            onPress: () => {
-              hideModal();
-              router.back();
-            },
-          },
-        ];
-
-        showModal(modalMessage, success ? "success" : "error", success ? false : true, buttons);
-
+        }
+        else {
+          showModal(res.message || " Something went wrong try again later", "error")
+        }
       } else {
         // ===== ADD NEW VEHICLE =====
-        const tankCapacity = parseFloat(form.tankCapacity);
         const payload = {
           vehicle: form.vehicleName.trim(),
           fuel_type: form.fuelType,
           fuel_unit: form.fuelSolid,
           distance_unit: form.distanceMeasurement,
           distance_per_unit_fuel: parseFloat(form.fuelEcnomy),
-          tank_capacity: tankCapacity,
-          level_raise_per_unit: tankCapacity ? 100 / tankCapacity : 0, // calculate here
+          tank_capacity: parseFloat(form.tankCapacity),
           status: "enabled", // default for new
         };
 
         const res = await post("my-vehicles/create-vehicle", payload, { useBearerAuth: true });
-        const success = res?.status === "success";
-
-        const modalMessage = success ? "Vehicle was added successfully!" : "Something went wrong try again latter";
-        const modalVisibility = success ? false : true
-        const buttons = [
-          {
-            label: "Add More",
-            bgColor: "bg-green-600",
-            onPress: () => {
-              hideModal();
-              resetForm();
-            },
-          },
-          {
-            label: "View All",
-            bgColor: "bg-blue-600",
-            onPress: () => {
-              hideModal();
-              router.back();
-            },
-          },
-        ];
-
-        const showButton = success ? buttons : []
-        showModal(modalMessage, success ? "success" : "error", modalVisibility, showButton);
-        if (success) resetForm();
+        if (res.status === "success" && res.action === "Next") {
+          showModal(
+            res.message || "The vehicle was added successfully!", "success",
+            "yah!!",
+            false,
+            [
+              {
+                label: "Add More",
+                bgColor: "bg-green-600",
+                onPress: () => {
+                  hideModal();
+                  resetForm();
+                },
+              },
+              {
+                label: "View All",
+                bgColor: "bg-blue-600",
+                onPress: () => {
+                  hideModal();
+                  router.back();
+                },
+              },
+            ]
+          )
+          resetForm();
+        }
+        else {
+          showModal(res.message || "Something went wrong try again leter", "error")
+        }
       }
     } catch (err) {
-      showModal(err?.error || "Something went wrong, try again later", "error");
+      showModal(err?.error || "Something went wrong, please try again later", "error");
     } finally {
       setGlobalLoading(false);
     }
