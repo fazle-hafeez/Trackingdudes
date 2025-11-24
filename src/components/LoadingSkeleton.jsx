@@ -23,7 +23,7 @@ const LoadingSkeleton = () => {
 
   return (
     <>
-      {[1, 2, 3,4,5].map((_, index) => (
+      {[1, 2, 3,4].map((_, index) => (
         <Animated.View
           key={index}
           style={{
@@ -40,7 +40,7 @@ const LoadingSkeleton = () => {
         >
           <View
             style={{
-              height: 20,
+              height: 18,
               backgroundColor: "#D1D1D1",
               borderRadius: 5,
               width: "80%",
@@ -49,7 +49,7 @@ const LoadingSkeleton = () => {
           />
           <View
             style={{
-              height: 15,
+              height: 14,
               backgroundColor: "#D1D1D1",
               borderRadius: 5,
               width: "60%",
@@ -58,7 +58,7 @@ const LoadingSkeleton = () => {
           />
            <View
             style={{
-              height: 15,
+              height: 12,
               backgroundColor: "#D1D1D1",
               borderRadius: 5,
               width: "40%",

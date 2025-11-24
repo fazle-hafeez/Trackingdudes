@@ -119,7 +119,7 @@ const AddingProject = () => {
 
       if (result.status === "success" && result.action === "Next") {
         showModal(
-          "Project created successfully!",
+          "The project was created successfully!",
           "success",
           "Yah!!",
           false,

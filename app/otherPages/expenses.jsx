@@ -5,7 +5,7 @@ import PageHeader from '../../src/components/PageHeader';
 
 const Expenses = () => {
   return (
-    <SafeAreaView className="flex-1">
+    <SafeAreaView className="flex-1 bg-blue-50">
       <PageHeader routes="Expenses Tracking" />
       <View className="px-4">
         <View className="bg-white rounded-lg p-4 my-3">

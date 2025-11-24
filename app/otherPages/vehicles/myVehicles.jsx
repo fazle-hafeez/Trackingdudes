@@ -1,7 +1,16 @@
-import React, { useState, useCallback } from "react";
-import { View, Text, TouchableOpacity, FlatList, StatusBar, TextInput,RefreshControl } from "react-native";
+
+import React, { useState, useCallback, useContext,useEffect } from "react";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  FlatList,
+  StatusBar,
+  TextInput,
+  RefreshControl
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { FontAwesome5, Ionicons, FontAwesome6, Feather, AntDesign } from "@expo/vector-icons";
+import { FontAwesome5, Ionicons, FontAwesome6, Feather } from "@expo/vector-icons";
 import { useApi } from "../../../src/hooks/useApi";
 import { useAuth } from "../../../src/context/UseAuth";
 import { useFocusEffect } from "@react-navigation/native";
@@ -12,9 +21,17 @@ import CheckBox from "../../../src/components/CheckBox";
 import { router } from "expo-router";
 import Tabs from "../../../src/components/Tabs";
 import BottomActionBar from "../../../src/components/ActionBar";
+import { readCache, storeCache } from "../../../src/offline/cache";
+import { OfflineContext } from "../../../src/offline/OfflineProvider";
+import ProjectCountModal from "../../../src/components/ProjectCountModal";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+const CACHE_KEY = "my-vehicles";
+
 const MyVehicles = () => {
   const { get, put, del } = useApi();
   const { showModal, hideModal, setGlobalLoading } = useAuth();
+  const { isConnected } = useContext(OfflineContext);
 
   const [vehicles, setVehicles] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -28,26 +45,146 @@ const MyVehicles = () => {
   const tabs = ["Enabled", "Disabled"];
   const [order, setOrder] = useState("asc");
   const [refreshing, setRefreshing] = useState(false);
+  const [pendingUpdates, setPendingUpdates] = useState({});
+  const [modalVisible, setModalVisible] = useState(false);
+  const [projectCount, setProjectCount] = useState(null);
 
-  //  Fetch vehicles list
-  const fetchVehicles = async (pageNumber = 1, currentOrder = order) => {
+  // ---------- Helpers ----------
+  const normalizeStatus = (value) => {
+    if (!value) return null;
+    if (typeof value === "string") return value.toLowerCase();
+    if (typeof value === "object" && value.status) return String(value.status).toLowerCase();
+    return null;
+  };
+
+  const mergePendingAndNormalize = (obj = {}) => {
+    const out = {};
+    Object.keys(obj).forEach(k => {
+      const v = obj[k];
+      const n = normalizeStatus(v);
+      if (n) out[k] = n;
+    });
+    return out;
+  };
+
+  //--------------------Fetch project in every page -------
+
+  useEffect(() => {
+    const checkProjectCount = async () => {
+      const value = await AsyncStorage.getItem("@project_count");
+      if (!value) {
+        setModalVisible(true); 
+      } else {
+        setProjectCount(parseInt(value));
+      }
+    };
+    checkProjectCount();
+  }, []);
+
+
+  const handleSelect = async (value) => {
+    try {
+      setProjectCount(value); // update state
+      setModalVisible(false); // close modal
+
+      // Optionally, refetch vehicles with new limit
+      await fetchVehicles(1); // first page
+    } catch (err) {
+      console.log("Error handling project count select:", err);
+    }
+  };
+
+  // ---------------- FETCH VEHICLES ----------------
+  const fetchVehicles = async (pageNumber = 1, currentOrder = order, shouldUpdateCache = false) => {
+    const fetchStatus = activeTab.toLowerCase();
     try {
       setLoading(true);
-      const status = activeTab.toLowerCase();
+
       const result = await get(
-        `my-vehicles?status=${status}&order=${currentOrder}&limit=15&page=${pageNumber}&_t=${Date.now()}`,
+        `my-vehicles?status=${fetchStatus}&order=${currentOrder}&limit=${projectCount}&page=${pageNumber}&_t=${isConnected ? Date.now() : 0}`,
         { useBearerAuth: true }
       );
-      console.log(result)
-      if (result?.status === "success") {
-        setVehicles(result.data || []);
-        setPage(result.pagination?.current_page || 1);
-        setTotalPages(result.pagination?.total_pages || 1);
+
+      let vehiclesData = Array.isArray(result?.data) ? result.data : [];
+
+      // Load caches
+      const cachedPendingRaw = await readCache("pendingUpdates") || {};
+      const cachedPending = mergePendingAndNormalize(cachedPendingRaw);
+      const allCachedWrap = await readCache(CACHE_KEY) || { data: [] };
+      const allCached = Array.isArray(allCachedWrap.data) ? allCachedWrap.data : [];
+
+      // 1) Merge pending offline posts (new records added offline)
+      const offlineQueue = (await readCache("offlineQueue")) || [];
+      const pendingItems = offlineQueue
+        .filter(i => i.endpoint && i.endpoint.includes("create-vehicle") && i.method === "post")
+        .map(i => ({
+          ...i.body,
+          tempId: i.body.tempId || i.body.id || Date.now(),
+          pending: true,
+          status: normalizeStatus(i.body.status) || "enabled",
+        }));
+
+      pendingItems.forEach(p => {
+        const exists = vehiclesData.find(v => (v.id && p.id && v.id === p.id) || (v.tempId && p.tempId && v.tempId === p.tempId));
+        if (!exists && p.status === fetchStatus) vehiclesData.push(p);
+      });
+
+      // 2) Add items moved to this tab due to pending status change
+      const movedPendingItems = allCached
+        .filter(item => {
+          const id = item.id;
+          const pendingStatus = cachedPending[id] || cachedPending[item.tempId];
+          return (id || item.tempId) && pendingStatus && pendingStatus === fetchStatus;
+        })
+        .map(item => ({ ...item, status: cachedPending[item.id] || cachedPending[item.tempId], pending: true }));
+
+      movedPendingItems.forEach(pItem => {
+        const exists = vehiclesData.find(v => (v.id && pItem.id && v.id === pItem.id) || (v.tempId && pItem.tempId && v.tempId === pItem.tempId));
+        if (!exists) vehiclesData.push(pItem);
+      });
+
+      // 3) Apply pending status to all records in the current list
+      vehiclesData = vehiclesData.map(v => {
+        const id = v.id || v.tempId;
+        const pendingStatus = cachedPending[id] || cachedPending[v.id] || cachedPending[v.tempId];
+        if (pendingStatus) return { ...v, status: pendingStatus, pending: true };
+        return { ...v, status: (v.status ? String(v.status).toLowerCase() : fetchStatus) };
+      });
+
+      // 4) Final filter to ensure displayed items match current tab
+      vehiclesData = vehiclesData.filter(v => String(v.status || "").toLowerCase() === fetchStatus);
+
+      setVehicles(vehiclesData);
+
+      // Update cache: store server-provided list when online (but keep timestamp)
+      if (vehiclesData.length > 0 && (isConnected || shouldUpdateCache)) {
+        await storeCache(CACHE_KEY, { data: vehiclesData, timestamp: Date.now() });
+      }
+
+    } catch (err) {
+      console.log("API error:", err);
+      // Fallback: show cache (with pending applied)
+      const cachedWrap = await readCache(CACHE_KEY) || { data: [] };
+      const cached = Array.isArray(cachedWrap.data) ? cachedWrap.data : [];
+      const cachedPendingRaw = await readCache("pendingUpdates") || {};
+      const cachedPending = mergePendingAndNormalize(cachedPendingRaw);
+
+      if (cached.length > 0) {
+        let safeCachedData = cached.map(item => {
+          const id = item.id || item.tempId;
+          const pendingStatus = cachedPending[id];
+          return {
+            ...item,
+            status: (pendingStatus || item.status || activeTab).toString().toLowerCase(),
+            pending: !!pendingStatus,
+          };
+        });
+
+        safeCachedData = safeCachedData.filter(item => String(item.status || "").toLowerCase() === fetchStatus);
+        setVehicles(safeCachedData);
       } else {
         setVehicles([]);
       }
-    } catch (err) {
-      console.log("Error fetching vehicles:", err);
     } finally {
       setLoading(false);
     }
@@ -55,52 +192,67 @@ const MyVehicles = () => {
 
   useFocusEffect(
     useCallback(() => {
-      fetchVehicles(1);
+      const restorePending = async () => {
+        const cachedPending = await readCache("pendingUpdates");
+        if (cachedPending) setPendingUpdates(mergePendingAndNormalize(cachedPending));
+      };
+
+      const checkActionsAndFetch = async () => {
+        const newRecord = await readCache("newRecordAdded");
+        const recordDeleted = await readCache("recordDeleted");
+
+        if (newRecord || recordDeleted) {
+          await fetchVehicles(1, order, true);
+          if (newRecord) await storeCache("newRecordAdded", false);
+          if (recordDeleted) await storeCache("recordDeleted", false);
+        } else {
+          await fetchVehicles(1);
+        }
+      };
+
+      restorePending();
+      checkActionsAndFetch();
     }, [activeTab, order])
   );
 
-  //when user pull down then call this one function
+  // ---------------- REFRESH ----------------
   const onRefresh = async () => {
     setRefreshing(true);
-    setOrder("desc");
-    await fetchVehicles(1, "desc");
+    await fetchVehicles(1, "desc", true);
     setRefreshing(false);
   };
 
-  //  Filter vehicles by search text
-  const filteredVehicles = vehicles.filter((item) =>
-    item?.vehicle?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  //  Select / Deselect all
+  // ---------------- SELECTION ----------------
   const handleSelectAll = () => {
-    setSelectAll((prev) => {
+    setSelectAll(prev => {
       const newValue = !prev;
-      setSelectedVehicles(newValue ? vehicles.map((v) => v.id) : []);
+      setSelectedVehicles(newValue ? filteredVehicles.map(v => v.id).filter(Boolean) : []);
       return newValue;
     });
   };
 
-  //  Toggle single selection
   const toggleVehicleSelect = (id) => {
-    setSelectedVehicles((prev) =>
-      prev.includes(id)
-        ? prev.filter((vid) => vid !== id)
-        : [...prev, id]
+    setSelectedVehicles(prev =>
+      prev.includes(id) ? prev.filter(vid => vid !== id) : [...prev, id]
     );
   };
 
-  //  Cancel selection mode
   const handleCancel = () => {
     setSelectionMode(false);
     setSelectedVehicles([]);
     setSelectAll(false);
   };
 
-  //  Toggle enable/disable
+  // ---------------- ENABLE / DISABLE ----------------
   const toggleVehicleStatus = async () => {
     if (selectedVehicles.length <= 0) {
       showModal("You must choose at least one vehicle.", "error");
+      return;
+    }
+
+    const validSelection = selectedVehicles.filter(id => id);
+    if (validSelection.length === 0) {
+      showModal("Selected item is pending sync and cannot be updated yet.", "error");
       return;
     }
 
@@ -118,7 +270,7 @@ const MyVehicles = () => {
           bgColor: "bg-red-600",
           onPress: async () => {
             hideModal();
-            await changeVehicleStatus(newStatus);
+            await changeVehicleStatus(newStatus, validSelection);
           },
         },
         {
@@ -133,38 +285,73 @@ const MyVehicles = () => {
     );
   };
 
-  //  Change vehicle status (enable/disable)
-  const changeVehicleStatus = async (status) => {
+  const changeVehicleStatus = async (status, selectedIds) => {
     try {
       setGlobalLoading(true);
-      const payload = {
-        status,
-        vehicle_nos: selectedVehicles,
-      };
-      setSelectedVehicles([]);
+      const payload = { status, vehicle_nos: selectedIds };
+      const newStatusLower = String(status).toLowerCase();
+      const result = await put("my-vehicles/mark-vehicles", payload, { useBearerAuth: true });
 
-      const result = await put("my-vehicles/mark-vehicles", payload, {
-        useBearerAuth: true,
-      });
+      if (result?.offline) {
+        const updatedPendingRaw = await readCache("pendingUpdates") || {};
+        const updatedPending = mergePendingAndNormalize(updatedPendingRaw);
+
+        selectedIds.forEach(id => { updatedPending[id] = newStatusLower; });
+        setPendingUpdates(updatedPending);
+        await storeCache("pendingUpdates", updatedPending);
+
+        // Update UI: remove items from current tab view
+        setVehicles(prev => prev.filter(item => !selectedIds.includes(item.id)));
+
+        // Update main cache so other tab can pick it up
+        const cachedWrap = await readCache(CACHE_KEY) || { data: [] };
+        let cachedList = Array.isArray(cachedWrap.data) ? cachedWrap.data : [];
+        cachedList = cachedList.map(item => selectedIds.includes(item.id) ? { ...item, status: newStatusLower, pending: true } : item);
+        await storeCache(CACHE_KEY, { data: cachedList, timestamp: Date.now() });
+        await storeCache("recordDeleted", true);
+
+        showModal(`Vehicles status updated to ${status} (offline). They will sync when online.`, "success");
+        handleCancel();
+        return;
+      }
 
       if (result.status === "success") {
+        const updatedPendingRaw = await readCache("pendingUpdates") || {};
+        const updatedPending = mergePendingAndNormalize(updatedPendingRaw);
+        selectedIds.forEach(id => delete updatedPending[id]);
+        await storeCache("pendingUpdates", updatedPending);
+        setPendingUpdates(updatedPending);
+
+        setVehicles(prev => prev.filter(item => !selectedIds.includes(item.id)));
+
+        const cachedWrap = await readCache(CACHE_KEY) || { data: [] };
+        let cachedList = Array.isArray(cachedWrap.data) ? cachedWrap.data : [];
+        cachedList = cachedList.map(item => selectedIds.includes(item.id) ? { ...item, status: newStatusLower, pending: false } : item);
+        await storeCache(CACHE_KEY, { data: cachedList, timestamp: Date.now() });
+
         showModal(result.data || `Vehicles ${status} successfully.`, "success");
-        setTimeout(() => fetchVehicles(), 2000);
+        handleCancel();
       } else {
         showModal("Failed to update vehicle status.", "error");
       }
-    } catch (error) {
+
+    } catch (err) {
       showModal("Something went wrong. Please try again.", "error");
     } finally {
       setGlobalLoading(false);
-      handleCancel();
     }
   };
 
-  //  Delete selected vehicles
+  // ---------------- DELETE VEHICLES ----------------
   const deleteVehicles = async () => {
     if (selectedVehicles.length === 0) {
       showModal("Please select at least one vehicle to delete.", "error");
+      return;
+    }
+
+    const validSelection = selectedVehicles.filter(id => id);
+    if (validSelection.length === 0) {
+      showModal("Selected item is pending sync and cannot be deleted yet.", "error");
       return;
     }
 
@@ -178,7 +365,7 @@ const MyVehicles = () => {
           bgColor: "bg-red-600",
           onPress: async () => {
             hideModal();
-            await confirmDelete();
+            await confirmDelete(validSelection);
           },
         },
         {
@@ -193,208 +380,168 @@ const MyVehicles = () => {
     );
   };
 
-  const confirmDelete = async () => {
+  const confirmDelete = async (selectedIds) => {
     try {
       setGlobalLoading(true);
-      const payload = { vehicle_nos: selectedVehicles };
-      const res = await del("my-vehicles/delete-vehicles", payload, {
-        useBearerAuth: true,
-      });
+      const payload = { vehicle_nos: selectedIds };
+      const res = await del("my-vehicles/delete-vehicles", payload, { useBearerAuth: true });
+
+      if (res?.offline) {
+        showModal("Cannot delete in offline mode", "error");
+        return;
+      }
 
       if (res.status === "success") {
+        setVehicles(prev => prev.filter(v => !selectedIds.includes(v.id)));
+        const cachedWrap = await readCache(CACHE_KEY) || { data: [] };
+        const cachedList = Array.isArray(cachedWrap.data) ? cachedWrap.data : [];
+        const updatedCache = cachedList.filter(v => !selectedIds.includes(v.id));
+        await storeCache(CACHE_KEY, { data: updatedCache, timestamp: Date.now() });
+        await storeCache("recordDeleted", true);
         showModal(res.data || "Vehicles deleted successfully.", "success");
-        setTimeout(() => fetchVehicles(), 2000);
+        handleCancel();
       } else {
         showModal(res?.data || "Couldn't delete vehicles.", "error");
       }
+
     } catch (err) {
       console.error("Delete error:", err);
       showModal("Something went wrong while deleting.", "error");
     } finally {
       setGlobalLoading(false);
-      handleCancel();
     }
   };
 
-  const removeDecimal = (val) => {
-    return val ? parseFloat(val) : null
-  }
+  // ---------------- HELPERS ----------------
+  const removeDecimal = val => val ? parseFloat(val) : null;
 
-  //convert to full name 
-
-  const convertToFullName = (item) => {
-    const map = {
-      gs: "gas",
-      ds: "diesel",
-      flx: "flex",
-      oth: "other fuel type",
-    };
+  const convertToFullName = item => {
+    const map = { gs: "gas", ds: "diesel", flx: "flex", oth: "other", gal: "gals", ltr: "ltrs", unit: "other" };
     return map[item] || null;
   };
 
-  //  Vehicle item render
-  const renderVehicle = ({ item }) => (
-    <TouchableOpacity
-      onLongPress={() => {
-        if (!selectionMode) {
-          setSelectionMode(true);
-          setSelectedVehicles([]);
-        } else {
-          setSelectedVehicles([item.id]);
-        }
-      }}
-      onPress={() => {
-        router.push({
-          pathname: "/otherPages/vehicles/addVehicles",
-          params: { id: item.id }
-        })
-      }}
-      activeOpacity={0.8}
-      delayLongPress={1000}
-      className="mb-3"
-    >
-      <View className="bg-white rounded-md shadow-sm p-4">
-        {/*  Title row */}
-        <View className="flex-row items-center border-b border-yellow-300 pb-2 mb-2">
-          <View className="flex-row items-center">
-            {selectionMode && (
-              <CheckBox
-                value={selectedVehicles.includes(item.id)}
-                onClick={() => toggleVehicleSelect(item.id)}
-              />
-            )}
-            <FontAwesome5 name="car" size={20} color="black" className="ml-2" />
-            <Text className="text-lg font-semibold text-gray-700 ml-2">
-              {item.vehicle}
-            </Text>
-          </View>
-        </View>
-
-        {/*  Vehicle Stats */}
-        <View className="flex-row justify-between items-center my-3">
-          <View className="items-center flex-1">
-            <FontAwesome5 name="leaf" size={20} color="#10b981" />
-            <Text className="text-xs text-gray-500 mt-1">Fuel economy</Text>
-            <Text className="text-base font-medium text-gray-700">
-              {removeDecimal(item.distance_per_unit_fuel)} /ltr
-            </Text>
-          </View>
-
-          <View className="items-center flex-1">
-            <FontAwesome6 name="ankh" size={20} color="#3b82f6" />
-            <Text className="text-xs text-gray-500 mt-1">Tank capacity</Text>
-            <Text className="text-base font-medium text-gray-700">
-              {removeDecimal(item.tank_capacity)}
-            </Text>
-          </View>
-
-          <View className="items-center flex-1">
-            <FontAwesome6 name="gas-pump" size={20} color="black" />
-            <Text className="text-xs text-gray-500 mt-1">Fuel type</Text>
-            <Text className="text-base font-medium text-gray-700">
-              {convertToFullName(item.fuel_type)}
-            </Text>
-          </View>
-        </View>
-      </View>
-    </TouchableOpacity>
+  const filteredVehicles = vehicles.filter((item) =>
+    item?.vehicle?.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const renderVehicle = ({ item }) => {
+    const key = item.id || item.tempId;
+    const isPending = !!item.pending || (item.id && !!pendingUpdates[item.id]) || (!!pendingUpdates[item.tempId]);
+
+    return (
+      <TouchableOpacity
+        onLongPress={() => {
+          if (key) {
+            if (!selectionMode) {
+              setSelectionMode(true);
+              if (item.id) setSelectedVehicles([item.id]);
+            } else {
+              if (item.id) toggleVehicleSelect(item.id);
+            }
+          }
+        }}
+        onPress={() => {
+          router.push({ pathname: "/otherPages/vehicles/addVehicles", params: { id: item.id, tempId: item.tempId } });
+        }}
+        activeOpacity={0.8}
+        delayLongPress={500}
+        className="mb-3"
+      >
+        <View className={`bg-white rounded-md shadow-sm p-4 ${isPending ? "border border-yellow-400 bg-yellow-50" : ""}`}>
+          <View className="flex-row items-center border-b border-yellow-300 pb-2 mb-2">
+            <View className="flex-row items-center">
+              {selectionMode && (
+                <CheckBox value={item.id ? selectedVehicles.includes(item.id) : false} onClick={() => item.id && toggleVehicleSelect(item.id)} />
+              )}
+              <FontAwesome5 name="car" size={20} color="black" className="ml-2" />
+              <Text className="text-lg font-semibold text-gray-700 ml-2">{item.vehicle}</Text>
+            </View>
+          </View>
+
+          <View className="flex-row justify-between items-center my-3">
+            <View className="items-center flex-1">
+              <FontAwesome5 name="leaf" size={20} color="#10b981" />
+              <Text className="text-xs text-gray-500 mt-1">Fuel economy</Text>
+              <Text className="text-base font-medium text-gray-700">{removeDecimal(item.distance_per_unit_fuel)} {item.distance_unit} / {item.fuel_unit}</Text>
+            </View>
+
+            <View className="items-center flex-1">
+              <FontAwesome6 name="ankh" size={20} color="#3b82f6" />
+              <Text className="text-xs text-gray-500 mt-1">Tank capacity</Text>
+              <Text className="text-base font-medium text-gray-700">{removeDecimal(item.tank_capacity)} {convertToFullName(item.fuel_unit)}</Text>
+            </View>
+
+            <View className="items-center flex-1">
+              <FontAwesome6 name="gas-pump" size={20} color="black" />
+              <Text className="text-xs text-gray-500 mt-1">Fuel type</Text>
+              <Text className="text-base font-medium text-gray-700">{convertToFullName(item.fuel_type)}</Text>
+            </View>
+          </View>
+
+          {isPending && (
+            <Text className="text-yellow-600 my-2 text-xs font-medium">⏳ Pending sync...</Text>
+          )}
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <SafeAreaView className="flex-1 bg-blue-50">
       <StatusBar barStyle="light-content" backgroundColor="#0000ff" />
       <PageHeader routes="My Vehicles" />
 
-      {/*  Add Vehicle */}
       <View className="bg-white rounded-md shadow-md flex-row justify-between items-center p-4 m-4">
         <View className="flex-row items-center">
           <FontAwesome5 name="car" size={20} color="#198754" />
           <Text className="ml-2 text-lg font-medium text-[#198754]">Add another vehicle</Text>
         </View>
-        <TouchableOpacity
-          onPress={() => router.push("otherPages/vehicles/addVehicles")}
-        >
-          <Ionicons name="add-circle" size={26} color="#198754" />
+        <TouchableOpacity onPress={() => router.push("otherPages/vehicles/addVehicles")}>
+          <Ionicons name="add-circle" size={26} color="#10b981" />
         </TouchableOpacity>
       </View>
 
-      {/*  Vehicle List */}
       <View className="px-4 flex-1">
+        <Tabs tabs={tabs} activeTab={activeTab} setActiveTab={setActiveTab} />
 
-        {/* Tabs */}
-        <Tabs
-          tabs={tabs}
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
-        />
-
-        {/* Search */}
         <View className="flex-row items-center border border-gray-300 rounded-lg mb-3 bg-white px-3 mt-4">
           <Feather name="search" size={20} color="#9ca3af" />
-          <TextInput
-            className="flex-1 ml-2 py-3 text-lg text-[#9ca3af]"
-            placeholder="Search vehicles..."
-            placeholderTextColor="#9ca3af"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
+          <TextInput className="flex-1 ml-2 py-3 text-lg text-[#9ca3af]" placeholder="Search vehicles..." placeholderTextColor="#9ca3af" value={searchQuery} onChangeText={setSearchQuery} />
         </View>
 
-        {/* Select All (when active) */}
         {selectionMode && filteredVehicles.length > 0 && (
           <View className="flex-row items-center mb-3 bg-white rounded-lg shadow-sm p-3 px-4">
             <CheckBox value={selectAll} onClick={handleSelectAll} />
-            <Text className="ml-2 text-lg font-medium text-gray-800">
-              Select All
-            </Text>
+            <Text className="ml-2 text-lg font-medium text-gray-800">Select All ({selectedVehicles.length})</Text>
           </View>
         )}
 
-        {/* Main List */}
         {loading ? (
           <LoadingSkeleton />
         ) : filteredVehicles.length > 0 ? (
-          <FlatList
-            data={filteredVehicles}
-            renderItem={renderVehicle}
-            keyExtractor={(item) => item.id.toString()}
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-            }
-            ListFooterComponent={
-              <View className="items-center">
-                <Pagination
-                  page={page}
-                  totalPages={totalPages}
-                  onPageChange={(newPage) => fetchVehicles(newPage)}
-                />
-              </View>
-            }
-          />
+          <FlatList data={filteredVehicles} renderItem={renderVehicle} keyExtractor={(item) => (item.id || item.tempId)?.toString()} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />} ListFooterComponent={<View className="items-center"><Pagination page={page} totalPages={totalPages} onPageChange={(newPage) => fetchVehicles(newPage)} /></View>} />
         ) : (
-          <View className="bg-white rounded-md shadow-md p-4">
-            <Text className="text-lg text-gray-700">
-              You have not saved any vehicles yet. Saving a vehicle allows you
-              to select it from the list of saved vehicles, enabling you to
-              track trips and fuel consumption.
-            </Text>
+          <View className="bg-white rounded-md shadow-md p-4"><Text className="text-lg text-gray-700">
+            You have not saved any vehicles yet. Saving a vehicle allows you to select it from the list of saved vehicles, enabling you to track trips as well as fuel consumption
+          </Text>
           </View>
         )}
       </View>
 
-      {/*  Bottom Action Bar */}
       {selectionMode && (
         <View className="absolute bottom-0 left-0 right-0 ">
-          <BottomActionBar
-            activeTab={activeTab}
-            toggleStatus={toggleVehicleStatus}
-            handleCancel={handleCancel}
-            handleDelete={deleteVehicles}
-          />
+          <BottomActionBar activeTab={activeTab} toggleStatus={toggleVehicleStatus} handleCancel={handleCancel} handleDelete={deleteVehicles} />
         </View>
       )}
+
+      <ProjectCountModal
+        visible={modalVisible}
+        onClose={() => setModalVisible(false)}
+        onSelect={handleSelect}
+      />
     </SafeAreaView>
   );
 };
 
 export default MyVehicles;
+

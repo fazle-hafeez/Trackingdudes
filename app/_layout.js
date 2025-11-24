@@ -4,8 +4,10 @@ import { Stack, usePathname } from "expo-router";
 import "../global.css";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider, AuthContext } from "../src/context/AuthContexts";
+import { OfflineProvider } from "../src/offline/OfflineProvider"; 
 import ModalComponent from "../src/components/ModalComponent";
 import LoadingComponent from "../src/components/LoadingComponent";
+// import { SyncStatus } from "../src/components/SyncStatus"; // optional, shows pending offline actions
 
 //  Handles remembering last visited path automatically
 const NavigationPathSaver = () => {
@@ -14,9 +16,8 @@ const NavigationPathSaver = () => {
 
   useEffect(() => {
     if (!pathname) return;
-    if (loading || isRedirecting) return; // Avoid saving while loading or redirecting
+    if (loading || isRedirecting) return;
 
-    // Skip same or root paths
     if (lastVisitedPath === pathname) return;
     if (pathname === "/" || pathname === "/dashboard" || pathname === "/auth") return;
 
@@ -39,7 +40,6 @@ function RootLayoutContent() {
   const { tokens, user, loading } = useContext(AuthContext);
 
   if (loading) {
-    // Show a splash screen while session is loading
     return (
       <View className="flex-1 justify-center items-center bg-white">
         <ActivityIndicator size={80} color="#0000ff" />
@@ -49,11 +49,7 @@ function RootLayoutContent() {
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      {tokens && user ? (
-        <Stack.Screen name="dashboard" />
-      ) : (
-        <Stack.Screen name="auth" />
-      )}
+      {tokens && user ? <Stack.Screen name="dashboard" /> : <Stack.Screen name="auth" />}
     </Stack>
   );
 }
@@ -82,16 +78,19 @@ const GlobalLoader = () => {
   return <LoadingComponent visible={globalLoading} />;
 };
 
-//  Root app entry — wraps everything
+//  Root app entry — wraps everything with OfflineProvider + AuthProvider
 export default function RootLayout() {
   return (
-    <AuthProvider>
-      <SafeAreaProvider style={{ flex: 1 }}>
-        <RootLayoutContent />
-        <NavigationPathSaver />
-        <GlobalModal />
-        <GlobalLoader />
-      </SafeAreaProvider>
-    </AuthProvider>
+    <OfflineProvider>
+      <AuthProvider>
+        <SafeAreaProvider style={{ flex: 1 }}>
+          <RootLayoutContent />
+          <NavigationPathSaver />
+          <GlobalModal />
+          <GlobalLoader />
+          {/* <SyncStatus /> optional UI for pending offline actions */}
+        </SafeAreaProvider>
+      </AuthProvider>
+    </OfflineProvider>
   );
 }
