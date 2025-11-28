@@ -1,12 +1,5 @@
 import React, { useState } from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  Modal,
-  FlatList,
-  Animated,
-  Dimensions,
+import {View,Text,TouchableOpacity,Modal,FlatList,Animated,Dimensions,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
@@ -18,7 +11,7 @@ const ProjectCountModal = ({ visible, onClose, onSelect }) => {
   const [selected, setSelected] = useState(null);
   const slideAnim = React.useRef(new Animated.Value(height)).current;
 
-  // Slide-up animation
+  // Slide animation
   React.useEffect(() => {
     if (visible) {
       Animated.timing(slideAnim, {
@@ -48,18 +41,26 @@ const ProjectCountModal = ({ visible, onClose, onSelect }) => {
 
   const renderItem = ({ item }) => {
     const isSelected = item === selected;
+
     return (
       <TouchableOpacity
         onPress={() => handleSelect(item)}
         activeOpacity={0.8}
-        className={`flex-row justify-between items-center p-4 my-2 rounded-xl shadow ${
+        className={`flex-1 mx-1 p-4 my-2 rounded-xl shadow items-center ${
           isSelected ? "bg-indigo-600" : "bg-gray-100"
         }`}
       >
-        <Text className={`text-lg font-semibold ${isSelected ? "text-white" : "text-gray-800"}`}>
-          {item} Projects
+        <Text
+          className={`text-lg font-semibold text-center ${
+            isSelected ? "text-white" : "text-gray-800"
+          }`}
+        >
+          {item}
         </Text>
-        {isSelected && <Ionicons name="checkmark-circle" size={22} color="white" />}
+
+        {isSelected && (
+          <Ionicons name="checkmark-circle" size={22} color="white" />
+        )}
       </TouchableOpacity>
     );
   };
@@ -76,9 +77,12 @@ const ProjectCountModal = ({ visible, onClose, onSelect }) => {
           </Text>
 
           <FlatList
+            key={"grid-3"} // <<< IMPORTANT FIX (no more error)
             data={options}
             keyExtractor={(item) => item.toString()}
             renderItem={renderItem}
+            numColumns={3}
+            columnWrapperStyle={{ justifyContent: "space-between" }}
             contentContainerStyle={{ paddingBottom: 10 }}
           />
 

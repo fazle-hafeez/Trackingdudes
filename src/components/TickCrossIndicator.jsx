@@ -2,18 +2,16 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 
-const TickCrossIndicator = ({ checked, label }) => (
+const TickCrossIndicator = ({ checked }) => (
   <View style={styles.container}>
     <Text
       style={[
         styles.icon,
         { color: checked ? "green" : "red" }
       ]}
-      accessibilityLabel={checked ? "Checked" : "Not checked"}
     >
       {checked ? "✔" : "✖"}
     </Text>
-    <Text style={styles.label}>{label}</Text>
   </View>
 );
 

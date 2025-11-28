@@ -1,14 +1,6 @@
 
-import React, { useState, useCallback, useContext,useEffect } from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  FlatList,
-  StatusBar,
-  TextInput,
-  RefreshControl
-} from "react-native";
+import React, { useState, useCallback, useContext, useEffect } from "react";
+import { View,Text,TouchableOpacity,FlatList,StatusBar,TextInput,RefreshControl} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { FontAwesome5, Ionicons, FontAwesome6, Feather } from "@expo/vector-icons";
 import { useApi } from "../../../src/hooks/useApi";
@@ -48,6 +40,7 @@ const MyVehicles = () => {
   const [pendingUpdates, setPendingUpdates] = useState({});
   const [modalVisible, setModalVisible] = useState(false);
   const [projectCount, setProjectCount] = useState(null);
+  const [fetchProject, setFetchProject] = useState(false)
 
   // ---------- Helpers ----------
   const normalizeStatus = (value) => {
@@ -71,11 +64,14 @@ const MyVehicles = () => {
 
   useEffect(() => {
     const checkProjectCount = async () => {
-      const value = await AsyncStorage.getItem("@project_count");
+      const value = await AsyncStorage.getItem("@my-vehicles");
       if (!value) {
-        setModalVisible(true); 
+        setModalVisible(true);
       } else {
         setProjectCount(parseInt(value));
+        setFetchProject(true)
+        // await AsyncStorage.removeItem("@project_count");
+
       }
     };
     checkProjectCount();
@@ -84,9 +80,10 @@ const MyVehicles = () => {
 
   const handleSelect = async (value) => {
     try {
+      await AsyncStorage.setItem("@my-vehicles",String(value))
       setProjectCount(value); // update state
       setModalVisible(false); // close modal
-
+      setFetchProject(true)
       // Optionally, refetch vehicles with new limit
       await fetchVehicles(1); // first page
     } catch (err) {
@@ -105,7 +102,19 @@ const MyVehicles = () => {
         { useBearerAuth: true }
       );
 
+      // Vehicles array
+      console.log("result:", result);
       let vehiclesData = Array.isArray(result?.data) ? result.data : [];
+      
+
+      // Set pagination
+      if (isConnected) {
+        setPage(result?.pagination?.current_page || pageNumber);
+        setTotalPages(result?.pagination?.total_pages || 1);
+      } else {
+        setPage(1);
+        setTotalPages(1);
+      }
 
       // Load caches
       const cachedPendingRaw = await readCache("pendingUpdates") || {};
@@ -116,7 +125,7 @@ const MyVehicles = () => {
       // 1) Merge pending offline posts (new records added offline)
       const offlineQueue = (await readCache("offlineQueue")) || [];
       const pendingItems = offlineQueue
-        .filter(i => i.endpoint && i.endpoint.includes("create-vehicle") && i.method === "post")
+        .filter(i => i.endpoint?.includes("create-vehicle") && i.method === "post")
         .map(i => ({
           ...i.body,
           tempId: i.body.tempId || i.body.id || Date.now(),
@@ -156,13 +165,14 @@ const MyVehicles = () => {
 
       setVehicles(vehiclesData);
 
-      // Update cache: store server-provided list when online (but keep timestamp)
+      // Update cache
       if (vehiclesData.length > 0 && (isConnected || shouldUpdateCache)) {
         await storeCache(CACHE_KEY, { data: vehiclesData, timestamp: Date.now() });
       }
 
     } catch (err) {
       console.log("API error:", err);
+
       // Fallback: show cache (with pending applied)
       const cachedWrap = await readCache(CACHE_KEY) || { data: [] };
       const cached = Array.isArray(cachedWrap.data) ? cachedWrap.data : [];
@@ -185,13 +195,19 @@ const MyVehicles = () => {
       } else {
         setVehicles([]);
       }
+
+      setPage(1);
+      setTotalPages(1); // offline fallback
     } finally {
       setLoading(false);
     }
   };
 
+
   useFocusEffect(
     useCallback(() => {
+      if (!fetchProject) return;
+
       const restorePending = async () => {
         const cachedPending = await readCache("pendingUpdates");
         if (cachedPending) setPendingUpdates(mergePendingAndNormalize(cachedPending));
@@ -212,8 +228,9 @@ const MyVehicles = () => {
 
       restorePending();
       checkActionsAndFetch();
-    }, [activeTab, order])
+    }, [activeTab, order, fetchProject])
   );
+
 
   // ---------------- REFRESH ----------------
   const onRefresh = async () => {
@@ -303,7 +320,8 @@ const MyVehicles = () => {
         // Update UI: remove items from current tab view
         setVehicles(prev => prev.filter(item => !selectedIds.includes(item.id)));
 
-        // Update main cache so other tab can pick it up
+        // Update m
+        // ain cache so other tab can pick it up
         const cachedWrap = await readCache(CACHE_KEY) || { data: [] };
         let cachedList = Array.isArray(cachedWrap.data) ? cachedWrap.data : [];
         cachedList = cachedList.map(item => selectedIds.includes(item.id) ? { ...item, status: newStatusLower, pending: true } : item);
@@ -519,7 +537,24 @@ const MyVehicles = () => {
         {loading ? (
           <LoadingSkeleton />
         ) : filteredVehicles.length > 0 ? (
-          <FlatList data={filteredVehicles} renderItem={renderVehicle} keyExtractor={(item) => (item.id || item.tempId)?.toString()} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />} ListFooterComponent={<View className="items-center"><Pagination page={page} totalPages={totalPages} onPageChange={(newPage) => fetchVehicles(newPage)} /></View>} />
+          <FlatList
+            data={filteredVehicles}
+            renderItem={renderVehicle}
+            keyExtractor={(item) => (item.id || item.tempId)?.toString()}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+            ListFooterComponent={
+              isConnected && totalPages > 1 ? (
+                <View className="items-center mb-2">
+                  <Pagination
+                    page={page}
+                    totalPages={totalPages}
+                    onPageChange={(newPage) => fetchVehicles(newPage)}
+                  />
+                </View>
+              ) : null
+            }
+          />
+
         ) : (
           <View className="bg-white rounded-md shadow-md p-4"><Text className="text-lg text-gray-700">
             You have not saved any vehicles yet. Saving a vehicle allows you to select it from the list of saved vehicles, enabling you to track trips as well as fuel consumption
