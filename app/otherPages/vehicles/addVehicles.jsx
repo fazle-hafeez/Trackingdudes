@@ -1,20 +1,27 @@
 
 import React, { useState, useEffect, useContext } from "react";
-import { View, Text, StatusBar, KeyboardAvoidingView, Platform } from "react-native";
+import { View, Text, StatusBar, KeyboardAvoidingView, Platform, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { FontAwesome5, FontAwesome6 } from "@expo/vector-icons";
 import { useLocalSearchParams } from "expo-router";
 import { router } from "expo-router";
+
+//-------components -------------------
+import { ThemedView, ThemedText, SafeAreacontext } from "../../../src/components/ThemedColor";
 import PageHeader from "../../../src/components/PageHeader";
 import Input from "../../../src/components/Input";
 import Button from "../../../src/components/Button";
 import Select from "../../../src/components/Select";
+
+//---------Hooks ---------------------
+import { useTheme } from "../../../src/context/ThemeProvider";
 import { useDebounce } from "../../../src/hooks/useDebounce";
 import { useApi } from "../../../src/hooks/useApi";
 import { useAuth } from "../../../src/context/UseAuth";
 import { readCache, storeCache } from "../../../src/offline/cache";
 import { OfflineContext } from "../../../src/offline/OfflineProvider";
 
+// add vehicles ==-==-=
 const AddVehicles = () => {
   const { id } = useLocalSearchParams();
   const { get, post, put } = useApi();
@@ -26,6 +33,7 @@ const AddVehicles = () => {
   const [isError, setIsError] = useState(false);
   const [errors, setErrors] = useState({});
   const debouncedName = useDebounce(form.vehicleName, 600);
+  const [hasEdited, setHasEdited] = useState(false);
 
   const fuelTypes = [{ label: "Gas", value: "gs" }, { label: "Diesel", value: "ds" }, { label: "Flex", value: "flx" }, { label: "Other", value: "oth" }];
   const fuelUnits = [{ label: "Gallons", value: "gal" }, { label: "Liters", value: "ltr" }, { label: "Other Unit", value: "unit" }];
@@ -70,6 +78,7 @@ const AddVehicles = () => {
 
   // --- Name availability check (offline + online) ---
   useEffect(() => {
+    if (!hasEdited) return;
     if (!debouncedName.trim()) {
       setMessage("");
       setIsError(false);
@@ -80,9 +89,7 @@ const AddVehicles = () => {
       setMessage("Checking...");
       let isDuplicate = false;
 
-      // ------------------------
-      // 🔵 1. CHECK ONLINE FIRST
-      // ------------------------
+      // 1. ONLINE CHECK
       if (isConnected) {
         try {
           const res = await get(
@@ -93,16 +100,13 @@ const AddVehicles = () => {
           );
 
           if (
-            res?.status === "error" ||
-            (res?.error && res.error.toLowerCase().includes("duplicate"))
+            res?.status === "error"
           ) {
-            // Duplicate ONLINE
-            setMessage(res.message || "This vehicle name already exists.");
+            setMessage(res.message || res.data || "This vehicle name already exists.");
             setIsError(true);
             isDuplicate = true;
           } else {
-            // Available ONLINE ✔
-            setMessage("The name is available");
+            setMessage(res.data || res.message || "The name is available");
             setIsError(false);
           }
         } catch (err) {
@@ -110,63 +114,56 @@ const AddVehicles = () => {
         }
       }
 
-      // If online duplicate found → stop here
       if (isDuplicate) return;
 
-      // ---------------------------------
-      // 🔵 2. OFFLINE DUPLICATE CHECK
-      // ---------------------------------
+      // 2. OFFLINE CHECK
       const cachedWrap = (await readCache("my-vehicles")) || { data: [] };
       const cached = Array.isArray(cachedWrap.data) ? cachedWrap.data : [];
 
       const queuedNames = (offlineQueue || [])
-        .filter(
-          (q) => q.endpoint && q.endpoint.includes("create-vehicle")
-        )
-        .map((q) => q.body.vehicle);
+        .filter(q => q.endpoint && q.endpoint.includes("create-vehicle"))
+        .map(q => q.body.vehicle);
 
-      const allOfflineNames = [
-        ...cached.map((v) => v.vehicle),
-        ...queuedNames,
-      ].filter(Boolean);
+      const allOfflineNames = [...cached.map(v => v.vehicle), ...queuedNames].filter(Boolean);
 
-      // Duplicate OFFLINE
-      if (
-        allOfflineNames.some(
-          (v) =>
-            String(v).trim().toLowerCase() ===
-            debouncedName.trim().toLowerCase()
-        )
-      ) {
-        setMessage(
-          "You have already used this vehicle name before. Try another."
-        );
+      if (allOfflineNames.some(v => String(v).trim().toLowerCase() === debouncedName.trim().toLowerCase())) {
+        setMessage("You have already used this vehicle name before. Try another.");
         setIsError(true);
         return;
       }
-
-      // ---------------------------------
-      //  3. OFFLINE BUT NOT DUPLICATE
-      // ---------------------------------
+      // 3. OFFLINE BUT NOT DUPLICATE
       if (!isConnected) {
-        setMessage(
-          "The name is availble but You are offline and we can't verify name availability."
-        );
+        setMessage("The name is available but you are offline and we can't verify it online.");
         setIsError(false);
         return;
       }
     })();
-  }, [debouncedName, offlineQueue, isConnected]);
+  }, [debouncedName, offlineQueue, isConnected, hasEdited]);
 
 
   const validateForm = () => {
+    // Reset previous errors
     const newErrors = {};
-    if (!form.vehicleName.trim()) newErrors.vehicleName = "Vehicle name required";
-    if (!form.fuelEcnomy.trim()) newErrors.fuelEcnomy = "Fuel economy required";
-    if (!form.tankCapacity.trim()) newErrors.tankCapacity = "Tank capacity required";
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+
+    if (form.vehicleName.trim() === "") {
+      setErrors({ vehicleName: "Vehicle name required" });
+      return false;
+    }
+
+    if (form.fuelEcnomy.trim() === "") {
+      setErrors({ fuelEcnomy: "Fuel economy required" });
+      return false;
+    }
+
+    if (form.tankCapacity.trim() === "") {
+      setErrors({ tankCapacity: "Tank capacity required" });
+      return false;
+    }
+
+    setErrors({});
+    return true;
   };
+
 
   const resetForm = () => setForm({ vehicleName: "", fuelEcnomy: "", tankCapacity: "", fuelType: "gs", fuelSolid: "gal", distanceMeasurement: "mi" });
 
@@ -182,7 +179,7 @@ const AddVehicles = () => {
         distance_unit: form.distanceMeasurement,
         distance_per_unit_fuel: parseFloat(form.fuelEcnomy),
         tank_capacity: parseFloat(form.tankCapacity),
-        status: "enabled" // <-- CRITICAL: include status for offline merging
+        status: "enabled"
       };
 
       if (id) {
@@ -268,34 +265,92 @@ const AddVehicles = () => {
   const fuelUnitLabels = { gal: "gallons", ltr: "liters", unit: "other Unit" };
 
   return (
-    <SafeAreaView className="flex-1 bg-blue-50">
-      <StatusBar barStyle="light-content" backgroundColor="#0000ff" />
+    <SafeAreacontext bgColor={'#eff6ff'} className="flex-1">
       <PageHeader routes={id ? "Edit Vehicle" : "Add Vehicle"} />
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0} className="flex-1">
-        <View>
-          <View className="p-4 bg-white rounded-xl mx-4 mt-2">
-            <Section label="Vehicle" icon={<FontAwesome5 name="car" size={22} color="black" />} input={<Input value={form.vehicleName} onchange={val => setForm({ ...form, vehicleName: val })} inputError={errors.vehicleName} placeholder="Enter vehicle name" />} />
-            {message && <Text className={isError ? "text-red-500" : "text-green-500"}>{message}</Text>}
-            <Section label="Fuel Type" icon={<FontAwesome6 name="gas-pump" size={22} color="black" />} input={<Select items={fuelTypes} value={form.fuelType} onChange={val => setForm({ ...form, fuelType: val })} />} />
-            <Section label="Fuel Unit" icon={<FontAwesome5 name="oil-can" size={22} color="black" />} input={<Select items={fuelUnits} value={form.fuelSolid} onChange={val => setForm({ ...form, fuelSolid: val })} />} />
-            <Section label="Distance Unit" icon={<FontAwesome6 name="code-compare" size={22} color="black" />} input={<Select items={distanceUnits} value={form.distanceMeasurement} onChange={val => setForm({ ...form, distanceMeasurement: val })} />} />
-            <Section label={`Ave. fuel economy (${form.distanceMeasurement}/${form.fuelSolid})`} icon={<FontAwesome5 name="leaf" size={22} color="black" />} input={<Input value={form.fuelEcnomy} onchange={val => setForm({ ...form, fuelEcnomy: val })} inputError={errors.fuelEcnomy} placeholder="Enter fuel rate" keyboardType="numeric" />} />
-            <Section label={`Tank capacity in (${fuelUnitLabels[form.fuelSolid]})`} icon={<FontAwesome6 name="ankh" size={22} color="black" />} input={<Input value={form.tankCapacity} onchange={val => setForm({ ...form, tankCapacity: val })} inputError={errors.tankCapacity} placeholder="Enter tank capacity" keyboardType="numeric" />} />
-            <View className="mt-2">
-              <Button title={id ? "Update" : "Save"} onClickEvent={handleSubmit} />
-            </View>
-          </View>
+      {/* <View className="p-4 bg-white rounded-xl mx-4 mt-2"> */}
+      <ScrollView className="px-3">
+        <Section
+          label="Vehicle"
+          icon={<FontAwesome5 name="car" size={22} />}
+          input={
+            <Input value={form.vehicleName}
+              onchange={val => {
+                setForm({ ...form, vehicleName: val });
+                setHasEdited(true);
+              }}
+              inputError={errors.vehicleName}
+              placeholder="Enter vehicle name"
+              onFocus={() => setHasEdited(true)}
+            />}
+          error={
+            message !== "" && (
+              <Text className={`${isError ? "text-red-500" : "text-green-500"} mt-2`}>
+                {message}
+              </Text>
+            )
+          }
+
+        />
+        <Section label="Fuel Type" icon={<FontAwesome6 name="gas-pump" size={22} />} input={<Select items={fuelTypes} value={form.fuelType} onChange={val => setForm({ ...form, fuelType: val })} />} />
+        <Section
+          label="Fuel Unit"
+          icon={<FontAwesome5 name="oil-can" size={22} />}
+          input={
+            <Select
+              items={fuelUnits}
+              value={form.fuelSolid}
+              onChange={val => setForm({ ...form, fuelSolid: val })} />}
+        />
+        <Section
+          label="Distance Unit"
+          icon={<FontAwesome6 name="code-compare" size={22} />}
+          input={
+            <Select
+              items={distanceUnits}
+              value={form.distanceMeasurement}
+              onChange={val => setForm({ ...form, distanceMeasurement: val })} />}
+        />
+        <Section
+          label={`Ave. fuel economy (${form.distanceMeasurement}/${form.fuelSolid})`}
+          icon={<FontAwesome5 name="leaf" size={22} />}
+          input={
+            <Input
+              value={form.fuelEcnomy}
+              onchange={val => setForm({ ...form, fuelEcnomy: val })}
+              inputError={errors.fuelEcnomy}
+              placeholder="Enter fuel rate"
+              keyboardType="numeric" />}
+        />
+        <Section
+          label={`Tank capacity in (${fuelUnitLabels[form.fuelSolid]})`}
+          icon={<FontAwesome6 name="ankh" size={22} />}
+          input={
+            <Input
+              value={form.tankCapacity}
+              onchange={val => setForm({ ...form, tankCapacity: val })}
+              inputError={errors.tankCapacity}
+              placeholder="Enter tank capacity"
+              keyboardType="numeric" />}
+        />
+        <View className="mt-2">
+          <Button title={id ? "Update" : "Save"} onClickEvent={handleSubmit} />
         </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+        {/* </View> */}
+      </ScrollView>
+    </SafeAreacontext>
   );
 };
 
-const Section = ({ label, icon, input }) => (
-  <View className="my-1">
-    <View className="flex-row items-end mb-2">{icon}<Text className="text-lg font-medium ml-3">{label}</Text></View>
+const Section = ({ label, icon, input, error }) => (
+  <ThemedView className="rounded-lg p-4 mt-4" style={{ elevation: 5 }}>
+    <View className="flex-row items-end mb-3">
+      <ThemedText className="pl-2">
+        {icon}
+      </ThemedText>
+      <ThemedText className="text-lg font-medium ml-3">{label}</ThemedText></View>
     {input}
-  </View>
+    {error}
+  </ThemedView>
 );
 
 export default AddVehicles;

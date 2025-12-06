@@ -1,15 +1,7 @@
-import React, { useState, useRef, useEffect } from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  Modal,
-  FlatList,
-  Animated,
-  Easing,
-  Dimensions,
-} from "react-native";
+import React, { useState, useRef } from "react";
+import {View,Text,TouchableOpacity,Modal,FlatList,Animated,Easing,Dimensions,} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useTheme } from "../context/ThemeProvider";
 
 const { height } = Dimensions.get("window");
 
@@ -17,15 +9,17 @@ const Select = ({
   items = [],
   value = null,
   onChange = () => {},
+  onOpen = () => {},
   placeholder = "Select item...",
   error = "",
   disabled = false,
   modalTitle = "Choose",
   emptyText = "No items found",
 }) => {
+  const { darkMode } = useTheme(); 
   const [open, setOpen] = useState(false);
-  const slideAnim = useRef(new Animated.Value(height)).current; // modal starts off-screen
-  const fadeAnim = useRef(new Animated.Value(0)).current; // background opacity
+  const slideAnim = useRef(new Animated.Value(height)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
 
   const isSelected = (item) => value === item.value;
 
@@ -41,6 +35,8 @@ const Select = ({
   };
 
   const openModal = () => {
+    if (disabled) return;
+    onOpen();
     setOpen(true);
     Animated.parallel([
       Animated.timing(fadeAnim, {
@@ -73,41 +69,46 @@ const Select = ({
     ]).start(() => setOpen(false));
   };
 
+  const borderColor = error
+    ? "border-red-500"
+    : disabled
+    ? "border-gray-300 opacity-60"
+    : darkMode
+    ? "border-gray-500"
+    : "border-gray-400";
+
+  const textColor = selectedLabel() === placeholder
+    ? darkMode
+      ? "text-gray-500"
+      : "text-gray-400"
+    : darkMode
+    ? "text-gray-400"
+    : "text-gray-900";
+
+  const modalBg = darkMode ? "#1f2937" : "white";
+  const modalText = darkMode ? "text-gray-300" : "text-gray-900";
+  const emptyTextColor = darkMode ? "text-gray-500" : "text-gray-500";
+
   return (
     <View className="mb-2">
       {/* Select Control */}
       <TouchableOpacity
         activeOpacity={0.8}
-        onPress={() => !disabled && openModal()}
-        className={`border rounded-md px-3 py-3 flex-row justify-between items-center ${
-          error
-            ? "border-red-500"
-            : disabled
-            ? "border-gray-300 opacity-60"
-            : "border-gray-400"
-        }`}
+        onPress={openModal}
+        className={`border rounded-md px-3 py-3 flex-row justify-between items-center ${borderColor}`}
       >
-        <Text
-          numberOfLines={1}
-          className={`text-base flex-1 ${
-            selectedLabel() === placeholder ? "text-gray-400" : "text-gray-900"
-          }`}
-        >
+        <Text numberOfLines={1} className={`text-lg flex-1 ${textColor}`}>
           {selectedLabel()}
         </Text>
 
-        <View className="ml-2">
-          <Ionicons
-            name={open ? "chevron-up" : "chevron-down"}
-            size={20}
-            color="#555"
-          />
-        </View>
+        <Ionicons
+          name={open ? "chevron-up" : "chevron-down"}
+          size={20}
+          color={darkMode ? "#aaa" : "#555"}
+        />
       </TouchableOpacity>
 
-      {error ? (
-        <Text className="text-red-500 text-sm mt-1">{error}</Text>
-      ) : null}
+      {error ? <Text className="text-red-500 text-sm mt-1">{error}</Text> : null}
 
       {/* Animated Modal */}
       {open && (
@@ -119,6 +120,7 @@ const Select = ({
               opacity: fadeAnim,
             }}
           />
+
           <Animated.View
             style={{
               position: "absolute",
@@ -126,7 +128,7 @@ const Select = ({
               left: 0,
               right: 0,
               transform: [{ translateY: slideAnim }],
-              backgroundColor: "white",
+              backgroundColor: modalBg,
               borderTopLeftRadius: 24,
               borderTopRightRadius: 24,
               maxHeight: "70%",
@@ -135,7 +137,7 @@ const Select = ({
           >
             {/* Header */}
             <View className="flex-row justify-between items-center mb-2">
-              <Text className="text-lg font-semibold">{modalTitle}</Text>
+              <Text className={`text-lg font-semibold ${modalText}`}>{modalTitle}</Text>
               <TouchableOpacity onPress={closeModal}>
                 <Text className="text-blue-500 font-medium">Close</Text>
               </TouchableOpacity>
@@ -147,7 +149,7 @@ const Select = ({
               keyExtractor={(i) => i.value.toString()}
               keyboardShouldPersistTaps="handled"
               ListEmptyComponent={() => (
-                <Text className="text-gray-500 text-center py-4">
+                <Text className={`text-center py-4 ${emptyTextColor}`}>
                   {emptyText}
                 </Text>
               )}
@@ -156,20 +158,16 @@ const Select = ({
                 return (
                   <TouchableOpacity
                     onPress={() => toggleItem(item)}
-                    className={`flex-row justify-between items-center py-3 px-3 border-b border-gray-100 ${
-                      selected ? "bg-indigo-50" : ""
+                    className={`flex-row justify-between items-center py-3 px-3 border-b ${darkMode ? "border-gray-700" : "border-gray-100"} ${
+                      selected ? "bg-indigo-200" : ""
                     }`}
                   >
                     <Text
-                      className={`text-base ${
-                        selected ? "font-semibold text-indigo-600" : ""
-                      }`}
+                      className={`text-base ${selected ? "font-semibold text-indigo-600" : darkMode ? "text-gray-300" : "text-gray-900"}`}
                     >
                       {item.label}
                     </Text>
-                    {selected && (
-                      <Ionicons name="checkmark" size={18} color="#4F46E5" />
-                    )}
+                    {selected && <Ionicons name="checkmark" size={18} color="#4F46E5" />}
                   </TouchableOpacity>
                 );
               }}

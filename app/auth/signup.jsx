@@ -1,19 +1,22 @@
 import React, { useState } from "react";
 import { View, Text, StatusBar, TouchableOpacity, Platform } from "react-native";
 import { Link, useLocalSearchParams, useRouter } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
+
 
 //Hooks
 import { useApi } from "../../src/hooks/useApi";
 import { useAuth } from "../../src/context/UseAuth";
+import { useTheme } from "../../src/context/ThemeProvider";
 
 //components
 import HeaderSection from "../../src/components/HeaderSection";
 import Button from "../../src/components/Button"
 import Input from "../../src/components/Input";
+import { ThemedView,ThemedText,SafeAreacontext } from "../../src/components/ThemedColor";
 
 const SignUp = () => {
   const route = useLocalSearchParams();
+  const {darkMode} = useTheme()
   const router = useRouter();
   const { post } = useApi();
   const { showModal, hideModal, setGlobalLoading, } = useAuth();
@@ -42,14 +45,17 @@ const SignUp = () => {
     if (!name.trim()) {
       setUsernameError("Field is required");
       hasError = true;
+      return;
     }
     const trimmedEmail = email.trim();
     if (!trimmedEmail) {
       setEmailError("Field is required");
       hasError = true;
+      return;
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
       setEmailError("Email is not valid");
       hasError = true;
+      return;
     } else {
       setEmailError("");
     }
@@ -93,21 +99,21 @@ const SignUp = () => {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
-      <StatusBar barStyle="light-content" backgroundColor="#0000ff" />
+    <SafeAreacontext className="flex-1 ">
       <HeaderSection />
 
       <View className="flex-1 p-3">
-        <View
-          className={`bg-[rgba(255,255,255,0.9)] rounded-xl p-6 ${Platform.OS === "ios" ? "shadow-sm" : ""
+        <ThemedView
+        bgColor={'rgba(255,255,255,0.9)'}
+          className={` rounded-xl p-6 ${Platform.OS === "ios" ? "shadow-sm" : ""
             }`}
           style={{ marginTop: -200, elevation: 5 }}
         >
-          <Text className="text-headercolor text-2xl font-medium mb-3">
+          <ThemedText color={'#646060ff'} className="text-headercolor text-2xl font-medium mb-3">
             Register
-          </Text>
+          </ThemedText>
 
-          <Text className="text-xl mb-2 text-headercolor">Enter your name</Text>
+          <ThemedText color={'#646060ff'} className="text-xl mb-2 text-headercolor">Enter your name</ThemedText>
           <Input
             value={name}
             placeholder="This is to call you with, in the email"
@@ -117,9 +123,9 @@ const SignUp = () => {
 
           />
 
-          <Text className="text-xl my-3 text-headercolor">
+          <ThemedText color={'#646060ff'} className="text-xl my-3 text-headercolor">
             Enter your email address
-          </Text>
+          </ThemedText>
 
           <Input
             placeholder="You will use this for account recovery"
@@ -136,21 +142,21 @@ const SignUp = () => {
           </View>
 
           <View className="mt-2 mb-2">
-            <Text className="text-lg text-headercolor font-normal">
+            <ThemedText color={'#646060ff'} className="text-lg text-headercolor font-normal">
               Already have an account?
               <Link href="/auth/login" className="text-blue-600 underline">
                 {" "}
                 Sign in
               </Link>
-            </Text>
+            </ThemedText>
           </View>
-        </View>
+        </ThemedView>
 
         {receivedcode || route.show && (
           <View className="flex-row mt-3 pl-5 ml-1 items-center">
-            <Text className="text-xl font-normal text-headercolor">
+            <ThemedText color={'#646060ff'} className="text-xl font-normal text-headercolor">
               I received the code?
-            </Text>
+            </ThemedText>
             <TouchableOpacity onPress={receivedCode}>
               <Text className="text-lg underline text-customBlue font-normal">
                 {" "}
@@ -160,7 +166,7 @@ const SignUp = () => {
           </View>
         )}
       </View>
-    </SafeAreaView>
+    </SafeAreacontext>
   );
 };
 

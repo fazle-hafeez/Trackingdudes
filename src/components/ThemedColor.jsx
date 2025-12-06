@@ -1,7 +1,33 @@
 import React from "react";
 import { View, Text } from "react-native";
 import { useTheme } from "../context/ThemeProvider";
+import { SafeAreaView } from "react-native-safe-area-context";
 
+// safeAreacontext -----
+export const SafeAreacontext = ({
+  children,
+  style = {},
+  bgColor,
+  ...props
+}) => {
+  const { darkMode } = useTheme();
+
+  const finalBgColor = darkMode ? '#121212' : bgColor || "#eff6ff";      // light mode bg
+
+  return (
+    <SafeAreaView
+      style={[
+        {
+          backgroundColor: finalBgColor,
+        },
+        style,
+      ]}
+      {...props}
+    >
+      {children}
+    </SafeAreaView>
+  );
+};
 // Themed container
 export const ThemedView = ({
   children,
@@ -13,7 +39,7 @@ export const ThemedView = ({
   const { darkMode } = useTheme();
 
   const finalBgColor = darkMode
-    ? darkBgColor || "#111"   // dark mode bg
+    ? darkBgColor || "#121212"   // dark mode bg
     : bgColor || "#fff";      // light mode bg
 
   return (
@@ -43,7 +69,7 @@ export const ThemedText = ({ children, style, color, darkColor, ...props }) => {
   const { darkMode } = useTheme();
 
   const textColor = darkMode
-    ? darkColor ?? "#fff" // dark mode default
+    ? darkColor ?? "#9ca3af" // dark mode default
     : color ?? "#111";    // light mode default
 
   return (

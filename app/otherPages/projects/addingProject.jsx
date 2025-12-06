@@ -251,86 +251,82 @@ const AddingProject = () => {
         in_expenses: project.in_expenses,
         suggestions: project.suggestions,
         status: "enabled",
+        tempId: Date.now(), // Temporary ID for offline
       };
 
-      // 🟢 Add temporary ID for offline tracking
-      payload.tempId = Date.now();
-
-      const result = await post("/my-projects/create-project", payload, {
-        useBearerAuth: true,
-      });
-
-      const isOffline = !!result?.offline;
-
-      const cachedWrap = (await readCache(CACHE_KEY)) || { data: [] };
-      const list = Array.isArray(cachedWrap.data) ? cachedWrap.data : [];
-
-      // Add/Update in local cache regardless of online status to handle instant display and temp ID association
-      const existsIdx = list.findIndex(i => i.tempId === payload.tempId || (i.project && i.project.toLowerCase() === payload.project.toLowerCase()));
-      if (existsIdx > -1) {
-        list[existsIdx] = { ...list[existsIdx], ...payload, id: payload.tempId, tempId: payload.tempId, pending: isOffline };
-      } else {
-        list.push({
-          ...payload,
-          id: payload.tempId,
-          tempId: payload.tempId,
-          pending: isOffline,
-          in_shifts: !!payload.in_shifts,
-          in_trips: !!payload.in_trips,
-          in_times: !!payload.in_times,
-          in_expenses: !!payload.in_expenses,
+      // Attempt online post
+      let result = null;
+      let isOffline = false;
+      try {
+        result = await post("/my-projects/create-project", payload, {
+          useBearerAuth: true,
         });
-
+        if (!result || result.offline) isOffline = true;
+      } catch (err) {
+        console.log("Offline detected or network error", err);
+        isOffline = true;
       }
 
-      await storeCache(CACHE_KEY, { data: list });
-      await storeCache("newRecordAdded", true); // For list refresh
+      // READ OLD CACHE
+      const cachedWrapOld = (await readCache(CACHE_KEY)) || { data: [] };
+      const oldData = Array.isArray(cachedWrapOld.data) ? cachedWrapOld.data : [];
 
-      if (isOffline || result.status === "success") {
-        showModal(
-          result.message || (isOffline
-            ? "The project was added locally. Server verification failed, potential conflict when back online."
-            : "The project was created successfully!"),
-          isOffline ? "warning" : "success",
-          false,
-          [
-            {
-              label: "Add More",
-              bgColor: "bg-green-600",
-              onPress: () => {
-                hideModal();
-                resetForm(); // Use resetForm for full reset
-              },
+      // PREPARE NEW PROJECT ITEM
+      const newProject = {
+        ...payload,
+        id: isOffline ? payload.tempId : result?.data?.id || payload.tempId,
+        pending: isOffline,
+        in_shifts: !!payload.in_shifts,
+        in_trips: !!payload.in_trips,
+        in_times: !!payload.in_times,
+        in_expenses: !!payload.in_expenses,
+      };
+
+      // MERGE CACHE USING MAP (duplicate-free)
+      const mergedMap = new Map();
+      oldData.forEach(p => mergedMap.set(p.id || p.tempId, p));
+      mergedMap.set(newProject.id || newProject.tempId, newProject);
+
+      const mergedList = Array.from(mergedMap.values());
+
+      // STORE CACHE
+      await storeCache(CACHE_KEY, { data: mergedList });
+      await storeCache("newRecordAdded", true); // Flag for list refresh
+
+      // SHOW MODAL
+      showModal(
+        isOffline
+          ? "Project saved locally. It will sync when online."
+          : result?.message || "Project created successfully!",
+        isOffline ? "warning" : "success",
+        false,
+        [
+          {
+            label: "Add More",
+            bgColor: "bg-green-600",
+            onPress: () => {
+              hideModal();
+              resetForm();
             },
-            {
-              label: "View All",
-              bgColor: "bg-blue-600",
-              onPress: () => {
-                hideModal();
-                router.back();
-              },
+          },
+          {
+            label: "View All",
+            bgColor: "bg-blue-600",
+            onPress: () => {
+              hideModal();
+              router.back();
             },
-          ]
-        );
-      } else {
-        showModal(
-          result.data ||
-          "Project creation failed online. Try again later.",
-          "error"
-        );
-      }
+          },
+        ]
+      );
     } catch (error) {
       console.error(error);
-      showModal(
-        error.error || "A server error occurred, please try again",
-        "error"
-      );
+      showModal(error?.error || "A server error occurred.", "error");
     } finally {
       setGlobalLoading(false);
     }
   };
 
-  // 🟢 OFFLINE UPDATE PROJECT
   const handleSave = async () => {
     if (!validateForm() || messageStatus) return;
 
@@ -344,98 +340,83 @@ const AddingProject = () => {
         in_times: project.in_times,
         in_expenses: project.in_expenses,
         suggestions: project.suggestions,
-        status: "enabled", // CRITICAL: include status for offline merging
+        status: "enabled",
       };
 
-      const res = await put("my-projects/update-project", payload, {
-        useBearerAuth: true,
-      });
+      let res = null;
+      let isOffline = false;
 
-      const isOffline = !!res?.offline;
-
-      if (isOffline) {
-        // 🟢 OFFLINE UPDATE: Update cache and mark as pending
-        const cachedWrap = (await readCache(CACHE_KEY)) || { data: [] };
-        const list = Array.isArray(cachedWrap.data) ? cachedWrap.data : [];
-        const idx = list.findIndex(
-          (i) =>
-            String(i.id) === String(id) ||
-            String(i.tempId) === String(id) ||
-            String(i.project_no) === String(id)
-        );
-
-        if (idx > -1) {
-          // Merge new data with existing cached data and add pending flag
-          list[idx] = {
-            ...list[idx],
-            ...payload,
-            pending: true,
-            status: list[idx].status || payload.status,
-            // Ensure ID/tempId are preserved
-            id: list[idx].id || payload.project_no,
-            tempId: list[idx].tempId || payload.project_no,
-            project_no: payload.project_no
-          };
-          await storeCache(CACHE_KEY, { data: list });
-        }
-
-        showModal(
-          "The project was updated successfully locally. You are offline. Changes will sync when online.",
-          "warning",
-          false,
-          [
-            {
-              label: "View Changes",
-              bgColor: "bg-green-600",
-              onPress: async () => {
-                hideModal();
-                await fetchProjectDetail(); // Re-fetch from cache to see changes
-              },
-            },
-            {
-              label: "View All",
-              bgColor: "bg-blue-600",
-              onPress: () => {
-                hideModal();
-                router.back();
-              },
-            },
-          ]
-        );
-      } else if (res.status === "success") {
-        showModal(
-          res.message || "Project was updated successfully!",
-          "success",
-          false,
-          [
-            {
-              label: "View changes",
-              bgColor: "bg-green-600",
-              onPress: async () => {
-                hideModal();
-                await fetchProjectDetail();
-              },
-            },
-            {
-              label: "View All",
-              bgColor: "bg-blue-600",
-              onPress: () => {
-                hideModal();
-                router.back();
-              },
-            },
-          ]
-        );
-      } else {
-        showModal(res?.data || "Failed to update project online.", "error");
+      try {
+        res = await put("my-projects/update-project", payload, { useBearerAuth: true });
+        if (!res || res.offline) isOffline = true;
+      } catch (err) {
+        console.log("Offline detected or network error", err);
+        isOffline = true;
       }
+
+      // READ OLD CACHE
+      const cachedWrapOld = (await readCache(CACHE_KEY)) || { data: [] };
+      const oldData = Array.isArray(cachedWrapOld.data) ? cachedWrapOld.data : [];
+
+      // Prepare updated project object
+      const updatedProject = {
+        ...payload,
+        id: payload.project_no,
+        tempId: payload.project_no,
+        pending: isOffline,
+        in_shifts: !!payload.in_shifts,
+        in_trips: !!payload.in_trips,
+        in_times: !!payload.in_times,
+        in_expenses: !!payload.in_expenses,
+      };
+
+      // MERGE CACHE USING MAP (duplicate-free)
+      const mergedMap = new Map();
+      oldData.forEach(p => mergedMap.set(p.id || p.tempId, p));
+      mergedMap.set(updatedProject.id || updatedProject.tempId, updatedProject);
+
+      const mergedList = Array.from(mergedMap.values());
+
+      // STORE CACHE
+      await storeCache(CACHE_KEY, { data: mergedList });
+      await storeCache("recordUpdated", true); // For list refresh
+
+      // SHOW MODAL
+      showModal(
+        isOffline
+          ? "Project updated locally. Changes will sync when online."
+          : res?.message || "Project updated successfully!",
+        isOffline ? "warning" : "success",
+        false,
+        [
+          {
+            label: "View changes",
+            bgColor: "bg-green-600",
+            onPress: async () => {
+              hideModal();
+              // Refresh from cache to reflect updated state
+              await fetchProjectDetail();
+            },
+          },
+          {
+            label: "View All",
+            bgColor: "bg-blue-600",
+            onPress: () => {
+              hideModal();
+              router.back();
+            },
+          },
+        ]
+      );
+
     } catch (error) {
       console.error(error);
-      showModal("Something went wrong while saving.", "error");
+      showModal(error?.error || "A server error occurred.", "error");
     } finally {
       setGlobalLoading(false);
     }
   };
+
 
   return (
     <SafeAreaView className="flex-1 bg-blue-50">

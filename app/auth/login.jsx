@@ -9,6 +9,7 @@ import { useLocalSearchParams } from "expo-router";
 //Hooks
 import { useApi } from "../../src/hooks/useApi";
 import { useAuth } from "../../src/context/UseAuth";
+import { useTheme } from "../../src/context/ThemeProvider";
 
 //components
 import CheckBox from "../../src/components/CheckBox";
@@ -16,6 +17,7 @@ import Button from "../../src/components/Button";
 import PasswordInputField from "../../src/components/ToggleField";
 import HeaderSection from "../../src/components/HeaderSection";
 import Input from "../../src/components/Input";
+import { ThemedView, ThemedText, SafeAreacontext } from "../../src/components/ThemedColor";
 
 const Login = () => {
   const [username, setUserName] = useState("");
@@ -161,17 +163,17 @@ const Login = () => {
     }
   };
   return (
-    <SafeAreaView className="flex-1 bg-white">
-      <StatusBar barStyle="light-content" backgroundColor="#0000ff" />
+    <SafeAreacontext className="flex-1">
       <HeaderSection />
 
       <View className="flex-1 p-3">
-        <View
-          className={`bg-[rgba(255,255,255,0.9)] rounded-xl p-6 ${Platform.OS === "ios" ? " shadow-sm" : ""
+        <ThemedView
+          bgColor={'rgba(255,255,255,0.9)'}
+          className={` rounded-xl p-6 ${Platform.OS === "ios" ? " shadow-sm" : ""
             }`}
           style={{ marginTop: -230, elevation: 5 }}
         >
-          <Text className="text-xl mb-2 text-headercolor">Enter your user name</Text>
+          <ThemedText color="#646060ff" className="text-xl mb-2 ">Enter your user name</ThemedText>
           <Input
             value={username}
             placeholder="Type your username here"
@@ -181,7 +183,7 @@ const Login = () => {
 
           />
 
-          <Text className="text-xl mb-2 text-headercolor mt-2">Enter your password</Text>
+          <ThemedText color="#646060ff" className="text-xl mb-2  mt-2">Enter your password</ThemedText>
           <PasswordInputField
             password={password}
             setPassword={setPassword}
@@ -195,7 +197,7 @@ const Login = () => {
               value={remember}
               onClick={setRemember}
             />
-            <Text className="text-lg ml-2 text-headercolor">Remember username</Text>
+            <ThemedText color="#646060ff" className="text-lg ml-2">Remember username</ThemedText>
           </View>
 
           <View className="flex-row items-center">
@@ -203,7 +205,7 @@ const Login = () => {
               value={keepLoggedIn}
               onClick={setKeepLoggedIn}
             />
-            <Text className="text-lg ml-2 text-headercolor">Keep logged in</Text>
+            <ThemedText color="#646060ff" className="text-lg ml-2 ">Keep logged in</ThemedText>
           </View>
 
           <View className="mt-2">
@@ -211,20 +213,20 @@ const Login = () => {
           </View>
 
           <View className="mt-2 items-center">
-            <Text className="text-lg text-headercolor">
+            <ThemedText color="#646060ff" className="text-lg ">
               No account yet?{" "}
               <Link className="text-blue-600 underline" href="/auth/signup">
                 Sign up
               </Link>
-            </Text>
-            <Text className="mt-1 text-lg text-headercolor">
+            </ThemedText>
+            <ThemedText color="#646060ff" className="mt-1 text-lg ">
               Forgot password?{" "}
               <Link className="text-blue-600 underline" href="/auth/resetPassword">
                 Reset
               </Link>
-            </Text>
+            </ThemedText>
           </View>
-        </View>
+        </ThemedView>
 
         <View className="mt-3 pl-2">
           <View className="flex-row">
@@ -238,12 +240,12 @@ const Login = () => {
               Terms of use
             </Link>
           </View>
-          <Text className="text-lg text-headercolor">
+          <ThemedText color="#646060ff" className="text-lg ">
             Logging into your tracker account
-          </Text>
+          </ThemedText>
         </View>
       </View>
-    </SafeAreaView>
+    </SafeAreacontext>
   );
 };
 

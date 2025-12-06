@@ -1,22 +1,28 @@
 
 import React, { useState, useCallback, useContext, useEffect } from "react";
-import { View,Text,TouchableOpacity,FlatList,StatusBar,TextInput,RefreshControl} from "react-native";
+import { View, Text, TouchableOpacity, FlatList, StatusBar, TextInput, RefreshControl } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { FontAwesome5, Ionicons, FontAwesome6, Feather } from "@expo/vector-icons";
-import { useApi } from "../../../src/hooks/useApi";
-import { useAuth } from "../../../src/context/UseAuth";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
+import { router } from "expo-router";
+
+// ---------Components -------------------
+import ProjectCountModal from "../../../src/components/ProjectCountModal";
 import PageHeader from "../../../src/components/PageHeader";
 import LoadingSkeleton from "../../../src/components/LoadingSkeleton";
 import Pagination from "../../../src/components/Pagination";
-import CheckBox from "../../../src/components/CheckBox";
-import { router } from "expo-router";
-import Tabs from "../../../src/components/Tabs";
 import BottomActionBar from "../../../src/components/ActionBar";
+import Tabs from "../../../src/components/Tabs";
+import CheckBox from "../../../src/components/CheckBox";
+import { ThemedView, ThemedText, SafeAreacontext } from "../../../src/components/ThemedColor";
+
+// ----------------Hooks --------------------
+import { useTheme } from "../../../src/context/ThemeProvider";
 import { readCache, storeCache } from "../../../src/offline/cache";
 import { OfflineContext } from "../../../src/offline/OfflineProvider";
-import ProjectCountModal from "../../../src/components/ProjectCountModal";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useApi } from "../../../src/hooks/useApi";
+import { useAuth } from "../../../src/context/UseAuth";
 
 const CACHE_KEY = "my-vehicles";
 
@@ -24,7 +30,7 @@ const MyVehicles = () => {
   const { get, put, del } = useApi();
   const { showModal, hideModal, setGlobalLoading } = useAuth();
   const { isConnected } = useContext(OfflineContext);
-
+  const { darkMode } = useTheme()
   const [vehicles, setVehicles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
@@ -80,7 +86,7 @@ const MyVehicles = () => {
 
   const handleSelect = async (value) => {
     try {
-      await AsyncStorage.setItem("@my-vehicles",String(value))
+      await AsyncStorage.setItem("@my-vehicles", String(value))
       setProjectCount(value); // update state
       setModalVisible(false); // close modal
       setFetchProject(true)
@@ -105,7 +111,7 @@ const MyVehicles = () => {
       // Vehicles array
       console.log("result:", result);
       let vehiclesData = Array.isArray(result?.data) ? result.data : [];
-      
+
 
       // Set pagination
       if (isConnected) {
@@ -465,73 +471,97 @@ const MyVehicles = () => {
         delayLongPress={500}
         className="mb-3"
       >
-        <View className={`bg-white rounded-md shadow-sm p-4 ${isPending ? "border border-yellow-400 bg-yellow-50" : ""}`}>
-          <View className="flex-row items-center border-b border-yellow-300 pb-2 mb-2">
+        <ThemedView className={` rounded-md shadow-sm p-4 ${isPending ? "border border-yellow-400 bg-yellow-50" : ""}`}
+          style={{ elevation: 2 }}>
+          <View className={`${darkMode ? 'border-gray-700' : 'border-yellow-300'} 
+             flex-row items-center border-b  pb-2 mb-2`}>
             <View className="flex-row items-center">
               {selectionMode && (
                 <CheckBox value={item.id ? selectedVehicles.includes(item.id) : false} onClick={() => item.id && toggleVehicleSelect(item.id)} />
               )}
-              <FontAwesome5 name="car" size={20} color="black" className="ml-2" />
-              <Text className="text-lg font-semibold text-gray-700 ml-2">{item.vehicle}</Text>
+              <ThemedText className="ml-2">
+                <FontAwesome5 name="car" size={20} className="ml-2" />
+              </ThemedText>
+              <ThemedText color="#374151" className="text-lg font-semibold  ml-2">{item.vehicle}</ThemedText>
             </View>
           </View>
 
           <View className="flex-row justify-between items-center my-3">
             <View className="items-center flex-1">
               <FontAwesome5 name="leaf" size={20} color="#10b981" />
-              <Text className="text-xs text-gray-500 mt-1">Fuel economy</Text>
-              <Text className="text-base font-medium text-gray-700">{removeDecimal(item.distance_per_unit_fuel)} {item.distance_unit} / {item.fuel_unit}</Text>
+              <ThemedText color="#6b7280" className="text-xs  mt-1">Fuel economy</ThemedText>
+              <ThemedText color="#374151" className="text-base font-medium ">
+                {removeDecimal(item.distance_per_unit_fuel)} {item.distance_unit} / {item.fuel_unit}
+              </ThemedText>
             </View>
 
             <View className="items-center flex-1">
               <FontAwesome6 name="ankh" size={20} color="#3b82f6" />
-              <Text className="text-xs text-gray-500 mt-1">Tank capacity</Text>
-              <Text className="text-base font-medium text-gray-700">{removeDecimal(item.tank_capacity)} {convertToFullName(item.fuel_unit)}</Text>
+              <ThemedText color="#6b7280" className="text-xs  mt-1">Tank capacity</ThemedText>
+              <ThemedText color="#374151" className="text-base font-medium">
+                {removeDecimal(item.tank_capacity)} {convertToFullName(item.fuel_unit)}
+              </ThemedText>
             </View>
 
             <View className="items-center flex-1">
-              <FontAwesome6 name="gas-pump" size={20} color="black" />
-              <Text className="text-xs text-gray-500 mt-1">Fuel type</Text>
-              <Text className="text-base font-medium text-gray-700">{convertToFullName(item.fuel_type)}</Text>
+              <ThemedText darkColor={'#6b7280'} color={'#00000'}>
+                <FontAwesome6 name="gas-pump" size={20} />
+              </ThemedText>
+              <ThemedText color="#6b7280" className="text-xs  mt-1">Fuel type</ThemedText>
+              <ThemedText color={'#374151'} className="text-base font-medium ">
+                {convertToFullName(item.fuel_type)}
+              </ThemedText>
             </View>
           </View>
 
           {isPending && (
             <Text className="text-yellow-600 my-2 text-xs font-medium">⏳ Pending sync...</Text>
           )}
-        </View>
+        </ThemedView>
       </TouchableOpacity>
     );
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-blue-50">
-      <StatusBar barStyle="light-content" backgroundColor="#0000ff" />
+    <SafeAreacontext bgColor="#eff6ff" className="flex-1 ">
       <PageHeader routes="My Vehicles" />
 
-      <View className="bg-white rounded-md shadow-md flex-row justify-between items-center p-4 m-4">
+      <ThemedView className=" rounded-md shadow-md flex-row justify-between items-center p-4 m-4">
         <View className="flex-row items-center">
-          <FontAwesome5 name="car" size={20} color="#198754" />
-          <Text className="ml-2 text-lg font-medium text-[#198754]">Add another vehicle</Text>
+          <FontAwesome5 name="car" size={20} color="#10b981" />
+          <Text className="ml-2 text-lg font-medium "
+            style={{ color: '#10b981' }}>
+            Add another vehicle
+          </Text>
         </View>
         <TouchableOpacity onPress={() => router.push("otherPages/vehicles/addVehicles")}>
           <Ionicons name="add-circle" size={26} color="#10b981" />
         </TouchableOpacity>
-      </View>
+      </ThemedView>
 
       <View className="px-4 flex-1">
         <Tabs tabs={tabs} activeTab={activeTab} setActiveTab={setActiveTab} />
 
-        <View className="flex-row items-center border border-gray-300 rounded-lg mb-3 bg-white px-3 mt-4">
-          <Feather name="search" size={20} color="#9ca3af" />
-          <TextInput className="flex-1 ml-2 py-3 text-lg text-[#9ca3af]" placeholder="Search vehicles..." placeholderTextColor="#9ca3af" value={searchQuery} onChangeText={setSearchQuery} />
-        </View>
+        <ThemedView className="flex-row items-center border  rounded-lg mb-3 px-3 mt-4"
+          style={{ elevation: 2 }}>
+          <ThemedText color="#9ca3af">
+            <Feather name="search" size={20} />
+          </ThemedText>
+          <TextInput
+            className="flex-1 ml-2 py-4 text-lg text-[#9ca3af]"
+            placeholder="Search vehicles..."
+            placeholderTextColor="#9ca3af"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+
+          />
+        </ThemedView>
 
         {selectionMode && filteredVehicles.length > 0 && (
-          <View className="flex-row items-center mb-3 bg-white rounded-lg shadow-sm p-3 px-4">
+          <ThemedView className="flex-row items-center mb-3  rounded-lg shadow-sm p-3 px-4">
             <CheckBox value={selectAll} onClick={handleSelectAll} />
-            <Text className="ml-2 text-lg font-medium text-gray-800">Select All ({selectedVehicles.length})</Text>
-          </View>
+            <ThemedText color="#1f2937" className="ml-2 text-lg font-medium ">Select All ({selectedVehicles.length})</ThemedText>
+          </ThemedView>
         )}
 
         {loading ? (
@@ -556,16 +586,22 @@ const MyVehicles = () => {
           />
 
         ) : (
-          <View className="bg-white rounded-md shadow-md p-4"><Text className="text-lg text-gray-700">
-            You have not saved any vehicles yet. Saving a vehicle allows you to select it from the list of saved vehicles, enabling you to track trips as well as fuel consumption
-          </Text>
-          </View>
+          <ThemedView className=" rounded-md shadow-md p-4">
+            <ThemedText color="#374151" className="text-lg ">
+              You have not saved any vehicles yet. Saving a vehicle allows you to select it from the list of saved vehicles, enabling you to track trips as well as fuel consumption
+            </ThemedText>
+          </ThemedView>
         )}
       </View>
 
       {selectionMode && (
         <View className="absolute bottom-0 left-0 right-0 ">
-          <BottomActionBar activeTab={activeTab} toggleStatus={toggleVehicleStatus} handleCancel={handleCancel} handleDelete={deleteVehicles} />
+          <BottomActionBar
+            activeTab={activeTab}
+            toggleStatus={toggleVehicleStatus}
+            handleCancel={handleCancel}
+            handleDelete={deleteVehicles}
+          />
         </View>
       )}
 
@@ -574,7 +610,7 @@ const MyVehicles = () => {
         onClose={() => setModalVisible(false)}
         onSelect={handleSelect}
       />
-    </SafeAreaView>
+    </SafeAreacontext>
   );
 };
 

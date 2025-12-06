@@ -8,15 +8,17 @@ import HeaderSection from "../../src/components/HeaderSection";
 import Button from "../../src/components/Button";
 import PasswordInputField from "../../src/components/ToggleField";
 import Input from "../../src/components/Input";
+import { ThemedView, ThemedText, SafeAreacontext } from "../../src/components/ThemedColor";
 
 //Hooks
 import { useApi } from "../../src/hooks/useApi";
 import { useAuth } from "../../src/context/UseAuth";
+import { useTheme } from "../../src/context/ThemeProvider";
 
 const CompleteRegistration = () => {
   const { post } = useApi();
-
-  const {showModal, hideModal,setGlobalLoading,} = useAuth();
+  const { darkMode } = useTheme()
+  const { showModal, hideModal, setGlobalLoading, } = useAuth();
   const [username, setUsername] = useState("");
   const [usernameError, setUsernameError] = useState("");
   const [password, setPassword] = useState("");
@@ -32,10 +34,12 @@ const CompleteRegistration = () => {
     if (!username.trim()) {
       setUsernameError("Field is required");
       hasError = true;
+      return;
     }
     if (!password.trim()) {
       setPassError("Field is required");
       hasError = true;
+      return;
     } else if (password.trim().length < 8) {
       setPassError("Password must be at least 8 characters long.");
       hasError = true;
@@ -56,6 +60,7 @@ const CompleteRegistration = () => {
     if (!confirmPassword.trim()) {
       setConfirmPassError("Field is required");
       hasError = true;
+      return;
     } else if (password !== confirmPassword) {
       setConfirmPassError("Password and Confirm Password don't match");
       hasError = true;
@@ -73,15 +78,15 @@ const CompleteRegistration = () => {
           password: password.trim(),
           confirm_password: confirmPassword.trim(),
         },
-       { useBearerAuth:true} // use token
+        { useBearerAuth: true } // use token
       );
       if (result.status === "success") {
         showModal(result.data || "User created successfully!", "success");
         setTimeout(() => {
           hideModal();
           router.push({
-            pathname:"/auth/login",
-            params:{userName:cleanUsername}
+            pathname: "/auth/login",
+            params: { userName: cleanUsername }
           });
         }, 3000);
 
@@ -103,37 +108,37 @@ const CompleteRegistration = () => {
 
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
-      <StatusBar barStyle="light-content" backgroundColor="#0000ff" />
+    <SafeAreacontext className="flex-1 ">
       <HeaderSection />
 
       <View className="flex-1  p-4">
-        <View
-          className={`bg-[rgba(255,255,255,0.9)] rounded-xl p-6 ${Platform.OS === "ios" ? " shadow-sm" : ''
+        <ThemedView
+          bgColor={'rgba(255,255,255,0.9)'}
+          className={` rounded-xl p-6 ${Platform.OS === "ios" ? " shadow-sm" : ''
             }`}
           style={{ marginTop: -230, elevation: 5 }}
         >
           <View className="mb-3">
-            <Text className="text-headercolor text-2xl font-medium">
+            <ThemedText color="#646060ff" className=" text-2xl font-medium">
               Complete Registration
-            </Text>
+            </ThemedText>
           </View>
           {/* Username field */}
-          <Text className="text-xl mb-2 text-headercolor">Enter your name</Text>
+          <ThemedText color="#646060ff" className="text-xl mb-2 ">Enter your name</ThemedText>
           <Input
             value={username}
             placeholder="Type your user name here"
             onchange={(val) => setUsername(val)}
             inputError={usernameError}
-             keyboardType="email-address"
+            keyboardType="email-address"
             autoCapitalize="none"
             setInputError={setUsernameError}
 
           />
-         
+
 
           {/* Password field */}
-          <Text className="text-xl mb-2 text-headercolor mt-2">Enter your password</Text>
+          <ThemedText color="#646060ff" className="text-xl mb-2  mt-2">Enter your password</ThemedText>
           <PasswordInputField
             password={password}
             setPassword={setPassword}
@@ -143,7 +148,7 @@ const CompleteRegistration = () => {
           />
 
           {/* Confirm password */}
-          <Text className="text-xl mb-2 text-headercolor mt-2">Confirm password</Text>
+          <ThemedText color="#646060ff" className="text-xl mb-2  mt-2">Confirm password</ThemedText>
 
           <PasswordInputField
             password={confirmPassword}
@@ -157,14 +162,14 @@ const CompleteRegistration = () => {
           <View className="mt-2">
             <Button title="Submit" onClickEvent={handleRegister} />
           </View>
-          <View className="border border-gray-200 my-2"></View>
+          <View className={`border ${darkMode ? ' border-gray-700' : ' border-gray-300'} my-2`}></View>
           <View className="flex-row flex-nowrap">
-            <Text className="text-xl font-medium text-headercolor">Already have an account? </Text>
+            <ThemedText color="#646060ff" className="text-xl font-medium ">Already have an account? </ThemedText>
             <Link href="/auth/signup" className="text-customBlue underline text-xl">Login</Link>
           </View>
-        </View>
+        </ThemedView>
       </View>
-    </SafeAreaView>
+    </SafeAreacontext>
   );
 };
 

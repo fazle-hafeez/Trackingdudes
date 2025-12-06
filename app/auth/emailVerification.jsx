@@ -1,22 +1,26 @@
 import { Link, useLocalSearchParams, router } from "expo-router";
-import React, { useState, useEffect } from "react";
-import {View,Text,TextInput,TouchableOpacity, StatusBar,Platform} from "react-native";
+import React, { useState, useEffect, useRef } from "react";
+import { View, Text, TextInput, TouchableOpacity, Platform, Animated } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 //Hooks
 import { useApi } from "../../src/hooks/useApi";
 import { useAuth } from "../../src/context/UseAuth";
+import { useTheme } from "../../src/context/ThemeProvider";
 
 //components
 import HeaderSection from "../../src/components/HeaderSection";
 import Button from "../../src/components/Button";
+import { ThemedView, ThemedText, SafeAreacontext } from "../../src/components/ThemedColor";
 
 
 const EmailVerification = () => {
   const { post, put } = useApi();
   const { showModal, hideModal, setGlobalLoading } = useAuth();
   const { trimmedEmail, changePassword, enableBtn, reastartEmail, resetEmail } = useLocalSearchParams();
+  const { darkMode } = useTheme()
+  const inputRef = useRef(null);
 
   const [code, setCode] = useState("");
   const [otpError, setOtpError] = useState("");
@@ -115,6 +119,51 @@ const EmailVerification = () => {
     return () => clearInterval(interval);
   }, [isBlocked, lockoutEndTime]);
 
+  const shakeAnim = useRef(new Animated.Value(0)).current;
+  const borderAnim = useRef(new Animated.Value(0)).current;
+  const [isFocused, setIsFocused] = useState(false);
+
+  const errorColor = darkMode ? "#ef4444" : "#dc3545";
+  const focusColor = darkMode ? "#3b82f6" : "#0d6efd";
+  const defaultColor = darkMode ? "#6b7280" : "#ccc";
+
+  const showError = otpError && code === "";
+
+  // Animate border + shake
+  useEffect(() => {
+    let toValue = 0;
+
+    if (showError) toValue = 2;
+    else if (isFocused) toValue = 1;
+
+    Animated.timing(borderAnim, {
+      toValue,
+      duration: 250,
+      useNativeDriver: false,
+    }).start();
+
+    // Shake only when real error
+    if (showError) {
+      Animated.sequence([
+        Animated.timing(shakeAnim, { toValue: 10, duration: 70, useNativeDriver: false }),
+        Animated.timing(shakeAnim, { toValue: -10, duration: 70, useNativeDriver: false }),
+        Animated.timing(shakeAnim, { toValue: 6, duration: 70, useNativeDriver: false }),
+        Animated.timing(shakeAnim, { toValue: -6, duration: 70, useNativeDriver: false }),
+        Animated.timing(shakeAnim, { toValue: 0, duration: 60, useNativeDriver: false }),
+      ]).start();
+    }
+  }, [showError, isFocused]);
+
+  useEffect(() => {
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 300);
+  }, []);
+
+  const borderColor = borderAnim.interpolate({
+    inputRange: [0, 1, 2],
+    outputRange: [defaultColor, focusColor, errorColor],
+  });
   //  Submit OTP
   const submitCode = async () => {
     if (isBlocked) return;
@@ -219,43 +268,67 @@ const EmailVerification = () => {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
-      <StatusBar barStyle="light-content" backgroundColor="#0000ff" />
+    <SafeAreacontext className="flex-1">
       <HeaderSection />
 
-      <View style={{marginTop:-320}} className="p-3">
-        <View
-          className={`bg-[rgba(255,255,255,0.9)] rounded-2xl p-6 mt-6 ${
-            Platform.OS === "ios" ? "shadow-sm" : ""
-          }`}
+      <View style={{ marginTop: -320 }} className="p-3">
+        <ThemedView
+          bgColor={'rgba(255,255,255,0.9)'}
+          className={` rounded-2xl p-6 mt-6 ${Platform.OS === "ios" ? "shadow-sm" : ""
+            }`}
           style={{ elevation: 5 }}
         >
-          <Text className="text-headercolor text-2xl font-medium mb-2">
+          <ThemedText color="#646060ff" className=" text-2xl font-medium mb-2">
             Verify your email address
-          </Text>
-          <Text className="text-md text-headercolor">
+          </ThemedText>
+          <ThemedText color="#646060ff" className="text-md ">
             We've sent a 6-digit code to{" "}
             {trimmedEmail || reastartEmail || resetEmail} from{" "}
             <Text className="font-medium">register@trackingdudes.com</Text>. Please
             enter it below.
-          </Text>
+          </ThemedText>
 
-          <Text className="text-xl mt-4 mb-2 text-headercolor">Enter code here</Text>
-          <TextInput
-            autoFocus
-            keyboardType="numeric"
-            maxLength={6}
-            className={`text-center border rounded-md px-3 py-2 text-lg text-headercolor ${
-              otpError ? "border-red-500" : "border-gray-400"
-            }`}
-            value={code}
-            onChangeText={(text) => {
-              setCode(text);
-              setOtpError("");
+          <ThemedText color="#646060ff" className="text-xl mt-4 mb-2 ">Enter code here</ThemedText>
+          <Animated.View
+            style={{
+              borderWidth: 1,
+              borderRadius: 8,
+              paddingHorizontal: 5,
+              paddingVertical: 2,
+              marginTop: 10,
+              borderColor: borderColor,
+              transform: [{ translateX: shakeAnim }],
             }}
-          />
+          >
+            <TextInput
+              ref={inputRef}
+              keyboardType="numeric"
+              maxLength={6}
+              value={code}
+              onChangeText={(t) => {
+                setCode(t);
+                if (t !== "") setOtpError("");
+              }}
+              onFocus={() => setIsFocused(true)}
+              onBlur={() => setIsFocused(false)}
+              placeholder="Enter code"
+              placeholderTextColor={darkMode ? "#9ca3af" : "#646060ff"}
+              style={{
+                textAlign: "center",
+                textAlignVertical: "center",   // ✔ Fix cursor position
+                includeFontPadding: false,     // ✔ Prevents right-shift cursor
+                fontSize: 18,
+                paddingVertical: 10,
+                color: darkMode ? "white" : "#1f2937",
+              }}
+            />
+          </Animated.View>
 
-          {otpError ? <Text className="text-red-500 text-sm mt-2">{otpError}</Text> : null}
+
+          {showError && (
+            <Text className="text-red-500 text-sm mt-2">{otpError}</Text>
+          )}
+
 
           {isBlocked && (
             <Text className="text-red-500 text-sm mt-2">
@@ -267,24 +340,22 @@ const EmailVerification = () => {
             <Button title="Submit" onClickEvent={submitCode} disabled={isAllDisabled} />
           </View>
 
-          <View className="border border-gray-300 my-4"></View>
+          <View className={`${darkMode ? ' border-gray-700' :' border-gray-300'} border my-4`}></View>
 
-          <Text className="text-xl text-headercolor mb-2">
+          <ThemedText color="#646060ff" className="text-xl  mb-2">
             Didn't receive the email?
-          </Text>
+          </ThemedText>
 
           <View className="flex-row justify-between">
             <TouchableOpacity
               disabled={isAllDisabled || (!canResend && !enableBtn)}
               onPress={sendEmailCode}
-              className={`border rounded-md h-12 justify-center px-3 ${
-                canResend || enableBtn ? "border-blue" : "border-gray-400"
-              }`}
+              className={`border rounded-md h-12 justify-center px-3 ${canResend || enableBtn ? "border-blue" : darkMode ? "border-gray-400" : "border-gray-400"
+                }`}
             >
               <Text
-                className={`${
-                  canResend || enableBtn ? "text-customBlue" : "text-gray-400"
-                }`}
+                className={`${canResend || enableBtn ? "text-customBlue" : "text-gray-400"
+                  }`}
               >
                 Resend Email {!enableBtn && !canResend && `| in ${formatTime(resendTimer)}`}
               </Text>
@@ -293,32 +364,30 @@ const EmailVerification = () => {
             <TouchableOpacity
               disabled={isAllDisabled || (!canRestart && !enableBtn)}
               onPress={restart}
-              className={`border rounded-md h-12 justify-center px-3 ${
-                canRestart || enableBtn ? "border-blue" : "border-gray-400"
-              }`}
+              className={`border rounded-md h-12 justify-center px-3 ${canRestart || enableBtn ? "border-blue" : "border-gray-400"
+                }`}
             >
               <Text
-                className={`${
-                  canRestart || enableBtn ? "text-customBlue" : "text-gray-400"
-                }`}
+                className={`${canRestart || enableBtn ? "text-customBlue" : "text-gray-400"
+                  }`}
               >
                 Restart {!enableBtn && !canRestart && `| in ${formatTime(restartTimer)}`}
               </Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </ThemedView>
 
         {/*  Info Text Below Card */}
         <View className="mt-3">
-          <Text className="text-gray-600 text-lg leading-6 text-justify">
+          <ThemedText color="#646060ff" className="text-gray-600 text-lg leading-6 text-justify">
             Please ensure that your email service provider does not block our emails. If
             you attempt to send emails from this page multiple times in a short period,
             they may end up in your spam folder. Therefore, please double-check all
             folders, including spam, before resending another email. Thank you.
-          </Text>
+          </ThemedText>
         </View>
       </View>
-    </SafeAreaView>
+    </SafeAreacontext>
   );
 };
 

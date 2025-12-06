@@ -6,26 +6,30 @@ import { FontAwesome6, Feather, Ionicons, FontAwesome5 } from "@expo/vector-icon
 import { router } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-// Hooks
+// -----Hooks----------
 import { useApi } from "../../../src/hooks/useApi";
 import { useAuth } from "../../../src/context/UseAuth";
 import { readCache, storeCache } from "../../../src/offline/cache";
 import { OfflineContext } from "../../../src/offline/OfflineProvider";
-// Components
+import { useTheme } from "../../../src/context/ThemeProvider";
+
+//------- Components-------
 import TickCrossIndicator from '../../../src/components/TickCrossIndicator';
 import CheckBox from "../../../src/components/CheckBox";
 import Pagination from "../../../src/components/Pagination";
 import LoadingSkeleton from "../../../src/components/LoadingSkeleton";
 import Tabs from "../../../src/components/Tabs";
 import PageHeader from "../../../src/components/PageHeader";
-import BottomActionBar from "../../../src/components/ActionBar"; // Assumed to be reusable
-import ProjectCountModal from "../../../src/components/ProjectCountModal"; // NEW: For project limit
+import BottomActionBar from "../../../src/components/ActionBar";
+import ProjectCountModal from "../../../src/components/ProjectCountModal";
+import { ThemedView, ThemedText, SafeAreacontext } from "../../../src/components/ThemedColor";
 
 const CACHE_KEY = "my-projects";
-const PROJECT_COUNT_ASYNC_KEY = "@my-projects-count"; // NEW: Key for project count in AsyncStorage
+const PROJECT_COUNT_ASYNC_KEY = "@my-projects-count"; // 
 
 const MyProjects = () => {
     const { get, del, put } = useApi();
+    const { darkMode } = useTheme()
     const { showModal, setGlobalLoading, hideModal } = useAuth();
     const { isConnected } = useContext(OfflineContext);
 
@@ -51,23 +55,23 @@ const MyProjects = () => {
     const [pendingUpdates, setPendingUpdates] = useState({});
 
     // ---------- helpers ----------
-   const normalizeStatus = (value) => {
-    if (!value) return null;
-    if (typeof value === "string") return value.toLowerCase();
-    if (typeof value === "object" && value.status) return String(value.status).toLowerCase();
-    return null;
-  };
-  
+    const normalizeStatus = (value) => {
+        if (!value) return null;
+        if (typeof value === "string") return value.toLowerCase();
+        if (typeof value === "object" && value.status) return String(value.status).toLowerCase();
+        return null;
+    };
 
-  const mergePendingAndNormalize = (obj = {}) => {
-    const out = {};
-    Object.keys(obj).forEach(k => {
-      const v = obj[k];
-      const n = normalizeStatus(v);
-      if (n) out[k] = n;
-    });
-    return out;
-  };
+
+    const mergePendingAndNormalize = (obj = {}) => {
+        const out = {};
+        Object.keys(obj).forEach(k => {
+            const v = obj[k];
+            const n = normalizeStatus(v);
+            if (n) out[k] = n;
+        });
+        return out;
+    };
 
     // -------------------- Project Count Logic (NEW) --------------------
     useEffect(() => {
@@ -96,21 +100,25 @@ const MyProjects = () => {
         }
     };
 
+    const parseFlag = (v) => {
+        if (v === true || v === "1" || v === 1) return true;
+        return false;
+    };
+
     // -------------------- FETCH PROJECTS --------------------
     const fetchProjects = async (pageNumber = 1, currentOrder = order, shouldUpdateCache = false) => {
-        if (!fetchProject) return; // Wait for project limit to be set
+        if (!fetchProject) return;
         const fetchStatus = activeTab.toLowerCase();
         try {
             setLoading(true);
 
             const result = await get(
-                `my-projects?status=${fetchStatus}&order=${currentOrder}&limit=${projectCount}&page=${pageNumber}&_t=${isConnected ? Date.now() : 0}`, // Use projectCount
+                `my-projects?status=${fetchStatus}&order=${currentOrder}&limit=${projectCount}&page=${pageNumber}&_t=${isConnected ? Date.now() : 0}`,
                 { useBearerAuth: true }
             );
 
             let projectsData = Array.isArray(result?.data) ? result.data : [];
 
-            // Pagination
             if (isConnected && result?.pagination) {
                 setPage(result?.pagination?.current_page || pageNumber);
                 setTotalPages(result?.pagination?.total_pages || 1);
@@ -119,158 +127,106 @@ const MyProjects = () => {
                 setTotalPages(1);
             }
 
-            // Load caches & pending
+            // Read caches
             const cachedPendingRaw = await readCache("pendingUpdates") || {};
             const cachedPending = mergePendingAndNormalize(cachedPendingRaw);
+
             const allCachedWrap = await readCache(CACHE_KEY) || { data: [] };
             const allCached = Array.isArray(allCachedWrap.data) ? allCachedWrap.data : [];
 
-            // 1) Merge pending offline posts (new records added offline)
+            // Offline queue
             const offlineQueue = (await readCache("offlineQueue")) || [];
             const pendingAdds = offlineQueue
                 .filter(i => i.endpoint?.includes("create-project") && i.method === "post")
                 .map(i => ({
                     ...i.body,
-                    // 🚨 FIX 1: Make sure 'project' field is included from body
-                    project: i.body.project,
-                    tempId: i.body.tempId || i.body.id || `local_${Date.now()}`,
-                    pending: true, // Mark as pending
-                    status: normalizeStatus(i.body.status) || "enabled",
-                }));
-
-            // Only include pending adds that belong to the current tab status
-            const addsForCurrentTab = pendingAdds.filter(p => normalizeStatus(p.status) === fetchStatus);
-
-            addsForCurrentTab.forEach(p => {
-                // Check if an item with the same tempId already exists in projectsData (to avoid duplicates on fresh fetch)
-                const exists = projectsData.find(v => (v.tempId && p.tempId && v.tempId === p.tempId));
-                // 🚨 FIX 2: Check if project already exists, if not, add it to the front of the list (unshift)
-                if (!exists) {
-                    projectsData.unshift(p);
-                }
-            });
-
-            // 2) Add items moved to this tab due to pending status change (from cache)
-            const movedPendingItems = allCached
-                .filter(item => {
-                    const id = item.id || item.tempId;
-                    const pendingStatus = cachedPending[id];
-                    // Item has a pending status change AND the new status matches the current tab
-                    return id && pendingStatus && pendingStatus === fetchStatus;
-                })
-                .map(item => ({ ...item, status: cachedPending[item.id] || cachedPending[item.tempId], pending: true }));
-
-            movedPendingItems.forEach(pItem => {
-                // Only add if it doesn't already exist from the API fetch
-                const exists = projectsData.find(v => (v.id && pItem.id && v.id === pItem.id) || (v.tempId && pItem.tempId && v.tempId === pItem.tempId));
-                if (!exists) projectsData.push(pItem);
-            });
-
-            // 3) Apply final pending status/flag to all records in the current list
-            projectsData = projectsData.map(p => {
-                const id = p.id || p.tempId;
-                const pendingStatus = cachedPending[id];
-
-                // 🚨 FIX 3: Check if it's a new pending add (no ID, has tempId and pending: true from step 1) 
-                // OR if it's a status update pending (has ID, pendingStatus exists)
-                const isNewPendingAdd = !p.id && !!p.tempId && !!p.pending;
-                const isStatusUpdatePending = !!pendingStatus;
-
-                if (isNewPendingAdd) {
-                    return { ...p, status: normalizeStatus(p.status) || fetchStatus, pending: true };
-                }
-                if (isStatusUpdatePending) {
-                    // If status update is pending, use the new pending status for display
-                    return { ...p, status: pendingStatus, pending: true };
-                }
-                // Use server status or cached status, and explicitly set pending to false
-                return { ...p, status: normalizeStatus(p.status) || fetchStatus, pending: false };
-            });
-
-            // 4) Final filter to ensure displayed items match current tab (safe normalize)
-            projectsData = projectsData.filter(p => {
-                const st = normalizeStatus(p.status) || fetchStatus;
-                return st === fetchStatus;
-            });
-
-            // Map to parsed format (inShift, inTrips etc) AFTER filtering & pending applied
-            const parsed = projectsData.map((p) => ({
-                ...p,
-                inShift: String(p.in_shifts) === "1" || p.inShift === true,
-                inTrips: String(p.in_trips) === "1" || p.inTrips === true,
-                inTimes: String(p.in_times) === "1" || p.inTimes === true,
-                inExpenses: String(p.in_expenses) === "1" || p.inExpenses === true,
-                suggestions: p.suggestions
-            }));
-
-            setProjects(parsed);
-
-            // Update cache if connected or forced
-            if (isConnected || shouldUpdateCache) {
-                // Storing the entire list including tempId items for offline view consistency
-                // Only store projects for the current tab to avoid mixing data
-                // ⚠️ Note: For full offline capability, all tabs should be cached, but for a quick fix, storing the current view.
-                await storeCache(CACHE_KEY, { data: parsed, timestamp: Date.now() });
-            }
-
-        } catch (error) {
-            console.error("Error fetching projects, falling back to cache:", error);
-
-            // Fallback to cached data with pending applied
-            const cachedWrap = await readCache(CACHE_KEY) || { data: [] };
-            const cached = Array.isArray(cachedWrap.data) ? cachedWrap.data : [];
-            const cachedPendingRaw = await readCache("pendingUpdates") || {};
-            const cachedPending = mergePendingAndNormalize(cachedPendingRaw);
-
-            // Also merge pending adds into cached data during fallback
-            const offlineQueue = (await readCache("offlineQueue")) || [];
-            const pendingAdds = offlineQueue
-                .filter(i => i.endpoint?.includes("create-project") && i.method === "post")
-                .map(i => ({
-                    ...i.body,
-                    project: i.body.project, // Ensure project name is included
                     tempId: i.body.tempId || i.body.id || `local_${Date.now()}`,
                     pending: true,
                     status: normalizeStatus(i.body.status) || "enabled",
                 }));
 
-            // Filter pendingAdds for the current tab
-            const pendingAddsForTab = pendingAdds.filter(p => normalizeStatus(p.status) === activeTab.toLowerCase());
+            // Merge all projects uniquely
+            const mergedMap = new Map();
 
-            // Add pending adds to the top of cached list, filtering out duplicates if they somehow got cached
-            let safeCachedData = [...pendingAddsForTab];
-            const pendingTempIds = pendingAddsForTab.map(p => p.tempId);
+            // 1) Existing online data
+            projectsData.forEach(p => {
+                const key = p.id || p.tempId;
+                mergedMap.set(key, { ...p, pending: false, status: normalizeStatus(p.status) || fetchStatus });
+            });
 
-            cached.forEach(item => {
-                if (!item.tempId || !pendingTempIds.includes(item.tempId)) {
-                    safeCachedData.push(item);
+            // 2) Pending offline adds
+            pendingAdds.forEach(p => {
+                const key = p.tempId;
+                if (!mergedMap.has(key)) {
+                    mergedMap.set(key, { ...p, pending: true, status: normalizeStatus(p.status) || fetchStatus });
                 }
             });
 
-            if (safeCachedData.length > 0) {
-                safeCachedData = safeCachedData.map(item => {
-                    const id = item.id || item.tempId;
-                    const pendingStatus = cachedPending[id];
-                    const isNewPendingAdd = !item.id && !!item.tempId; // Check if it's a new local creation
+            // 3) Items moved due to pending status update
+            allCached.forEach(item => {
+                const id = item.id || item.tempId;
+                const pendingStatus = cachedPending[id];
+                if (id && pendingStatus) {
+                    mergedMap.set(id, { ...item, status: pendingStatus, pending: true });
+                }
+            });
 
-                    return {
-                        ...item,
-                        status: pendingStatus || normalizeStatus(item.status) || activeTab.toLowerCase(),
-                        pending: !!pendingStatus || isNewPendingAdd, // Keep pending true for new adds and status updates
-                        inShift: String(item.in_shifts) === "1" || item.inShift === true,
-                        inTrips: String(item.in_trips) === "1" || item.inTrips === true,
-                        inTimes: String(item.in_times) === "1" || item.inTimes === true,
-                        inExpenses: String(item.in_expenses) === "1" || item.inExpenses === true,
-                        suggestions: item.suggestions
-                    };
-                });
+            // Convert Map to array & parse flags
+            let finalList = Array.from(mergedMap.values())
+                .map(p => ({
+                    ...p,
+                    inShift: parseFlag(p.inShift) || parseFlag(p.in_shifts),
+                    inTrips: parseFlag(p.inTrips) || parseFlag(p.in_trips),
+                    inTimes: parseFlag(p.inTimes) || parseFlag(p.in_times),
+                    inExpenses: parseFlag(p.inExpenses) || parseFlag(p.in_expenses),
+                    pending: !!p.pending,
+                    status: normalizeStatus(p.status) || fetchStatus,
+                }))
 
-                safeCachedData = safeCachedData.filter(item => String(item.status || "").toLowerCase() === activeTab.toLowerCase());
-                setProjects(safeCachedData);
-            } else {
-                setProjects([]);
+                .filter(p => normalizeStatus(p.status) === fetchStatus);
+
+            setProjects(finalList);
+
+            // Update cache if online or forced
+            if (isConnected || shouldUpdateCache) {
+                await storeCache(CACHE_KEY, { data: finalList, timestamp: Date.now() });
             }
 
+        } catch (error) {
+            console.error("Error fetching projects, falling back to cache:", error);
+
+            // Offline fallback
+            const cachedWrap = await readCache(CACHE_KEY) || { data: [] };
+            const cached = Array.isArray(cachedWrap.data) ? cachedWrap.data : [];
+            const offlineQueue = (await readCache("offlineQueue")) || [];
+
+            const pendingAdds = offlineQueue
+                .filter(i => i.endpoint?.includes("create-project") && i.method === "post")
+                .map(i => ({
+                    ...i.body,
+                    tempId: i.body.tempId || i.body.id || `local_${Date.now()}`,
+                    pending: true,
+                }));
+
+            // Merge uniquely using Map
+            const mergedMap = new Map();
+            cached.forEach(p => mergedMap.set(p.id || p.tempId, p));
+            pendingAdds.forEach(p => mergedMap.set(p.tempId, p));
+
+            const finalList = Array.from(mergedMap.values())
+                .map(p => ({
+                    ...p,
+                    inShift: parseFlag(p.inShift) || parseFlag(p.in_shifts),
+                    inTrips: parseFlag(p.inTrips) || parseFlag(p.in_trips),
+                    inTimes: parseFlag(p.inTimes) || parseFlag(p.in_times),
+                    inExpenses: parseFlag(p.inExpenses) || parseFlag(p.in_expenses),
+
+                    pending: !!p.pending,
+                    status: normalizeStatus(p.status) || fetchStatus,
+                }))
+                .filter(p => normalizeStatus(p.status) === fetchStatus);
+
+            setProjects(finalList);
             setPage(1);
             setTotalPages(1);
         } finally {
@@ -278,34 +234,39 @@ const MyProjects = () => {
         }
     };
 
+
     // -------------------- USE FOCUS EFFECT --------------------
     useFocusEffect(
         useCallback(() => {
             if (!fetchProject) return;
 
-            const restorePending = async () => { /* ... (Same as before) */ };
-
             const checkActionsAndFetch = async () => {
-                const newRecord = await readCache("newRecordAdded");
-                const recordDeleted = await readCache("recordDeleted");
+                try {
+                    // Read action flags
+                    const newRecord = await readCache("newRecordAdded");
+                    const recordDeleted = await readCache("recordDeleted");
+                    const recordUpdated = await readCache("recordUpdated");
 
-                // 🚨 NEW: Check for successful sync flag from OfflineProvider
-                const recordUpdated = await readCache("recordUpdated");
+                    // If any action happened, force cache update
+                    if (newRecord || recordDeleted || recordUpdated) {
+                        await fetchProjects(1, order, true); // Force cache refresh
 
-                if (newRecord || recordDeleted || recordUpdated) { // Added recordUpdated
-                    await fetchProjects(1, order, true);
-                    if (newRecord) await storeCache("newRecordAdded", false);
-                    if (recordDeleted) await storeCache("recordDeleted", false);
-                    if (recordUpdated) await storeCache("recordUpdated", false); // 🚨 Clean up flag
-                } else {
-                    await fetchProjects(1);
+                        // Reset flags after fetch
+                        if (newRecord) await storeCache("newRecordAdded", false);
+                        if (recordDeleted) await storeCache("recordDeleted", false);
+                        if (recordUpdated) await storeCache("recordUpdated", false);
+                    } else {
+                        await fetchProjects(1); // normal fetch
+                    }
+                } catch (err) {
+                    console.error("Focus fetch error:", err);
                 }
             };
 
-            restorePending();
             checkActionsAndFetch();
         }, [activeTab, order, fetchProject])
     );
+
 
     // ---------------- REFRESH (FROM MyVehicles) ----------------
     const onRefresh = async () => {
@@ -516,9 +477,9 @@ const MyProjects = () => {
     );
 
     // -------------------- RENDER ITEM --------------------
-const renderProject = ({ item }) => {
-         const key = item.id || item.tempId;
-    const isPending = !!item.pending || (item.id && !!pendingUpdates[item.id]) || (!!pendingUpdates[item.tempId]);
+    const renderProject = ({ item }) => {
+        const key = item.id || item.tempId;
+        const isPending = !!item.pending || (item.id && !!pendingUpdates[item.id]) || (!!pendingUpdates[item.tempId]);
 
         return (
             <TouchableOpacity
@@ -542,69 +503,70 @@ const renderProject = ({ item }) => {
                 delayLongPress={500}
                 className="mb-3"
             >
-                <View className={`bg-white rounded-md shadow-sm p-4 ${isPending ? "border-2 border-yellow-400 bg-yellow-50" : ""}`}>
-                    <View className="flex-row items-center border-b border-gray-200 pb-2 mb-2">
+                <ThemedView className={` rounded-md shadow-sm p-4 ${isPending ? "border-2 border-yellow-400 bg-yellow-50" : ""}`}
+                    style={{ elevation: 5 }}>
+                    <View className={` ${darkMode ? 'border-gray-700' : 'border-gray-400'} 
+                      flex-row items-center border-b  pb-2 mb-2`}>
                         <View className="flex-row items-center flex-1">
                             {selectionMode && (
                                 // Only show checkbox/allow selection if it has a real ID
                                 <CheckBox value={item.id ? selectedProjects.includes(item.id) : false} onClick={() => item.id && toggleProjectSelect(item.id)} />
                             )}
-                            {/* प्रोजेक्ट आइकॉन */}
-                            <FontAwesome5 name="folder-open" size={20} color="#3b82f6" className="ml-2" /> 
-                            <Text className="text-lg font-semibold text-gray-700 ml-2">{item.project}</Text>
+                            <FontAwesome5 name="folder-open" size={20} color="#3b82f6" className="ml-2" />
+                            <ThemedText color={'#374151'} className="text-lg font-semibold ml-2">{item.project}</ThemedText>
                         </View>
 
                     </View>
 
                     <View className="flex-row justify-between items-center my-3">
-                        {/* Shifts - हल्का नीला (Teal) रंग */}
+                        {/* Shifts - */}
                         <View className="items-center flex-1">
-                            <FontAwesome5 name="clock" size={20} color="#14b8a6" className="mb-1" /> {/* Teal-500 */}
-                            <Text className="text-xs font-medium text-gray-500">Shifts</Text>
-                            <TickCrossIndicator checked={item.inShift}  />
+                            <FontAwesome5 name="clock" size={20} color="#14b8a6" className="mb-1" />
+                            <ThemedText color={'#6b7280'} className="text-xs font-medium ">Shifts</ThemedText>
+                            <TickCrossIndicator checked={item.inShift} />
                         </View>
 
-                        {/* Trips - हल्का बैंगनी (Indigo) रंग */}
+                        {/* Trips - */}
                         <View className="items-center flex-1">
-                            <FontAwesome5 name="route" size={20} color="#6366f1" className="mb-1" /> {/* Indigo-500 */}
-                            <Text className="text-xs font-medium text-gray-500">Trips</Text>
-                            <TickCrossIndicator checked={item.inTrips}  />
+                            <FontAwesome5 name="route" size={20} color="#6366f1" className="mb-1" />
+                            <ThemedText color={'#6b7280'} className="text-xs font-medium">Trips</ThemedText>
+                            <TickCrossIndicator checked={item.inTrips} />
                         </View>
-                        
-                        {/* Times - नारंगी (Orange) रंग */}
+
+                        {/* Times - */}
                         <View className="items-center flex-1">
-                            <FontAwesome5 name="hourglass-half" size={20} color="#f97316" className="mb-1" /> {/* Orange-600 */}
-                            <Text className="text-xs font-medium text-gray-500">Times</Text>
-                            <TickCrossIndicator checked={item.inTimes}  />
+                            <FontAwesome5 name="hourglass-half" size={20} color="#f97316" className="mb-1" />
+                            <ThemedText color={'#6b7280'} className="text-xs font-medium ">Times</ThemedText>
+                            <TickCrossIndicator checked={item.inTimes} />
                         </View>
-                        
-                        {/* Expenses - गहरा हरा (Emerald) रंग */}
+
+                        {/* Expenses - */}
                         <View className="items-center flex-1">
-                            <FontAwesome5 name="receipt" size={20} color="#059669" className="mb-1" /> {/* Emerald-600 */}
-                            <Text className="text-xs font-medium text-gray-500">Expenses</Text>
-                            <TickCrossIndicator checked={item.inExpenses}  />
+                            <FontAwesome5 name="receipt" size={20} color="#059669" className="mb-1" />
+                            <ThemedText color={'#6b7280'} className="text-xs font-medium ">Expenses</ThemedText>
+                            <TickCrossIndicator checked={item.inExpenses} />
                         </View>
                     </View>
 
-                     {item.suggestions && (
-                                <Text className="text-base text-gray-500 pl-6 pr-4">{item.suggestions}</Text>
-                            )
-                        }
+                    {item.suggestions && (
+                        <ThemedText color={'#6b7280'} className="text-base  pl-6 pr-4">{item.suggestions}</ThemedText>
+                    )
+                    }
 
                     {isPending && (
                         <Text className="text-yellow-600 my-2 text-xs font-medium">
                             {item.id ? "⏳ Status/Update pending sync..." : "⏳ New record pending sync..."}
                         </Text>
                     )}
-                </View>
+                </ThemedView>
             </TouchableOpacity>
         );
     };
     return (
-        <SafeAreaView className="flex-1 bg-blue-50">
+        <SafeAreacontext bgColor={'#eff6ff'} className="flex-1">
             <PageHeader routes="My Projects" />
 
-            <View className="bg-white rounded-md shadow-md flex-row justify-between items-center p-4 m-4">
+            <ThemedView className=" rounded-md shadow-md flex-row justify-between items-center p-4 m-4">
                 <View className="flex-row items-center">
                     <FontAwesome6 name="file-shield" size={20} color="#198754" />
                     <Text className="ml-2 text-lg font-medium text-[#198754]">Add New Project</Text>
@@ -612,15 +574,14 @@ const renderProject = ({ item }) => {
                 <TouchableOpacity onPress={() => router.push("otherPages/projects/addingProject")}>
                     <Ionicons name="add-circle" size={26} color="#10b981" />
                 </TouchableOpacity>
-            </View>
+            </ThemedView>
 
             <View className="px-4 flex-1">
                 <Tabs tabs={tabs} activeTab={activeTab} setActiveTab={setActiveTab} />
-
-                <View className="flex-row items-center border border-gray-300 rounded-lg mb-3 bg-white px-3 mt-4">
+                <ThemedView className="flex-row items-center border border-gray-300 rounded-lg mb-3 bg-white px-3 mt-4">
                     <Feather name="search" size={20} color="#9ca3af" />
                     <TextInput className="flex-1 ml-2 py-3 text-lg text-[#9ca3af]" placeholder="Search projects..." placeholderTextColor="#9ca3af" value={searchQuery} onChangeText={setSearchQuery} />
-                </View>
+                </ThemedView>
 
                 {selectionMode && filteredProjects.length > 0 && (
                     <View className="flex-row items-center mb-3 bg-white rounded-lg shadow-sm p-3 px-4">
@@ -650,14 +611,14 @@ const renderProject = ({ item }) => {
                         }
                     />
                 ) : (
-                    <View className="bg-white rounded-md shadow-md p-4">
-                        <Text className="text-lg text-gray-700">
+                    <ThemedView  className=" rounded-md shadow-md p-4" style={{eveltion:5}}>
+                        <ThemedText color={'#374151'} className="text-lg ">
                             You have not saved any projects under the selected status.
                             Saving a project allows you to select it from the list of saved projects.
-                             This is useful in tracking shifts, trips, time, as well as fuel consumption or other expenses.
+                            This is useful in tracking shifts, trips, time, as well as fuel consumption or other expenses.
 
-                        </Text>
-                    </View>
+                        </ThemedText>
+                    </ThemedView>
                 )}
             </View>
 
@@ -672,7 +633,7 @@ const renderProject = ({ item }) => {
                 onClose={() => setModalVisible(false)}
                 onSelect={handleSelect}
             />
-        </SafeAreaView>
+        </SafeAreacontext>
     );
 };
 
