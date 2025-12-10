@@ -15,6 +15,8 @@ import Pagination from "../../../src/components/Pagination";
 import BottomActionBar from "../../../src/components/ActionBar";
 import Tabs from "../../../src/components/Tabs";
 import CheckBox from "../../../src/components/CheckBox";
+import Input from "../../../src/components/Input";
+import  { AddItemCard } from "../../../src/components/AddEntityCard";
 import { ThemedView, ThemedText, SafeAreacontext } from "../../../src/components/ThemedColor";
 
 // ----------------Hooks --------------------
@@ -47,6 +49,7 @@ const MyVehicles = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [projectCount, setProjectCount] = useState(null);
   const [fetchProject, setFetchProject] = useState(false)
+  const inputBgColor = darkMode ? 'bg-transparent' : 'bg-white'
 
   // ---------- Helpers ----------
   const normalizeStatus = (value) => {
@@ -526,36 +529,26 @@ const MyVehicles = () => {
     <SafeAreacontext bgColor="#eff6ff" className="flex-1 ">
       <PageHeader routes="My Vehicles" />
 
-      <ThemedView className=" rounded-md shadow-md flex-row justify-between items-center p-4 m-4">
-        <View className="flex-row items-center">
-          <FontAwesome5 name="car" size={20} color="#10b981" />
-          <Text className="ml-2 text-lg font-medium "
-            style={{ color: '#10b981' }}>
-            Add another vehicle
-          </Text>
-        </View>
-        <TouchableOpacity onPress={() => router.push("otherPages/vehicles/addVehicles")}>
-          <Ionicons name="add-circle" size={26} color="#10b981" />
-        </TouchableOpacity>
-      </ThemedView>
-
       <View className="px-4 flex-1">
+
+        <AddItemCard
+          className="my-4"
+          title="Add another vehicle"
+          onchange={() => router.push("otherPages/vehicles/addVehicles")}
+          icon={<FontAwesome5 name="car" size={20} color="#10b981" />}
+        />
+
         <Tabs tabs={tabs} activeTab={activeTab} setActiveTab={setActiveTab} />
 
-        <ThemedView className="flex-row items-center border  rounded-lg mb-3 px-3 mt-4"
-          style={{ elevation: 2 }}>
-          <ThemedText color="#9ca3af">
-            <Feather name="search" size={20} />
-          </ThemedText>
-          <TextInput
-            className="flex-1 ml-2 py-4 text-lg text-[#9ca3af]"
-            placeholder="Search vehicles..."
-            placeholderTextColor="#9ca3af"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-
-          />
-        </ThemedView>
+        <Input
+          className={`${inputBgColor} my-4 `}
+          placeholder="Search  vehicles..."
+          icon={true}
+          elevation={1}
+          border={false}
+          value={searchQuery}
+          onchange={setSearchQuery}
+        />
 
         {selectionMode && filteredVehicles.length > 0 && (
           <ThemedView className="flex-row items-center mb-3  rounded-lg shadow-sm p-3 px-4">

@@ -15,6 +15,7 @@ import { useTheme } from "../../../src/context/ThemeProvider";
 
 //------- Components-------
 import TickCrossIndicator from '../../../src/components/TickCrossIndicator';
+import Input from "../../../src/components/Input";
 import CheckBox from "../../../src/components/CheckBox";
 import Pagination from "../../../src/components/Pagination";
 import LoadingSkeleton from "../../../src/components/LoadingSkeleton";
@@ -45,7 +46,7 @@ const MyProjects = () => {
     const [totalPages, setTotalPages] = useState(1);
     const [refreshing, setRefreshing] = useState(false);
     const [order, setOrder] = useState("asc");
-
+    const inputBgColor = darkMode ? 'bg-transparent' : 'bg-white'
     // NEW: Project limit states (from MyVehicles)
     const [projectCount, setProjectCount] = useState(15); // Default to 15 if not set
     const [modalVisible, setModalVisible] = useState(false);
@@ -578,16 +579,24 @@ const MyProjects = () => {
 
             <View className="px-4 flex-1">
                 <Tabs tabs={tabs} activeTab={activeTab} setActiveTab={setActiveTab} />
-                <ThemedView className="flex-row items-center border border-gray-300 rounded-lg mb-3 bg-white px-3 mt-4">
-                    <Feather name="search" size={20} color="#9ca3af" />
-                    <TextInput className="flex-1 ml-2 py-3 text-lg text-[#9ca3af]" placeholder="Search projects..." placeholderTextColor="#9ca3af" value={searchQuery} onChangeText={setSearchQuery} />
-                </ThemedView>
+                <Input
+                    className={`${inputBgColor} my-4 `}
+                    placeholder="Search projects..."
+                    value={searchQuery}
+                    onchange={setSearchQuery}
+                    icon={true}
+                    border={false}
+                    elevation={1}
+
+                />
 
                 {selectionMode && filteredProjects.length > 0 && (
-                    <View className="flex-row items-center mb-3 bg-white rounded-lg shadow-sm p-3 px-4">
+                    <ThemedView className="flex-row items-center mb-3 bg-white rounded-lg shadow-sm p-3 px-4">
                         <CheckBox value={selectAll} onClick={handleSelectAll} />
-                        <Text className="ml-2 text-lg font-medium text-gray-800">Select All ({selectedProjects.length})</Text>
-                    </View>
+                        <ThemedText color={"#1f2937"} className="ml-2 text-lg font-medium ">
+                            Select All ({selectedProjects.length})
+                        </ThemedText>
+                    </ThemedView>
                 )}
 
                 {loading ? (
@@ -611,7 +620,7 @@ const MyProjects = () => {
                         }
                     />
                 ) : (
-                    <ThemedView  className=" rounded-md shadow-md p-4" style={{eveltion:5}}>
+                    <ThemedView className=" rounded-md shadow-md p-4" style={{ eveltion: 5 }}>
                         <ThemedText color={'#374151'} className="text-lg ">
                             You have not saved any projects under the selected status.
                             Saving a project allows you to select it from the list of saved projects.

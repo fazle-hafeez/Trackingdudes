@@ -5,6 +5,8 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from "react-native-safe-area-context";
 import PageHeader from '../../src/components/PageHeader';
 import Tabs from '../../src/components/Tabs';
+import { AddFilterCard, FilterChip, AddItemCard } from '../../src/components/AddEntityCard';
+import { ThemedView, ThemedText, SafeAreacontext } from '../../src/components/ThemedColor';
 const CURRENT_DATE = '10-13 2025';
 
 export default function ShiftsData() {
@@ -15,13 +17,6 @@ export default function ShiftsData() {
     const timeFilters = ['this-week', 'prev-week', 'this-month', 'others'];
 
     const tabs = ['In-progress', 'Summary', 'Audit', 'Last'];
-
-    const FilterChip = ({ label, iconName }) => (
-        <View className="flex-row items-center bg-customBlue rounded-full px-4 py-2 mr-2 mb-2">
-            {iconName && <Ionicons name={iconName} size={16} color="white" className="mr-1" />}
-            <Text className="text-white text-sm font-semibold">{label}</Text>
-        </View>
-    );
     
     const TabContent = () => {
         if (activeTab === 'In-progress') {
@@ -67,9 +62,9 @@ export default function ShiftsData() {
 
     const TabsHeader = ({label}) => {
       return(
-        <Text className="text-lg font-bold text-gray-800 ">
+        <ThemedText color={"#1f2937"} className="text-lg font-bold  ">
             {label}       
-        </Text>
+        </ThemedText>
       )
     }
 
@@ -90,13 +85,13 @@ export default function ShiftsData() {
     }
 
     return (
-        <SafeAreaView className="flex-1 bg-gray-50">
+        <SafeAreacontext bgColor={"#eff6ff"} className="flex-1 ">
           <PageHeader routes={"Trips Tracking"}/>   
            <View className="p-4 flex-1">
             <View className="mb-6">
                 <View className="flex-row items-center">
                     <Ionicons name="filter" size={24} color="#3b82f6" />
-                    <Text className="text-2xl font-bold text-gray-800 ml-2">Filters</Text>
+                    <Text className="text-xl font-medium text-['#3b82f6'] ml-2">Filters</Text>
                 </View>
                 
                 <View className="my-4">
@@ -115,15 +110,11 @@ export default function ShiftsData() {
                 </View>
             </View>
 
-            
-            <View className="bg-white px-3 py-4 rounded-lg shadow-md border border-gray-200">
-                <View className="flex-row justify-between items-center">
-                    <Text className="text-xl font-bold text-gray-800">Trip tracking</Text>
-                    <TouchableOpacity>
-                        <Ionicons name="add-circle" size={24} color="#10b981" />
-                    </TouchableOpacity>
-                </View>
-            </View>
+
+            <AddItemCard 
+             title='Trip tracking'
+             onchange={()=>console.log('starting working on it soon')}
+            />
 
              <View className="my-4">
                 <Tabs  
@@ -141,6 +132,6 @@ export default function ShiftsData() {
             </View>
            </View>
 
-        </SafeAreaView>
+        </SafeAreacontext>
     );
 }

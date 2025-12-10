@@ -11,11 +11,12 @@ import Button from "../../../src/components/Button";
 import { useTheme } from "../../../src/context/ThemeProvider";
 import Select from "../../../src/components/Select";
 import { useApi } from "../../../src/hooks/useApi";
+import Tabs from "../../../src/components/Tabs";
 
 const AddExpenses = () => {
     const { darkMode } = useTheme();
     const { get } = useApi();
-
+    
     const [receipt, setReceipt] = useState(null);
     const [date, setDate] = useState(new Date());
     const [showDatePicker, setShowDatePicker] = useState(false);

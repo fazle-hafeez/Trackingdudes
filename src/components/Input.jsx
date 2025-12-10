@@ -2,17 +2,23 @@
 import { View, Text, TextInput, Animated } from 'react-native'
 import React, { useState, useRef, useEffect } from 'react'
 import { useTheme } from '../context/ThemeProvider'
+import { Feather } from "@expo/vector-icons";
 
 const Input = ({
   value,
+  icon = false,
   onchange,
   multiline = false,
+  elevation,
+  className,
+  style = {},
   inputError = "",
   onFocus = () => { },
   setInputError = () => { },
   placeholder,
   keyboardType = 'default',
   autoCapitalize = 'words',
+  border = true,
 }) => {
 
   const [focus, setFocus] = useState(false)
@@ -25,9 +31,10 @@ const Input = ({
 
   const errorColor = darkMode ? '#ef4444' : '#dc3545'
   const focusColor = darkMode ? '#3b82f6' : '#0d6efd'
-  const defaultColor = darkMode ? '#6b7280' : '#ccc'
+  const defaultColor = darkMode ? '#4a5568' : '#ccc'
 
   useEffect(() => {
+    if (!border  & !darkMode) return;
     let toValue = 0;
 
     if (showError) toValue = 2;
@@ -51,7 +58,7 @@ const Input = ({
       ]).start();
     }
 
-  }, [focus, showError]);
+  }, [focus, showError,border]);
 
 
 
@@ -71,20 +78,23 @@ const Input = ({
       }}>
         <Animated.View
           style={{
-            borderWidth: 1,
+            borderWidth: border ? 1 :darkMode ? 1 : 0,
             borderRadius: 5,
             paddingHorizontal: 5,
-            paddingVertical: 2,
+            paddingVertical: 4,
             borderColor: borderColor,
             transform: [{ translateX: shakeAnim }],
+            elevation:elevation || 0
           }}
+          className={` ${className} flex-row items-center px-3`}
         >
+          {icon && (<Feather name="search" size={22} color="#9ca3af" />)}
           <TextInput
             placeholder={placeholder}
             keyboardType={keyboardType}
             autoCapitalize={autoCapitalize}
             placeholderTextColor={finalColor}
-            multiline = {multiline}
+            multiline={multiline}
             value={value}
             onChangeText={(val) => {
               onchange(val)
@@ -95,7 +105,7 @@ const Input = ({
               onFocus();
             }}
             onBlur={() => setFocus(false)}
-            style={{ fontSize: 16, color: finalColor }}
+            style={[style, { fontSize: 17, color: finalColor }]}
           />
         </Animated.View>
       </View>

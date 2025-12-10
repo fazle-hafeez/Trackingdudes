@@ -1,8 +1,12 @@
 import { Animated, View } from "react-native";
 import React, { useEffect, useRef } from "react";
-import { useTheme } from "../context/ThemeProvider"; 
+import { useTheme } from "../context/ThemeProvider";
 
-const LoadingSkeleton = () => {
+const LoadingSkeleton = ({
+  count = 4,       
+  spacing = 8,  
+  height = 90,  
+}) => {
   const { darkMode } = useTheme();
   const fadeAnim = useRef(new Animated.Value(0.3)).current;
 
@@ -23,51 +27,56 @@ const LoadingSkeleton = () => {
     ).start();
   }, []);
 
-  // Colors based on theme
-  const cardBg = darkMode ? "#1f2937" : "#fff"; // dark card bg
-  const shimmerColor = darkMode ? "#374151" : "#D1D1D1"; // dark/light shimmer
+  const cardBg = darkMode ? "#1f2937" : "#ffffff";
+  const shimmerColor = darkMode ? "#374151" : "#D1D1D1";
 
   return (
     <>
-      {[1, 2, 3, 4].map((_, index) => (
+      {Array.from({ length: count }).map((_, index) => (
         <Animated.View
           key={index}
           style={{
             opacity: fadeAnim,
             backgroundColor: cardBg,
-            borderRadius: 12,
-            marginVertical: 8,
-            padding: 15,
-            shadowColor: darkMode ? "#000" : "#000",
-            shadowOpacity: 0.1,
-            shadowRadius: 5,
-            elevation: 3,
+            borderRadius: 14,
+            marginVertical: spacing,
+            padding: 16,
+            height,
+            shadowColor: "#000",
+            shadowOpacity: darkMode ? 0 : 0.1,
+            shadowRadius: 6,
+            elevation: darkMode ? 0 : 3,
           }}
         >
+          {/* Line 1 */}
           <View
             style={{
-              height: 18,
+              height: 16,
               backgroundColor: shimmerColor,
-              borderRadius: 5,
-              width: "80%",
+              borderRadius: 6,
+              width: "75%",
               marginBottom: 10,
             }}
           />
+
+          {/* Line 2 */}
           <View
             style={{
               height: 14,
               backgroundColor: shimmerColor,
-              borderRadius: 5,
-              width: "60%",
+              borderRadius: 6,
+              width: "55%",
               marginBottom: 10,
             }}
           />
+
+          {/* Line 3 */}
           <View
             style={{
               height: 12,
               backgroundColor: shimmerColor,
-              borderRadius: 5,
-              width: "40%",
+              borderRadius: 6,
+              width: "35%",
             }}
           />
         </Animated.View>
