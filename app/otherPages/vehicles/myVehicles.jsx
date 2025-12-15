@@ -1,8 +1,7 @@
 
 import React, { useState, useCallback, useContext, useEffect } from "react";
-import { View, Text, TouchableOpacity, FlatList, StatusBar, TextInput, RefreshControl } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { FontAwesome5, Ionicons, FontAwesome6, Feather } from "@expo/vector-icons";
+import { View, Text, TouchableOpacity, FlatList, RefreshControl } from "react-native";
+import { FontAwesome5, FontAwesome6 } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 import { router } from "expo-router";
@@ -16,7 +15,7 @@ import BottomActionBar from "../../../src/components/ActionBar";
 import Tabs from "../../../src/components/Tabs";
 import CheckBox from "../../../src/components/CheckBox";
 import Input from "../../../src/components/Input";
-import  { AddItemCard } from "../../../src/components/AddEntityCard";
+import { AddItemCard } from "../../../src/components/AddEntityCard";
 import { ThemedView, ThemedText, SafeAreacontext } from "../../../src/components/ThemedColor";
 
 // ----------------Hooks --------------------
@@ -25,6 +24,8 @@ import { readCache, storeCache } from "../../../src/offline/cache";
 import { OfflineContext } from "../../../src/offline/OfflineProvider";
 import { useApi } from "../../../src/hooks/useApi";
 import { useAuth } from "../../../src/context/UseAuth";
+import { normalizeStatus, mergePendingAndNormalize } from "../../../src/helper";
+
 
 const CACHE_KEY = "my-vehicles";
 
@@ -50,24 +51,6 @@ const MyVehicles = () => {
   const [projectCount, setProjectCount] = useState(null);
   const [fetchProject, setFetchProject] = useState(false)
   const inputBgColor = darkMode ? 'bg-transparent' : 'bg-white'
-
-  // ---------- Helpers ----------
-  const normalizeStatus = (value) => {
-    if (!value) return null;
-    if (typeof value === "string") return value.toLowerCase();
-    if (typeof value === "object" && value.status) return String(value.status).toLowerCase();
-    return null;
-  };
-
-  const mergePendingAndNormalize = (obj = {}) => {
-    const out = {};
-    Object.keys(obj).forEach(k => {
-      const v = obj[k];
-      const n = normalizeStatus(v);
-      if (n) out[k] = n;
-    });
-    return out;
-  };
 
   //--------------------Fetch project in every page -------
 
@@ -112,9 +95,7 @@ const MyVehicles = () => {
       );
 
       // Vehicles array
-      console.log("result:", result);
       let vehiclesData = Array.isArray(result?.data) ? result.data : [];
-
 
       // Set pagination
       if (isConnected) {
@@ -565,6 +546,9 @@ const MyVehicles = () => {
             renderItem={renderVehicle}
             keyExtractor={(item) => (item.id || item.tempId)?.toString()}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+            contentContainerStyle={{
+              paddingBottom: selectionMode ? 60 : 10
+            }}
             ListFooterComponent={
               isConnected && totalPages > 1 ? (
                 <View className="items-center mb-2">

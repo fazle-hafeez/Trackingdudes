@@ -527,7 +527,7 @@ const AddingProject = () => {
             placeholder="This input allows you to save commonly used words or phrases for project notes. Each word or phrase should be separated by the | character."
           />
 
-          <View className="mt-4">
+          <View className="mt-2">
             <Button
               title={id ? "Update" : "Save"}
               onClickEvent={id ? handleSave : handleCreateProject}

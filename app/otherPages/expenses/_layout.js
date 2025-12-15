@@ -5,6 +5,7 @@ export default function ExpensesRootLayout() {
     <Stack screenOptions={{headerShown:false}}>
         <Stack.Screen name="expensesReport"/>
         <Stack.Screen name="addExpenses"/>
+        <Stack.Screen name="expense"/>
     </Stack>
   );
 }

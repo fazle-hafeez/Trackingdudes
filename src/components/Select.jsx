@@ -1,25 +1,38 @@
-import React, { useState, useRef } from "react";
-import {View,Text,TouchableOpacity,Modal,FlatList,Animated,Easing,Dimensions,} from "react-native";
+import React, { useState, useRef, useEffect } from "react";
+import { View, Text, TouchableOpacity, Modal, FlatList, Animated, Easing, Dimensions, TextInput, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../context/ThemeProvider";
+import Input from "./Input";
 
 const { height } = Dimensions.get("window");
 
 const Select = ({
   items = [],
   value = null,
-  onChange = () => {},
-  onOpen = () => {},
+  onChange = () => { },
+  onOpen = () => { },
+  loading = false,
   placeholder = "Select item...",
   error = "",
   disabled = false,
   modalTitle = "Choose",
   emptyText = "No items found",
 }) => {
-  const { darkMode } = useTheme(); 
+  const { darkMode } = useTheme();
   const [open, setOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filteredItems, setFilteredItems] = useState(items);
+
   const slideAnim = useRef(new Animated.Value(height)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    // Filter items whenever searchQuery changes
+    const filtered = items.filter((item) =>
+      item.label.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+    setFilteredItems(filtered);
+  }, [searchQuery, items]);
 
   const isSelected = (item) => value === item.value;
 
@@ -39,63 +52,46 @@ const Select = ({
     onOpen();
     setOpen(true);
     Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 0.5,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 300,
-        easing: Easing.out(Easing.exp),
-        useNativeDriver: true,
-      }),
+      Animated.timing(fadeAnim, { toValue: 0.5, duration: 300, useNativeDriver: true }),
+      Animated.timing(slideAnim, { toValue: 0, duration: 300, easing: Easing.out(Easing.exp), useNativeDriver: true }),
     ]).start();
   };
 
   const closeModal = () => {
     Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: height,
-        duration: 200,
-        easing: Easing.in(Easing.exp),
-        useNativeDriver: true,
-      }),
+      Animated.timing(fadeAnim, { toValue: 0, duration: 200, useNativeDriver: true }),
+      Animated.timing(slideAnim, { toValue: height, duration: 200, easing: Easing.in(Easing.exp), useNativeDriver: true }),
     ]).start(() => setOpen(false));
+    setSearchQuery("");
   };
 
   const borderColor = error
     ? "border-red-500"
     : disabled
-    ? "border-gray-300 opacity-60"
-    : darkMode
-    ? "border-gray-500"
-    : "border-gray-400";
+      ? "border-gray-300 opacity-60"
+      : darkMode
+        ? "border-gray-700"
+        : "border-gray-400";
 
   const textColor = selectedLabel() === placeholder
     ? darkMode
-      ? "text-gray-500"
+      ? "text-gray-400"
       : "text-gray-400"
     : darkMode
-    ? "text-gray-400"
-    : "text-gray-900";
+      ? "text-gray-400"
+      : "text-gray-900";
 
   const modalBg = darkMode ? "#1f2937" : "white";
   const modalText = darkMode ? "text-gray-300" : "text-gray-900";
   const emptyTextColor = darkMode ? "text-gray-500" : "text-gray-500";
 
   return (
-    <View className="mb-2">
+    <View className="">
       {/* Select Control */}
       <TouchableOpacity
         activeOpacity={0.8}
         onPress={openModal}
-        className={`border rounded-md px-3 py-3 flex-row justify-between items-center ${borderColor}`}
+        className={`border rounded-md px-4 py-4 flex-row justify-between items-center ${borderColor}`}
       >
         <Text numberOfLines={1} className={`text-lg flex-1 ${textColor}`}>
           {selectedLabel()}
@@ -113,13 +109,7 @@ const Select = ({
       {/* Animated Modal */}
       {open && (
         <Modal transparent visible={open} animationType="none">
-          <Animated.View
-            style={{
-              flex: 1,
-              backgroundColor: "black",
-              opacity: fadeAnim,
-            }}
-          />
+          <Animated.View style={{ flex: 1, backgroundColor: "black", opacity: fadeAnim }} />
 
           <Animated.View
             style={{
@@ -143,35 +133,45 @@ const Select = ({
               </TouchableOpacity>
             </View>
 
+            {/* Search Input - show only if items exist */}
+            {items.length > 0 && (
+              <Input
+              className={"my-2"}
+                placeholder="Search..."
+                value={searchQuery}
+                onChange={setSearchQuery}
+              />
+            )}
+
             {/* List */}
-            <FlatList
-              data={items}
-              keyExtractor={(i) => i.value.toString()}
-              keyboardShouldPersistTaps="handled"
-              ListEmptyComponent={() => (
-                <Text className={`text-center py-4 ${emptyTextColor}`}>
-                  {emptyText}
-                </Text>
-              )}
-              renderItem={({ item }) => {
-                const selected = isSelected(item);
-                return (
-                  <TouchableOpacity
-                    onPress={() => toggleItem(item)}
-                    className={`flex-row justify-between items-center py-3 px-3 border-b ${darkMode ? "border-gray-700" : "border-gray-100"} ${
-                      selected ? "bg-indigo-200" : ""
-                    }`}
-                  >
-                    <Text
-                      className={`text-base ${selected ? "font-semibold text-indigo-600" : darkMode ? "text-gray-300" : "text-gray-900"}`}
+            {loading ? (
+              <View className="py-10 justify-center items-center">
+                <ActivityIndicator size={35} color={darkMode ? "#9CA3AF" : "#6B7280"} />
+              </View>
+            ) : (
+              <FlatList
+                data={filteredItems}
+                keyExtractor={(i) => i.value.toString()}
+                keyboardShouldPersistTaps="handled"
+                ListEmptyComponent={() => (
+                  <Text className={`text-center py-4 ${emptyTextColor}`}>{emptyText}</Text>
+                )}
+                renderItem={({ item }) => {
+                  const selected = isSelected(item);
+                  return (
+                    <TouchableOpacity
+                      onPress={() => toggleItem(item)}
+                      className={`flex-row justify-between items-center py-3 px-3 border-b ${darkMode ? "border-gray-700" : "border-gray-100"} ${selected ? "bg-indigo-200" : ""}`}
                     >
-                      {item.label}
-                    </Text>
-                    {selected && <Ionicons name="checkmark" size={18} color="#4F46E5" />}
-                  </TouchableOpacity>
-                );
-              }}
-            />
+                      <Text className={`text-base ${selected ? "font-semibold text-indigo-600" : darkMode ? "text-gray-300" : "text-gray-900"}`}>
+                        {item.label}
+                      </Text>
+                      {selected && <Ionicons name="checkmark" size={18} color="#4F46E5" />}
+                    </TouchableOpacity>
+                  );
+                }}
+              />
+            )}
           </Animated.View>
         </Modal>
       )}

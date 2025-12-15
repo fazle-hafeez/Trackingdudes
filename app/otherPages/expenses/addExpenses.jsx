@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { View, TouchableOpacity, Image, ScrollView, Platform, Text, ActivityIndicator } from "react-native";
+import React, { useState, useContext, useEffect } from "react";
+import { View, TouchableOpacity, Image, ScrollView, Platform } from "react-native";
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -11,79 +11,167 @@ import Button from "../../../src/components/Button";
 import { useTheme } from "../../../src/context/ThemeProvider";
 import Select from "../../../src/components/Select";
 import { useApi } from "../../../src/hooks/useApi";
-import Tabs from "../../../src/components/Tabs";
+import { OfflineContext } from "../../../src/offline/OfflineProvider";
 
 const AddExpenses = () => {
     const { darkMode } = useTheme();
+    const { isConnected } = useContext(OfflineContext);
     const { get } = useApi();
-    
+
     const [receipt, setReceipt] = useState(null);
     const [date, setDate] = useState(new Date());
     const [showDatePicker, setShowDatePicker] = useState(false);
-    const [amount, setAmount] = useState("");
-    const [category, setCategory] = useState("");
-    const [vendor, setVendor] = useState("");
-    const [memo, setMemo] = useState("");
-    const [amountError, setAmountError] = useState("");
-    const [categoryError, setCategoryError] = useState("");
-    const [vendorError, setVendorError] = useState("");
 
-    // --- PROJECT SELECT STATES ---
+    const [formData, setFormData] = useState({
+        amount: "",
+        category: "",
+        vendor: "",
+        paymentType: "",
+        memo: "",
+        project: ""
+    });
+
+    const [formErrors, setFormErrors] = useState({
+        amount: "",
+        category: "",
+        vendor: "",
+        paymentType: "",
+        project: ""
+    });
+
+    // --- Select States ---
     const [projectItems, setProjectItems] = useState([]);
     const [projectLoading, setProjectLoading] = useState(false);
-    const [selectedProject, setSelectedProject] = useState(null);
 
-    // Pick Image
+    const [categoryItems, setCategoryItems] = useState([]);
+    const [categoryLoading, setCategoryLoading] = useState(false);
+
+    const [vendorItems, setVendorItems] = useState([]);
+    const [vendorLoading, setVendorLoading] = useState(false);
+
+    const [paymentItems, setPaymentItems] = useState([]);
+    const [paymentLoading, setPaymentLoading] = useState(false);
+
+    const [selectedProject, setSelectedProject] = useState(null);
+    const [selectedCategory, setSelectedCategory] = useState(null);
+    const [selectedVendor, setSelectedVendor] = useState(null);
+    const [selectedPayment, setSelectedPayment] = useState(null);
+
+    // --- Pick Image ---
     const pickImage = async () => {
         const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (!permission.granted) {
             alert("Permission is required to select images.");
             return;
         }
-
         const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            mediaTypes: ImagePicker.Images,
             quality: 0.7,
             allowsEditing: true
         });
-
-        if (!result.canceled) {
-            setReceipt(result.assets[0].uri);
-        }
+        if (!result.canceled) setReceipt(result.assets[0].uri);
     };
 
-    // Handle Date
+    // --- Date Handler ---
     const handleDateChange = (event, selectedDate) => {
         setShowDatePicker(Platform.OS === "ios");
         if (selectedDate) setDate(selectedDate);
     };
 
-    // Fetch Projects on Select Open
-    const fetchProjects = async () => {
-        if (projectItems.length > 0) return; // already fetched
-        setProjectLoading(true);
-        try {
-            const url = `my-projects/show-in?destination=expenses`;
-            const response = await get(url, { useBearerAuth: true });
-            if (response.status === "success") {
-                const formatted = response.data.map(p => ({ label: p.project, value: p.project }));
-                setProjectItems(formatted);
-            } else {
-                setProjectItems([]);
-            }
-        } catch (error) {
-            console.log("Project fetch error:", error);
-            setProjectItems([]);
-        } finally {
-            setProjectLoading(false);
+    // --- Fetch Select Items ---
+    const DESTINATION_MAP = {
+        expenses: {
+            items: projectItems,
+            setItems: setProjectItems,
+            setLoading: setProjectLoading,
+            label: i => i.project || i.name
+        },
+        categories: {
+            items: categoryItems,
+            setItems: setCategoryItems,
+            setLoading: setCategoryLoading,
+            label: i => i.name
+        },
+        vendors: {
+            items: vendorItems,
+            setItems: setVendorItems,
+            setLoading: setVendorLoading,
+            label: i => i.name
+        },
+        "payment-types": {
+            items: paymentItems,
+            setItems: setPaymentItems,
+            setLoading: setPaymentLoading,
+            label: i => i.name
         }
     };
 
-    // Submit Form
+
+    const fetchItems = async (destination) => {
+        const config = DESTINATION_MAP[destination];
+        if (!config) return;
+
+        if (config.items.length > 0) return; // ✅ cache hit
+
+        config.setLoading(true);
+
+        try {
+            const response = await get(
+                `my-projects/show-in?destination=${destination}`,
+                { useBearerAuth: true }
+            );
+
+            if (response?.status === "success") {
+                config.setItems(
+                    response.data.map(i => ({
+                        label: config.label(i),
+                        value: config.label(i)
+                    }))
+                );
+            }
+        } catch (e) {
+            console.log(destination, e);
+            config.setItems([]);
+        } finally {
+            config.setLoading(false);
+        }
+    };
+
+
+    useEffect(() => {
+        let mounted = true;
+
+        const loadAll = async () => {
+            if (!mounted) return;
+
+            await fetchItems("expenses");
+            await fetchItems("categories");
+            await fetchItems("vendors");
+            await fetchItems("payment-types");
+        };
+
+        loadAll();
+
+        //  cleanup MUST be a function
+        return () => {
+            mounted = false;
+        };
+    }, []);
+
+
+    // --- Submit Form ---
     const handleSubmit = () => {
-        if (!amount) return setAmountError("Amount is required");
-        if (!category) return setCategoryError("Category is required");
-        if (!vendor) return setVendorError("Vendor is required");
+        let errors = { amount: "", category: "", vendor: "", paymentType: "", project: "" };
+        let hasError = false;
+
+        if (!formData.amount) { errors.amount = "Amount is required"; hasError = true; }
+        if (!selectedCategory) { errors.category = "Category is required"; hasError = true; }
+        if (!selectedVendor) { errors.vendor = "Vendor is required"; hasError = true; }
+        if (!selectedPayment) { errors.paymentType = "Payment type is required"; hasError = true; }
+        if (!selectedProject) { errors.project = "Project is required"; hasError = true; }
+
+        setFormErrors(errors);
+        if (hasError) return;
 
         alert("Expense submitted successfully!");
     };
@@ -95,19 +183,13 @@ const AddExpenses = () => {
             <PageHeader routes="Add Expenses" />
             <ScrollView className="p-3">
 
-                {/* Header */}
-                <ThemedView className="p-4 rounded-lg mb-4" style={{ elevation: 5 }}>
-                    <ThemedText className="text-center text-lg font-medium">Expenses Reports</ThemedText>
-                </ThemedView>
-
                 {/* Receipt */}
                 <ThemedView className={`mb-4 p-4 rounded-lg ${bgColor} border border-gray-300`} style={{ elevation: 5 }}>
                     <TouchableOpacity className="flex-row justify-between items-center" onPress={pickImage}>
                         <View className="flex-row items-center">
                             <Ionicons name="attach-outline" size={24} color={darkMode ? "#fff" : "#1f2937"} />
-                            <Text className={`ml-3 text-base ${darkMode ? "text-gray-300" : "text-gray-700"}`}>Attach Receipt</Text>
+                            <ThemedText className="ml-3 text-base">Attach Receipt</ThemedText>
                         </View>
-
                         {receipt ? (
                             <Image source={{ uri: receipt }} style={{ width: 50, height: 40, borderRadius: 8 }} />
                         ) : (
@@ -131,43 +213,77 @@ const AddExpenses = () => {
                 {/* Amount */}
                 <ThemedView className={`mb-4 p-4 rounded-lg ${bgColor} border border-gray-300`} style={{ elevation: 5 }}>
                     <ThemedText className="mb-1 text-base">Amount:</ThemedText>
-                    <Input value={amount} onchange={setAmount} placeholder="Amount" keyboardType="numeric" inputError={amountError} setInputError={setAmountError} />
+                    <Input
+                        value={formData.amount}
+                        onchange={(val) => setFormData({ ...formData, amount: val })}
+                        placeholder="Amount"
+                        keyboardType="numeric"
+                        inputError={formErrors.amount}
+                        setInputError={(err) => setFormErrors({ ...formErrors, amount: err })}
+                    />
                 </ThemedView>
 
-                {/* Category */}
-                <ThemedView className={`mb-4 p-4 rounded-lg ${bgColor} border border-gray-300`} style={{ elevation: 5 }}>
-                    <ThemedText className="mb-1 text-base">Category:</ThemedText>
-                    <Input value={category} onchange={setCategory} placeholder="Category" inputError={categoryError} setInputError={setCategoryError} />
-                </ThemedView>
-
-                {/* Vendor */}
-                <ThemedView className={`mb-4 p-4 rounded-lg ${bgColor} border border-gray-300`} style={{ elevation: 5 }}>
-                    <ThemedText className="mb-1 text-base">Vendor:</ThemedText>
-                    <Input value={vendor} onchange={setVendor} placeholder="Vendor" inputError={vendorError} setInputError={setVendorError} />
-                </ThemedView>
-
-                {/* PROJECT SELECT */}
-                <ThemedView className={`mb-4 p-4 rounded-lg ${bgColor} border border-gray-300`} style={{ elevation: 5 }}>
-                    <ThemedText className="mb-1 text-base">Select your project:</ThemedText>
-
+                {/* Select Fields */}
+                <ThemedView className={`mb-4 p-4 rounded-lg ${bgColor} border border-gray-300`}>
+                    <ThemedText className="mb-1 text-base">Project:</ThemedText>
                     <Select
                         items={projectItems}
                         value={selectedProject}
                         onChange={setSelectedProject}
                         placeholder="Choose project"
                         loading={projectLoading}
-                        onOpen={fetchProjects}   // 🔹 Lazy fetch
+                    />
+                </ThemedView>
+
+                <ThemedView className={`mb-4 p-4 rounded-lg ${bgColor} border border-gray-300`}>
+                    <ThemedText className="mb-1 text-base">Category:</ThemedText>
+                    <Select
+                        items={categoryItems}
+                        value={selectedCategory}
+                        onChange={setSelectedCategory}
+                        placeholder="Choose category"
+                        loading={categoryLoading}
+
+                    />
+                </ThemedView>
+
+                <ThemedView className={`mb-4 p-4 rounded-lg ${bgColor} border border-gray-300`}>
+                    <ThemedText className="mb-1 text-base">Vendor:</ThemedText>
+                    <Select
+                        items={vendorItems}
+                        value={selectedVendor}
+                        onChange={setSelectedVendor}
+                        placeholder="Choose vendor"
+                        loading={vendorLoading}
+
+                    />
+                </ThemedView>
+
+                <ThemedView className={`mb-4 p-4 rounded-lg ${bgColor} border border-gray-300`}>
+                    <ThemedText className="mb-1 text-base">Payment Type:</ThemedText>
+                    <Select
+                        items={paymentItems}
+                        value={selectedPayment}
+                        onChange={setSelectedPayment}
+                        placeholder="Choose payment type"
+                        loading={paymentLoading}
+
                     />
                 </ThemedView>
 
                 {/* Memo */}
-                <ThemedView className={`mb-2 p-4 rounded-lg ${bgColor} border border-gray-300`} style={{ elevation: 5 }}>
+                <ThemedView className={`mb-2 p-4 rounded-lg ${bgColor} border border-gray-300`}>
                     <ThemedText className="mb-1 text-base">Memo:</ThemedText>
-                    <Input value={memo} onchange={setMemo} placeholder="Memo" multiline />
+                    <Input
+                        value={formData.memo}
+                        onchange={(val) => setFormData({ ...formData, memo: val })}
+                        placeholder="Memo"
+                        multiline
+                    />
                 </ThemedView>
 
                 {/* Submit */}
-                <View className="mb-6" style={{ elevation: 5 }}>
+                <View className="mb-6">
                     <Button title="Submit" onClickEvent={handleSubmit} />
                 </View>
 

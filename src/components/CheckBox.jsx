@@ -2,7 +2,7 @@
 import Checkbox from "expo-checkbox";
 import React from "react";
 
-const CheckBox = ({ value, onClick, color, dimColor = false }) => {
+const CheckBox = ({ value, onClick, color, dimColor = false,className }) => {
   const activeColor = dimColor ? "#9ca3af" : (color || "#2563eb");
 
   return (
@@ -10,6 +10,7 @@ const CheckBox = ({ value, onClick, color, dimColor = false }) => {
       value={value}
       onValueChange={onClick}
       color={value ? activeColor : undefined}
+      className={className}
       style={{
         borderWidth: 2,
         borderColor: value ? activeColor : "#9ca3af",

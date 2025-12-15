@@ -2,7 +2,7 @@ import { View,TouchableOpacity,Text,} from "react-native"
 import { useTheme } from "../context/ThemeProvider";
 const Button = (props) => {
     const {darkMode } = useTheme()
-    const finaldarkmodeprocess = darkMode ? 'border border-gray-500 ' : 'bg-blue-700'
+    const finaldarkmodeprocess = darkMode ? 'border border-gray-700 ' : 'bg-blue-700'
     const darkmodeColor = darkMode ? 'text-gray-400' : 'text-white'
     return (
         <View>

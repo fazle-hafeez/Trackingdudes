@@ -5,7 +5,7 @@ import { useTheme } from "../context/ThemeProvider";
 
 const Tabs = ({ tabs = [], activeTab, setActiveTab }) => {
   // Dynamic padding based on number of tabs
-  const containerPadding = tabs.length === 2 ? "px-12" : "";
+  const containerPadding = tabs.length === 2 ? "px-12" : tabs.length === 3 ? "px-8" : "";
   const { darkMode } = useTheme();
 
   return (

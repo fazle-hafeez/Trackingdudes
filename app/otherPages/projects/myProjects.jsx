@@ -12,6 +12,7 @@ import { useAuth } from "../../../src/context/UseAuth";
 import { readCache, storeCache } from "../../../src/offline/cache";
 import { OfflineContext } from "../../../src/offline/OfflineProvider";
 import { useTheme } from "../../../src/context/ThemeProvider";
+import { normalizeStatus, mergePendingAndNormalize } from "../../../src/helper";
 
 //------- Components-------
 import TickCrossIndicator from '../../../src/components/TickCrossIndicator';
@@ -54,25 +55,6 @@ const MyProjects = () => {
 
     // Track pending offline updates (project id -> status string OR true)
     const [pendingUpdates, setPendingUpdates] = useState({});
-
-    // ---------- helpers ----------
-    const normalizeStatus = (value) => {
-        if (!value) return null;
-        if (typeof value === "string") return value.toLowerCase();
-        if (typeof value === "object" && value.status) return String(value.status).toLowerCase();
-        return null;
-    };
-
-
-    const mergePendingAndNormalize = (obj = {}) => {
-        const out = {};
-        Object.keys(obj).forEach(k => {
-            const v = obj[k];
-            const n = normalizeStatus(v);
-            if (n) out[k] = n;
-        });
-        return out;
-    };
 
     // -------------------- Project Count Logic (NEW) --------------------
     useEffect(() => {
@@ -290,11 +272,25 @@ const MyProjects = () => {
         });
     };
 
-    const toggleProjectSelect = (id) => {
-        setSelectedProjects(prev =>
-            prev.includes(id) ? prev.filter(vid => vid !== id) : [...prev, id]
-        );
-    };
+
+
+    const toggleProjectSelect = (ids) => {
+        setSelectedProjects(prev => {
+            let updated;
+            if (prev.includes(ids)) {
+                updated = prev.filter((id) => !id == ids)
+            }
+            else {
+                updated = [...prev, ids]
+            }
+
+            const filteredIds = filteredProjects
+                .map(item => item.id).filter(Boolean);
+            setSelectAll(updated.length === filteredIds.length)
+            return updated
+        })
+
+    }
 
     const handleCancel = () => {
         setSelectionMode(false);
@@ -457,7 +453,7 @@ const MyProjects = () => {
                 const cachedWrap = await readCache(CACHE_KEY) || { data: [] };
                 const cachedList = Array.isArray(cachedWrap.data) ? cachedWrap.data : [];
                 const updatedCache = cachedList.filter(v => !selectedIds.includes(v.id));
-                await storeCache(CACHE_KEY, { data: updatedCache, timestamp: Date.now() });
+                await storeCache(CACHE_KEY, { data: updatedCache });
                 await storeCache("recordDeleted", true);
                 showModal(res.data || "Projects deleted successfully.", "success");
                 handleCancel();
@@ -473,9 +469,13 @@ const MyProjects = () => {
         }
     };
 
-    const filteredProjects = projects.filter((item) =>
-        item?.project?.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    // filter throught input =========
+    const filteredProjects = React.useMemo(() => {
+        return projects.filter((item) =>
+            item?.project?.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+    }, [projects, searchQuery])
+
 
     // -------------------- RENDER ITEM --------------------
     const renderProject = ({ item }) => {
@@ -506,7 +506,7 @@ const MyProjects = () => {
             >
                 <ThemedView className={` rounded-md shadow-sm p-4 ${isPending ? "border-2 border-yellow-400 bg-yellow-50" : ""}`}
                     style={{ elevation: 5 }}>
-                    <View className={` ${darkMode ? 'border-gray-700' : 'border-gray-400'} 
+                    <View className={` ${darkMode ? 'border-gray-700' : 'border-orange-300'} 
                       flex-row items-center border-b  pb-2 mb-2`}>
                         <View className="flex-row items-center flex-1">
                             {selectionMode && (
@@ -633,7 +633,12 @@ const MyProjects = () => {
 
             {selectionMode && (
                 <View className="absolute bottom-0 left-0 right-0 ">
-                    <BottomActionBar activeTab={activeTab} toggleStatus={toggleProjectStatus} handleCancel={handleCancel} handleDelete={deleteProjects} />
+                    <BottomActionBar
+                        activeTab={activeTab}
+                        toggleStatus={toggleProjectStatus}
+                        handleCancel={handleCancel}
+                        handleDelete={deleteProjects}
+                    />
                 </View>
             )}
 
