@@ -184,7 +184,7 @@ const AddExpenses = () => {
             <ScrollView className="p-3">
 
                 {/* Receipt */}
-                <ThemedView className={`mb-4 p-4 rounded-lg ${bgColor} border border-gray-300`} style={{ elevation: 5 }}>
+                <ThemedView className={`mb-4 p-4 rounded-lg ${bgColor} border border-gray-300`} style={{ elevation: 3 }}>
                     <TouchableOpacity className="flex-row justify-between items-center" onPress={pickImage}>
                         <View className="flex-row items-center">
                             <Ionicons name="attach-outline" size={24} color={darkMode ? "#fff" : "#1f2937"} />
@@ -193,13 +193,13 @@ const AddExpenses = () => {
                         {receipt ? (
                             <Image source={{ uri: receipt }} style={{ width: 50, height: 40, borderRadius: 8 }} />
                         ) : (
-                            <Ionicons name="image-outline" size={26} color={darkMode ? "#aaa" : "#9ca3af"} />
+                            <Ionicons name="image-outline" size={26} color={darkMode ? "#aaa" : "#1f2937"} />
                         )}
                     </TouchableOpacity>
                 </ThemedView>
 
                 {/* Date */}
-                <ThemedView className={`mb-4 p-4 rounded-lg ${bgColor} border border-gray-300`} style={{ elevation: 5 }}>
+                <ThemedView className={`mb-4 p-4 rounded-lg ${bgColor} border border-gray-300`} style={{ elevation: 3 }}>
                     <ThemedText className="mb-1 text-base">Date of purchase:</ThemedText>
                     <TouchableOpacity className="flex-row justify-between items-center" onPress={() => setShowDatePicker(true)}>
                         <Input value={date.toDateString()} onchange={() => { }} placeholder="Date of Purchase" inputError="" />
@@ -211,7 +211,7 @@ const AddExpenses = () => {
                 </ThemedView>
 
                 {/* Amount */}
-                <ThemedView className={`mb-4 p-4 rounded-lg ${bgColor} border border-gray-300`} style={{ elevation: 5 }}>
+                <ThemedView className={`mb-4 p-4 rounded-lg ${bgColor} border border-gray-300`} style={{ elevation: 3 }}>
                     <ThemedText className="mb-1 text-base">Amount:</ThemedText>
                     <Input
                         value={formData.amount}
@@ -224,7 +224,8 @@ const AddExpenses = () => {
                 </ThemedView>
 
                 {/* Select Fields */}
-                <ThemedView className={`mb-4 p-4 rounded-lg ${bgColor} border border-gray-300`}>
+                <ThemedView className={`mb-4 p-4 rounded-lg ${bgColor} border border-gray-300`}
+                 style={{elevation:3}}>
                     <ThemedText className="mb-1 text-base">Project:</ThemedText>
                     <Select
                         items={projectItems}
@@ -232,10 +233,12 @@ const AddExpenses = () => {
                         onChange={setSelectedProject}
                         placeholder="Choose project"
                         loading={projectLoading}
+                        message="To select a project,just click on it . if the desired project is not in the list.it could be because you might have disabled the project"
                     />
                 </ThemedView>
 
-                <ThemedView className={`mb-4 p-4 rounded-lg ${bgColor} border border-gray-300`}>
+                <ThemedView className={`mb-4 p-4 rounded-lg ${bgColor} border border-gray-300`}
+                 style={{elevation:3}}>
                     <ThemedText className="mb-1 text-base">Category:</ThemedText>
                     <Select
                         items={categoryItems}
@@ -243,11 +246,14 @@ const AddExpenses = () => {
                         onChange={setSelectedCategory}
                         placeholder="Choose category"
                         loading={categoryLoading}
+                        message="To select a project,just click on it . if the desired project is not in the list.it could be because you might have disabled the project"
+
 
                     />
                 </ThemedView>
 
-                <ThemedView className={`mb-4 p-4 rounded-lg ${bgColor} border border-gray-300`}>
+                <ThemedView className={`mb-4 p-4 rounded-lg ${bgColor} border border-gray-300`}
+                 style={{elevation:3}}>
                     <ThemedText className="mb-1 text-base">Vendor:</ThemedText>
                     <Select
                         items={vendorItems}
@@ -255,11 +261,13 @@ const AddExpenses = () => {
                         onChange={setSelectedVendor}
                         placeholder="Choose vendor"
                         loading={vendorLoading}
+                        message="To select a project,just click on it . if the desired project is not in the list.it could be because you might have disabled the project"
 
                     />
                 </ThemedView>
 
-                <ThemedView className={`mb-4 p-4 rounded-lg ${bgColor} border border-gray-300`}>
+                <ThemedView className={`mb-4 p-4 rounded-lg ${bgColor} border border-gray-300`}
+                 style={{elevation:3}}>
                     <ThemedText className="mb-1 text-base">Payment Type:</ThemedText>
                     <Select
                         items={paymentItems}
@@ -267,12 +275,14 @@ const AddExpenses = () => {
                         onChange={setSelectedPayment}
                         placeholder="Choose payment type"
                         loading={paymentLoading}
+                        message="To select a project,just click on it . if the desired project is not in the list.it could be because you might have disabled the project"
 
                     />
                 </ThemedView>
 
                 {/* Memo */}
-                <ThemedView className={`mb-2 p-4 rounded-lg ${bgColor} border border-gray-300`}>
+                <ThemedView className={`mb-2 p-4 rounded-lg ${bgColor} border border-gray-300`}
+                 style={{elevation:3}}>
                     <ThemedText className="mb-1 text-base">Memo:</ThemedText>
                     <Input
                         value={formData.memo}

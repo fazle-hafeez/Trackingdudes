@@ -76,7 +76,7 @@ export default function Dashboard() {
             icon={
               <MaterialIcons
                 name="access-time"
-                size={38}
+                size={40}
                 color={darkMode ? "lightblue" : "blue"}
               />
             }
@@ -115,7 +115,7 @@ export default function Dashboard() {
             icon={
               <FontAwesome5
                 name="car"
-                size={38}
+                size={40}
                 color={darkMode ? "lightblue" : "blue"}
               />
             }
@@ -194,8 +194,8 @@ export default function Dashboard() {
 
 const Section = ({ title, children, darkMode }) => (
   <View
-    className={`m-4 rounded-xl p-4 ${darkMode ? 'border border-gray-700' : ''}`}
-    style={{ backgroundColor: darkMode ? "#121212" : "#fff"}}
+    className={`m-3 rounded-xl p-4  ${darkMode ? 'border border-gray-700' : ''}`}
+    style={{ backgroundColor: darkMode ? "#121212" : "white", elevation:4}}
   >
     <Text
       className={`text-2xl font-medium border-b pb-2 mb-3 

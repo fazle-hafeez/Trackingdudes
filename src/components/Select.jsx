@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, Modal, FlatList, Animated, Easing, Dimens
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../context/ThemeProvider";
 import Input from "./Input";
+import { ThemedText } from "./ThemedColor";
 
 const { height } = Dimensions.get("window");
 
@@ -17,6 +18,7 @@ const Select = ({
   disabled = false,
   modalTitle = "Choose",
   emptyText = "No items found",
+  message
 }) => {
   const { darkMode } = useTheme();
   const [open, setOpen] = useState(false);
@@ -41,6 +43,7 @@ const Select = ({
     onChange(item.value);
     closeModal();
   };
+  
 
   const selectedLabel = () => {
     const sel = items.find((i) => i.value === value);
@@ -71,22 +74,22 @@ const Select = ({
       ? "border-gray-300 opacity-60"
       : darkMode
         ? "border-gray-700"
-        : "border-gray-400";
+        : "border-['#ccc']";
 
   const textColor = selectedLabel() === placeholder
     ? darkMode
       ? "text-gray-400"
-      : "text-gray-400"
+      : "text-['#646060ff']"
     : darkMode
       ? "text-gray-400"
-      : "text-gray-900";
+      : "text-['#646060ff']";
 
   const modalBg = darkMode ? "#1f2937" : "white";
   const modalText = darkMode ? "text-gray-300" : "text-gray-900";
   const emptyTextColor = darkMode ? "text-gray-500" : "text-gray-500";
 
   return (
-    <View className="">
+    <View className="" >
       {/* Select Control */}
       <TouchableOpacity
         activeOpacity={0.8}
@@ -136,10 +139,10 @@ const Select = ({
             {/* Search Input - show only if items exist */}
             {items.length > 0 && (
               <Input
-              className={"my-2"}
+                className={"my-2"}
                 placeholder="Search..."
                 value={searchQuery}
-                onChange={setSearchQuery}
+                onchange={setSearchQuery}
               />
             )}
 
@@ -171,6 +174,9 @@ const Select = ({
                   );
                 }}
               />
+            )}
+            {message && (
+              <ThemedText color={"#646060ff"} className="mt-3 mb-2 text-lg ">{message}</ThemedText>
             )}
           </Animated.View>
         </Modal>

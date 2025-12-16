@@ -22,7 +22,7 @@ const Expenses = () => {
     const { isConnected } = useContext(OfflineContext)
     const timeFilters = ["this-week", "prev-week", "this-month", "others"];
     const { darkMode } = useTheme();
-    const [activeTimeFilter, setActiveTimeFilter] = useState("this-week");
+    const [activeTab, setActiveTab] = useState("this-week");
     const [searchQuery, setSearchQuery] = useState("");
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
@@ -125,7 +125,7 @@ const Expenses = () => {
                 updated = [...prev, id];
             }
 
-            
+
             const filteredIds = filteredExpenses
                 .map(item => item.id)
                 .filter(Boolean);
@@ -143,6 +143,28 @@ const Expenses = () => {
         setSelectedExpenses([])
     }
 
+    useEffect(() => {
+        if (activeTab === "this-week") {
+            console.log("active tab is this-week");
+                
+        }
+
+        if (activeTab === "prev-week") {
+            console.log("active tab is prev-week");
+                
+        }
+
+        if (activeTab === "this-month") {
+            console.log("active tab is this-month");
+                
+        }
+
+        if (activeTab === "others") {
+            console.log("active tab is others");
+                
+        }
+
+    }, [activeTab])
     // filter item throught input 
 
     const filteredExpenses = useMemo(() => {
@@ -257,13 +279,13 @@ const Expenses = () => {
 
     return (
         <SafeAreacontext className="flex-1">
-            <PageHeader routes="Expenses Tracking"  showMenu={true} 
-              onMenuPress={()=>router.push("/otherPages/expenses/expense")}
+            <PageHeader routes="Expenses Tracking" showMenu={true}
+                onMenuPress={() => router.push("/otherPages/expenses/expense")}
             />
             <View className="px-4 flex-1">
                 {/* Tabs */}
                 <View className="my-4">
-                    <Tabs tabs={timeFilters} activeTab={activeTimeFilter} setActiveTab={setActiveTimeFilter} />
+                    <Tabs tabs={timeFilters} activeTab={activeTab} setActiveTab={setActiveTab} />
                 </View>
 
                 {/* Add Expense Card */}
