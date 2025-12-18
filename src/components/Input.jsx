@@ -105,7 +105,7 @@ const Input = ({
               onFocus();
             }}
             onBlur={() => setFocus(false)}
-            style={[style, { fontSize: 17, color: finalColor }]}
+            style={[style, { fontSize: 16, color: finalColor }]}
           />
         </Animated.View>
       </View>

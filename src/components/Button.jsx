@@ -8,7 +8,7 @@ const Button = (props) => {
         <View>
             <TouchableOpacity
                 onPress={props.onClickEvent}
-                className={` ${finaldarkmodeprocess} rounded-md  p-3 my-3 w-full h-14 mx-auto`}
+                className={` ${finaldarkmodeprocess} ${props.className}  rounded-md mt-3 p-3  w-full h-14 mx-auto`}
                 activeOpacity={0.6}
             
             >

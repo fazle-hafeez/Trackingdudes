@@ -28,7 +28,7 @@ const AddExpenses = () => {
         vendor: "",
         paymentType: "",
         memo: "",
-        project: ""
+        project: "",
     });
 
     const [formErrors, setFormErrors] = useState({
@@ -225,7 +225,7 @@ const AddExpenses = () => {
 
                 {/* Select Fields */}
                 <ThemedView className={`mb-4 p-4 rounded-lg ${bgColor} border border-gray-300`}
-                 style={{elevation:3}}>
+                    style={{ elevation: 3 }}>
                     <ThemedText className="mb-1 text-base">Project:</ThemedText>
                     <Select
                         items={projectItems}
@@ -238,7 +238,7 @@ const AddExpenses = () => {
                 </ThemedView>
 
                 <ThemedView className={`mb-4 p-4 rounded-lg ${bgColor} border border-gray-300`}
-                 style={{elevation:3}}>
+                    style={{ elevation: 3 }}>
                     <ThemedText className="mb-1 text-base">Category:</ThemedText>
                     <Select
                         items={categoryItems}
@@ -246,14 +246,14 @@ const AddExpenses = () => {
                         onChange={setSelectedCategory}
                         placeholder="Choose category"
                         loading={categoryLoading}
-                        message="To select a project,just click on it . if the desired project is not in the list.it could be because you might have disabled the project"
-
+                        message="To select a Category,just click on it . if the desired Category is not in the list.it could be because you might have disabled the project"
 
                     />
+
                 </ThemedView>
 
                 <ThemedView className={`mb-4 p-4 rounded-lg ${bgColor} border border-gray-300`}
-                 style={{elevation:3}}>
+                    style={{ elevation: 3 }}>
                     <ThemedText className="mb-1 text-base">Vendor:</ThemedText>
                     <Select
                         items={vendorItems}
@@ -267,7 +267,7 @@ const AddExpenses = () => {
                 </ThemedView>
 
                 <ThemedView className={`mb-4 p-4 rounded-lg ${bgColor} border border-gray-300`}
-                 style={{elevation:3}}>
+                    style={{ elevation: 3 }}>
                     <ThemedText className="mb-1 text-base">Payment Type:</ThemedText>
                     <Select
                         items={paymentItems}
@@ -282,7 +282,7 @@ const AddExpenses = () => {
 
                 {/* Memo */}
                 <ThemedView className={`mb-2 p-4 rounded-lg ${bgColor} border border-gray-300`}
-                 style={{elevation:3}}>
+                    style={{ elevation: 3 }}>
                     <ThemedText className="mb-1 text-base">Memo:</ThemedText>
                     <Input
                         value={formData.memo}
@@ -301,5 +301,6 @@ const AddExpenses = () => {
         </SafeAreacontext>
     );
 };
+
 
 export default AddExpenses;
