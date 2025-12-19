@@ -13,16 +13,16 @@ const PaymentType = () => {
     const [paymentList, setPaymentList] = useState([]);
 
     const iconOptions = [
-        "cash-outline",
-        "card-outline",
-        "checkmark-circle-outline",
-        "swap-horizontal-outline",
-        "wallet-outline",
-        "logo-paypal",
-        "logo-apple",
-        "logo-google",
-        "logo-bitcoin",
-        "logo-facebook",
+        { icon: "cash-outline", label: "Cash", value: "cash" },
+        { icon: "card-outline", label: " Card", value: "card" },
+        { icon: "wallet-outline", label: "Wallet", value: "wallet" }, 
+        { icon: "logo-paypal", label: "PayPal", value: "paypal" },
+        { icon: "logo-apple", label: "Apple Pay", value: "apple" },
+        { icon: "logo-google", label: "Google Pay", value: "google" },
+        { icon: "logo-bitcoin", label: "Crypto", value: "crypto" },
+        { icon: "cash-outline", label: "Check", value: "check" },
+        { icon: "swap-horizontal-outline", label: "Bank Transfer", value: "bank-transfer" },
+        { icon: "globe-outline", label: "Online", value: "Online" },
     ];
 
     const handleAddPayment = () => {
@@ -44,31 +44,37 @@ const PaymentType = () => {
 
     return (
         <SafeAreacontext className="flex-1">
-            <PageHeader routes="Vendor Tracking" />
+            <PageHeader routes="Adding Payment Method" />
 
             <View className="p-4 flex-1">
                 {/* Card with title */}
                 <ThemedView className="p-4 rounded-lg mb-5" style={{ elevation: 2 }}>
                     <ThemedText color="#374151" className="text-center text-lg font-medium mb-1">
-                        Add Payment Type
+                        Add Payment Method
                     </ThemedText>
                 </ThemedView>
 
                 {/* Payment Name Input */}
                 <ThemedView className="p-4 rounded-lg mb-5" style={{ elevation: 2 }}>
-                    <ThemedText className="mb-1">Payment type:</ThemedText>
-                    <Input placeholder="Type payment name..." value={paymentName} onchange={setPaymentName} />
+                    <ThemedText className="mb-1">Payment method:</ThemedText>
+                    <Input placeholder="Enter a label for the payment method" value={paymentName} onchange={setPaymentName} />
                 </ThemedView>
 
                 {/* Icon Select */}
                 <ThemedView className="p-4 rounded-lg mb-3" style={{ elevation: 2 }}>
                     <ThemedText className="mb-2">Choose an icon:</ThemedText>
                     <Select
-                        items={iconOptions.map(icon => ({ label: icon, value: icon }))}
+                        items={iconOptions.map(icon => ({
+                            label: icon.label,
+                            value: icon.icon, // ye select value ke liye
+                            icon: icon.icon  // ye modal me icon show karne ke liye
+                        }))}
                         value={selectedIcon}
                         onChange={setSelectedIcon}
+                        iconVisibility={true} // 3-column icons ke liye
                         placeholder="Select icon"
                     />
+
                 </ThemedView>
 
                 {/* Bottom display of selected icon & label */}
@@ -83,11 +89,11 @@ const PaymentType = () => {
                 )}
 
                 {/* Submit Button */}
-                <Button title="Add Payment Type" onPress={handleAddPayment} />
+                <Button title="Save" onPress={handleAddPayment} />
 
-                <ThemedText color="#374151" className="mt-4   text-lg">
-                    Please select a single icon that best represents this payment type.
-                    This icon will help you and others quickly identify the payment method in the app.
+                <ThemedText color="#374151" className="mt-4  text-lg">
+                    Please choose an icon that best represents this payment method.
+                    This icon will help you  quickly identify the payment method in the app.
 
                 </ThemedText>
 

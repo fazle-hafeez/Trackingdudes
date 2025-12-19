@@ -196,7 +196,8 @@ const Expense = () => {
                         </View>
                     )}
 
-                    <ThemedView className="w-12 h-12 rounded-full border border-gray-900 items-center justify-center mr-4">
+                    <ThemedView
+                        className="w-12 h-12 rounded-full border border-gray-900 items-center justify-center mr-4">
                         <Ionicons name={item.icon} size={25} color="#2563eb" />
                     </ThemedView>
 
