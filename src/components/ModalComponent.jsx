@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Modal, View, Text, TouchableOpacity, Image, StyleSheet } from "react-native";
 import { playSound } from "../hooks/useSound";
 import { useTheme } from "../context/ThemeProvider";
-import { ThemedView,ThemedText } from "./ThemedColor";
+import { ThemedView, ThemedText } from "./ThemedColor";
 
 const ModalComponent = ({
   visible,
@@ -16,7 +16,6 @@ const ModalComponent = ({
   const { darkMode } = useTheme()
   const [imageSource, setImageSource] = useState(null);
   const [autoHide, setAutoHide] = useState(false);
-  const finalbgColored = darkMode ? " bg-black/90" : " bg-black/85"
   const buttonColored = darkMode ? "border border-gray-500" : "bg-customBlue"
 
   // Handle image and sound based on errorType
@@ -59,8 +58,9 @@ const ModalComponent = ({
   // Render Modal
   return (
     <Modal transparent visible={visible} animationType="fade">
-      <View className={`flex-1 justify-center items-center ${finalbgColored}`}>
-        <ThemedView bgColor={"rgba(255,255,255,0.9)"} className="p-4 rounded-2xl w-11/12 max-w-sm items-center">
+      <View className={`flex-1 justify-center items-center bg-black/85`}>
+        <ThemedView darkBgColor={"#1f2937"} bgColor={"rgba(255,255,255,0.9)"}
+          className="p-4 rounded-2xl w-11/12 max-w-sm items-center">
 
           {/* Icon */}
           <View className="mb-1">

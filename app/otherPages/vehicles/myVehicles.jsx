@@ -25,6 +25,7 @@ import { OfflineContext } from "../../../src/offline/OfflineProvider";
 import { useApi } from "../../../src/hooks/useApi";
 import { useAuth } from "../../../src/context/UseAuth";
 import { normalizeStatus, mergePendingAndNormalize } from "../../../src/helper";
+import usePersistentValue from "../../../src/hooks/usePersistentValue";
 
 
 const CACHE_KEY = "my-vehicles";
@@ -47,42 +48,21 @@ const MyVehicles = () => {
   const [order, setOrder] = useState("asc");
   const [refreshing, setRefreshing] = useState(false);
   const [pendingUpdates, setPendingUpdates] = useState({});
-  const [modalVisible, setModalVisible] = useState(false);
-  const [projectCount, setProjectCount] = useState(null);
   const [fetchProject, setFetchProject] = useState(false)
   const inputBgColor = darkMode ? 'bg-transparent' : 'bg-white'
 
   //--------------------Fetch project in every page -------
 
+  const {
+    modalVisible,
+    storedValue: projectCount,
+    saveValue: setProjectCount,
+    setModalVisible
+  } = usePersistentValue("@my-vehicles");
+
   useEffect(() => {
-    const checkProjectCount = async () => {
-      const value = await AsyncStorage.getItem("@my-vehicles");
-      if (!value) {
-        setModalVisible(true);
-      } else {
-        setProjectCount(parseInt(value));
-        setFetchProject(true)
-        // await AsyncStorage.removeItem("@project_count");
-
-      }
-    };
-    checkProjectCount();
-  }, []);
-
-
-  const handleSelect = async (value) => {
-    try {
-      await AsyncStorage.setItem("@my-vehicles", String(value))
-      setProjectCount(value); // update state
-      setModalVisible(false); // close modal
-      setFetchProject(true)
-      // Optionally, refetch vehicles with new limit
-      await fetchVehicles(1); // first page
-    } catch (err) {
-      console.log("Error handling project count select:", err);
-    }
-  };
-
+    if (projectCount) setFetchProject(true);
+  }, [projectCount]);
   // ---------------- FETCH VEHICLES ----------------
   const fetchVehicles = async (pageNumber = 1, currentOrder = order, shouldUpdateCache = false) => {
     const fetchStatus = activeTab.toLowerCase();
@@ -585,7 +565,11 @@ const MyVehicles = () => {
       <ProjectCountModal
         visible={modalVisible}
         onClose={() => setModalVisible(false)}
-        onSelect={handleSelect}
+        onSelect={(val) => {
+          setProjectCount(val);
+          setFetchProject(true)
+          setModalVisible(false)
+        }}
       />
     </SafeAreacontext>
   );

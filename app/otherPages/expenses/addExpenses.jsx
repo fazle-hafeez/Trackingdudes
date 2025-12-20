@@ -19,7 +19,7 @@ const AddExpenses = () => {
     const { get } = useApi();
 
     const [receipt, setReceipt] = useState(null);
-    const [date, setDate] = useState(new Date());
+    const [date, setDate] = useState(new Date())
     const [showDatePicker, setShowDatePicker] = useState(false);
 
     const [formData, setFormData] = useState({

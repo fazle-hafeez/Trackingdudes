@@ -2,14 +2,20 @@ import React, { useState, useEffect, useContext, useMemo } from "react";
 import { View, FlatList, TouchableOpacity, Text } from "react-native";
 import { FontAwesome6, Ionicons, FontAwesome } from "@expo/vector-icons";
 import { router } from "expo-router";
+
+// Contexts / Hooks
 import { useTheme } from "../../../src/context/ThemeProvider";
 import { useAuth } from "../../../src/context/UseAuth";
 import { OfflineContext } from "../../../src/offline/OfflineProvider";
+import usePersistentValue from "../../../src/hooks/usePersistentValue";
+import { readCache, storeCache } from "../../../src/offline/cache";
+
 
 // Components
 import Tabs from "../../../src/components/Tabs";
 import { ThemedView, ThemedText, SafeAreacontext } from "../../../src/components/ThemedColor";
 import PageHeader from "../../../src/components/PageHeader";
+import ProjectCountModal from "../../../src/components/ProjectCountModal";
 import Input from "../../../src/components/Input";
 import { AddFilterCard, FilterChip } from "../../../src/components/AddEntityCard";
 import LoadingSkeleton from "../../../src/components/LoadingSkeleton";
@@ -18,161 +24,191 @@ import BottomActionBar from "../../../src/components/ActionBar";
 import Pagination from "../../../src/components/Pagination";
 
 const Expenses = () => {
-    const { showModal, hideModal, setGlobalLoading } = useAuth();
-    const { isConnected } = useContext(OfflineContext)
-    const timeFilters = ["this-week", "prev-week", "this-month", "others"];
+
+    //  Custom reusable hook (only change key per page)
+    const {
+        modalVisible,
+        storedValue: fetchExpense,
+        saveValue: setFetchExpense,
+        setModalVisible
+    } = usePersistentValue("@expense-tracking");
+
+    const { showModal, hideModal } = useAuth();
+    const { isConnected } = useContext(OfflineContext);
     const { darkMode } = useTheme();
+
+    const timeFilters = ["this-week", "prev-week", "this-month", "others"];
+    const CURRENT_DATE = "10-13 2025";
+
+    // UI states
     const [activeTab, setActiveTab] = useState("this-week");
     const [searchQuery, setSearchQuery] = useState("");
+
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
+
     const [loading, setLoading] = useState(true);
-    const [selectAll, setSelectAll] = useState(false);
-
-    const CURRENT_DATE = '10-13 2025';
-    const inputBgColor = darkMode ? 'bg-transparent' : 'bg-white';
-
-    const [expensesReports, setExpensesReports] = useState([
-        { id: "1", project: "Mosque Project", amount: "$1200", date: "02/03/2025", vendor: "ABC Supplier", paymentType: "Bank", category: "Construction" },
-
-        { id: "2", project: "School Repair", amount: "$800", date: "05/03/2025", vendor: "XYZ Store", paymentType: "Cash", category: "Maintenance" },
-
-        { id: "3", project: "Hospital Plumbing", amount: "$1500", date: "10/03/2025", vendor: "Khan Traders", paymentType: "Bank", category: "Plumbing" },
-
-        { id: "4", project: "Road Maintenance", amount: "$600", date: "15/03/2025", vendor: "RoadFix Co.", paymentType: "Cash", category: "Infrastructure" },
-
-        { id: "5", project: "Office Supplies", amount: "$300", date: "18/03/2025", vendor: "OfficePro", paymentType: "Online", category: "Stationary" }
-    ]);
-
+    const [showExpensesReport, setShowExpensesReport] = useState(false);
 
     // Selection states
     const [selectionMode, setSelectionMode] = useState(false);
     const [selectedExpenses, setSelectedExpenses] = useState([]);
+    const [selectAll, setSelectAll] = useState(false);
 
-    // Simulate loading
+    const inputBgColor = darkMode ? "bg-transparent" : "bg-white";
+
+    //  Enable expenses table when user selects value
     useEffect(() => {
-        const timer = setTimeout(() => setLoading(false), 1200);
-        return () => clearTimeout(timer);
-    }, []);
+        if (fetchExpense !== null) {
+            setShowExpensesReport(true);
+        }
+    }, [fetchExpense]);
 
-    const deleteExpense = async () => {
+    // Demo data
+
+    // const fetchExpenses = async (pageNumber = 1, shouldUpdateCache = false) => {
+    //     try {
+    //         setLoading(true);
+
+    //         const limit = fetchExpense || 10;
+
+    //         // 1️⃣ API call
+    //         const result = await get(
+    //             `expenses?limit=${limit}&page=${pageNumber}&_t=${isConnected ? Date.now() : 0}`,
+    //             { useBearerAuth: true }
+    //         );
+
+    //         let expensesData = Array.isArray(result?.data) ? result.data : [];
+
+    //         // 2️⃣ Read offlineQueue new expenses
+    //         const offlineQueue = await readCache("offlineQueue") || [];
+    //         const pendingItems = offlineQueue
+    //             .filter(i => i.endpoint?.includes("create-expense") && i.method === "post")
+    //             .map(i => ({ ...i.body, tempId: i.body.tempId || Date.now(), pending: true }));
+
+    //         pendingItems.forEach(p => {
+    //             const exists = expensesData.find(v => v.id === p.id || v.tempId === p.tempId);
+    //             if (!exists) expensesData.push(p);
+    //         });
+
+    //         // 3️⃣ Apply pending edits / deleted
+    //         const cachedPendingRaw = await readCache("pendingUpdates") || {};
+    //         const cachedPending = mergePendingAndNormalize(cachedPendingRaw);
+
+    //         expensesData = expensesData.map(v => {
+    //             const id = v.id || v.tempId;
+    //             const pending = cachedPending[id];
+    //             return pending ? { ...v, pending: true, ...pending } : v;
+    //         });
+
+    //         // 4️⃣ Filter by time tab (optional)
+    //         // For example, this-week / prev-week etc
+    //         // expensesData = expensesData.filter(v => matchesTimeFilter(v.date, activeTab));
+
+    //         setExpensesReports(expensesData);
+
+    //         // 5️⃣ Update cache
+    //         if (expensesData.length > 0 && (isConnected || shouldUpdateCache)) {
+    //             await storeCache("@expenses-cache", { data: expensesData, timestamp: Date.now() });
+    //         }
+
+    //     } catch (err) {
+    //         console.log("Expenses API error:", err);
+
+    //         // fallback to cache
+    //         const cachedWrap = await readCache("@expenses-cache") || { data: [] };
+    //         const cached = Array.isArray(cachedWrap.data) ? cachedWrap.data : [];
+    //         const cachedPendingRaw = await readCache("pendingUpdates") || {};
+    //         const cachedPending = mergePendingAndNormalize(cachedPendingRaw);
+
+    //         const safeCachedData = cached.map(item => {
+    //             const id = item.id || item.tempId;
+    //             const pending = cachedPending[id];
+    //             return pending ? { ...item, pending: true, ...pending } : item;
+    //         });
+
+    //         setExpensesReports(safeCachedData);
+    //     } finally {
+    //         setLoading(false);
+    //     }
+    // };
+
+    const [expensesReports, setExpensesReports] = useState([
+        { id: "1", project: "Mosque Project", amount: "$1200", date: "02/03/2025", vendor: "ABC Supplier", paymentType: "Bank", category: "Construction" },
+        { id: "2", project: "School Repair", amount: "$800", date: "05/03/2025", vendor: "XYZ Store", paymentType: "Cash", category: "Maintenance" },
+        { id: "3", project: "Hospital Plumbing", amount: "$1500", date: "10/03/2025", vendor: "Khan Traders", paymentType: "Bank", category: "Plumbing" },
+        { id: "4", project: "Road Maintenance", amount: "$600", date: "15/03/2025", vendor: "RoadFix Co.", paymentType: "Cash", category: "Infrastructure" },
+        { id: "5", project: "Office Supplies", amount: "$300", date: "18/03/2025", vendor: "OfficePro", paymentType: "Online", category: "Stationary" },
+
+    ]);
+
+    // Simulate loading after selecting count
+    useEffect(() => {
+        if (!showExpensesReport) return;
+        const t = setTimeout(() => setLoading(false), 1200);
+        return () => clearTimeout(t);
+    }, [showExpensesReport]);
+
+    // Delete
+    const deleteExpense = () => {
         if (selectedExpenses.length === 0) {
             showModal("Please select at least one item to perform this action", "error");
             return;
         }
 
         showModal(
-            "You're about to permanently remove the selected item...",
+            "You're about to permanently remove selected item...",
             "warning",
             "Deleting item?",
             [
-                {
-                    label: " Yes,delete",
-                    bgColor: "bg-red-600",
-                    onPress: () => {
-                        hideModal();
-                        confirmDelete(selectedExpenses);
-                    },
-                },
-                {
-                    label: "Cancel",
-                    bgColor: "bg-green-600",
-                    onPress: () => {
-                        hideModal();
-                        handleCancel();
-                    },
-                },
+                { label: "Yes, delete", bgColor: "bg-red-600", onPress: () => { hideModal(); confirmDelete(selectedExpenses); } },
+                { label: "Cancel", bgColor: "bg-green-600", onPress: () => { hideModal(); handleCancel(); } },
             ]
         );
     };
 
     const confirmDelete = (ids) => {
-        const updatedList = expensesReports.filter((item => !ids.includes(item.id)))
-        const recoreds = ids.length
-        if (updatedList) {
-            setExpensesReports(updatedList)
-            showModal(`${recoreds} recored was deleted successfully `, "success")
-        }
+        const updated = expensesReports.filter(item => !ids.includes(item.id));
+        setExpensesReports(updated);
+        showModal(`${ids.length} record(s) deleted successfully`, "success");
         handleCancel();
-
-    }
-
-    // sellect all the items
+    };
 
     const handleSelectAll = () => {
         setSelectAll(prev => {
-            const newValue = !prev;
-            // Filtered projects based on search query
-            const filteredExpenses = expensesReports.filter(item =>
-                item?.project?.toLowerCase().includes(searchQuery.toLowerCase())
-            );
-            // Only select items with a valid ID (not just tempId from offline new record)
-            setSelectedExpenses(newValue ? filteredExpenses.map(v => v.id).filter(Boolean) : []);
-            return newValue;
+            const next = !prev;
+            const validIds = filteredExpenses.map(v => v.id).filter(Boolean);
+            setSelectedExpenses(next ? validIds : []);
+            return next;
         });
     };
-
-    // selects or disselects the items
 
     const toggleSelect = (id) => {
         setSelectedExpenses(prev => {
             let updated;
+            if (prev.includes(id)) updated = prev.filter(v => v !== id);
+            else updated = [...prev, id];
 
-            // add / remove logic
-            if (prev.includes(id)) {
-                updated = prev.filter(v => v !== id);
-            } else {
-                updated = [...prev, id];
-            }
-
-
-            const filteredIds = filteredExpenses
-                .map(item => item.id)
-                .filter(Boolean);
-
-            // 🔹 auto select-all sync
-            setSelectAll(updated.length === filteredIds.length);
+            const allIds = filteredExpenses.map(v => v.id).filter(Boolean);
+            setSelectAll(updated.length === allIds.length);
 
             return updated;
         });
     };
 
-
     const handleCancel = () => {
         setSelectionMode(false);
-        setSelectedExpenses([])
-    }
+        setSelectedExpenses([]);
+    };
 
-    useEffect(() => {
-        if (activeTab === "this-week") {
-            console.log("active tab is this-week");
-                
-        }
-
-        if (activeTab === "prev-week") {
-            console.log("active tab is prev-week");
-                
-        }
-
-        if (activeTab === "this-month") {
-            console.log("active tab is this-month");
-                
-        }
-
-        if (activeTab === "others") {
-            console.log("active tab is others");
-                
-        }
-
-    }, [activeTab])
-    // filter item throught input 
-
+    // Search filter
     const filteredExpenses = useMemo(() => {
-        return expensesReports.filter((item) => (
-            item?.category?.toLocaleLowerCase().includes(searchQuery.toLocaleLowerCase())
-        ))
-    }, [expensesReports, searchQuery])
+        return expensesReports.filter(item =>
+            item.category?.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+    }, [expensesReports, searchQuery]);
 
+    // Single Item Renderer
     const ExpenseItem = ({ item }) => {
         const isSelected = selectedExpenses.includes(item.id);
 
@@ -181,18 +217,12 @@ const Expenses = () => {
                 onLongPress={() => {
                     if (!selectionMode) {
                         setSelectionMode(true);
-                        setSelectedExpenses([]);
-                    }
-                    else {
-                        setSelectedExpenses([item.id])
+                        setSelectedExpenses([item.id]);
                     }
                 }}
                 onPress={() => {
-                    if (selectionMode) {
-                        toggleSelect(item.id);
-                    } else {
-                        router.push({ pathname: "/otherPages/expenses/addExpenses", params: { id: item.id } });
-                    }
+                    if (selectionMode) toggleSelect(item.id);
+                    else router.push({ pathname: "/otherPages/expenses/addExpenses", params: { id: item.id } });
                 }}
                 activeOpacity={0.8}
                 className="mb-4"
@@ -203,14 +233,14 @@ const Expenses = () => {
                 >
 
                     <View className="flex-1">
-                        {/* Row 1 */}
+
                         <View className="flex-row justify-between items-center mb-4">
                             <View className="flex-row items-center">
                                 {selectionMode && (
                                     <CheckBox
                                         value={isSelected}
                                         onClick={() => toggleSelect(item.id)}
-                                        className="mr-3 "
+                                        className="mr-3"
                                     />
                                 )}
                                 <View className="bg-purple-100 p-2 rounded-full mr-1">
@@ -221,12 +251,12 @@ const Expenses = () => {
                                     <ThemedText>{item.date}</ThemedText>
                                 </View>
                             </View>
+
                             <ThemedText>{item.amount}</ThemedText>
                         </View>
 
-                        <View className={`${darkMode ? 'border-gray-500' : 'border-yellow-400'} mb-5 border-b`} />
+                        <View className={`${darkMode ? "border-gray-500" : "border-yellow-400"} mb-5 border-b`} />
 
-                        {/* Row 2 */}
                         <View className="flex-row justify-between mb-3">
                             <View className="flex-row items-center w-[48%]">
                                 <View className="bg-green-100 p-2 rounded-full mr-2">
@@ -249,7 +279,6 @@ const Expenses = () => {
                             </View>
                         </View>
 
-                        {/* Row 3 */}
                         <View className="flex-row justify-between">
                             <View className="flex-row items-center w-[48%]">
                                 <View className="bg-blue-100 p-2 rounded-full mr-2">
@@ -261,6 +290,7 @@ const Expenses = () => {
                                 </View>
                             </View>
                         </View>
+
                     </View>
                 </ThemedView>
             </TouchableOpacity>
@@ -275,23 +305,25 @@ const Expenses = () => {
         </ThemedView>
     );
 
-
-
     return (
         <SafeAreacontext className="flex-1">
-            <PageHeader routes="Expenses Tracking" showMenu={true}
+
+            {/* Header */}
+            <PageHeader
+                routes="Expenses Tracking"
+                showMenu={true}
                 onMenuPress={() => router.push("/otherPages/expenses/expense")}
             />
+
             <View className="px-4 flex-1">
-                {/* Tabs */}
+
                 <View className="my-4">
                     <Tabs tabs={timeFilters} activeTab={activeTab} setActiveTab={setActiveTab} />
                 </View>
 
-                {/* Add Expense Card */}
                 <AddFilterCard
                     title="Add Expenses"
-                    filterItem={() => console.log('filtered')}
+                    filterItem={() => { }}
                     onchange={() => router.push("/otherPages/expenses/addExpenses")}
                 />
 
@@ -300,9 +332,8 @@ const Expenses = () => {
                     <FilterChip label="project: all" />
                 </View>
 
-                {/* Search */}
                 <Input
-                    className={`${inputBgColor} mb-3 `}
+                    className={`${inputBgColor} mb-3`}
                     placeholder="Search expenses..."
                     icon={true}
                     border={false}
@@ -312,12 +343,14 @@ const Expenses = () => {
                 />
 
                 {selectionMode && filteredExpenses.length > 0 && (
-                    <ThemedView className="flex-row items-center mb-3  rounded-lg shadow-sm p-3 px-4">
+                    <ThemedView className="flex-row items-center mb-3 rounded-lg shadow-sm p-3 px-4">
                         <CheckBox value={selectAll} onClick={handleSelectAll} />
-                        <ThemedText color="#1f2937" className="ml-2 text-lg font-medium ">Select All ({selectedExpenses.length})</ThemedText>
+                        <ThemedText className="ml-2 text-lg font-medium">
+                            Select All ({selectedExpenses.length})
+                        </ThemedText>
                     </ThemedView>
                 )}
-                {/* Loading / List / Empty */}
+
                 {loading ? (
                     <LoadingSkeleton count={4} />
                 ) : (
@@ -326,16 +359,14 @@ const Expenses = () => {
                         keyExtractor={(item) => item.id}
                         renderItem={({ item }) => <ExpenseItem item={item} />}
                         ListEmptyComponent={EmptyList}
-                        contentContainerStyle={{
-                            paddingBottom: selectionMode ? 60 : 0
-                        }}
+                        contentContainerStyle={{ paddingBottom: selectionMode ? 60 : 0 }}
                         ListFooterComponent={
                             isConnected && totalPages > 1 ? (
                                 <View className="items-center mb-2">
                                     <Pagination
                                         page={page}
                                         totalPages={totalPages}
-                                        onPageChange={(newPage) => fetchVehicles(newPage)}
+                                        onPageChange={(p) => console.log("change page", p)}
                                     />
                                 </View>
                             ) : null
@@ -344,18 +375,27 @@ const Expenses = () => {
                 )}
             </View>
 
-            {/* Bottom Action Bar for Selection */}
             {selectionMode && (
-                <View className="absolute bottom-0 left-0 right-0 ">
+                <View className="absolute bottom-0 left-0 right-0">
                     <BottomActionBar
                         actionType="editView"
-                        handleView={() => console.log("view function is called")}
+                        handleView={() => { }}
                         handleDelete={deleteExpense}
                         handleCancel={handleCancel}
                     />
-
                 </View>
             )}
+
+            {/* Hook-driven modal */}
+            <ProjectCountModal
+                visible={modalVisible}
+                onClose={() => setModalVisible(false)}
+                onSelect={(value) => {
+                    setFetchExpense(value);
+                    setShowExpensesReport(true);
+                    setModalVisible(false);
+                }}
+            />
         </SafeAreacontext>
     );
 };

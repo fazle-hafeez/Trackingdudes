@@ -1,7 +1,6 @@
-import { View, Text, TouchableOpacity, TextInput, FlatList, RefreshControl, StatusBar } from "react-native";
+import { View, Text, TouchableOpacity, FlatList, RefreshControl, StatusBar } from "react-native";
 import React, { useCallback, useState, useEffect, useContext } from "react";
 import { useFocusEffect } from "@react-navigation/native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { FontAwesome6, Feather, Ionicons, FontAwesome5 } from "@expo/vector-icons";
 import { router } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -13,6 +12,7 @@ import { readCache, storeCache } from "../../../src/offline/cache";
 import { OfflineContext } from "../../../src/offline/OfflineProvider";
 import { useTheme } from "../../../src/context/ThemeProvider";
 import { normalizeStatus, mergePendingAndNormalize } from "../../../src/helper";
+import usePersistentValue from "../../../src/hooks/usePersistentValue";
 
 //------- Components-------
 import TickCrossIndicator from '../../../src/components/TickCrossIndicator';
@@ -27,14 +27,12 @@ import ProjectCountModal from "../../../src/components/ProjectCountModal";
 import { ThemedView, ThemedText, SafeAreacontext } from "../../../src/components/ThemedColor";
 
 const CACHE_KEY = "my-projects";
-const PROJECT_COUNT_ASYNC_KEY = "@my-projects-count"; // 
 
 const MyProjects = () => {
     const { get, del, put } = useApi();
     const { darkMode } = useTheme()
     const { showModal, setGlobalLoading, hideModal } = useAuth();
     const { isConnected } = useContext(OfflineContext);
-
     const tabs = ["Enabled", "Disabled"];
     const [activeTab, setActiveTab] = useState("Enabled");
     const [projects, setProjects] = useState([]);
@@ -49,48 +47,31 @@ const MyProjects = () => {
     const [order, setOrder] = useState("asc");
     const inputBgColor = darkMode ? 'bg-transparent' : 'bg-white'
     // NEW: Project limit states (from MyVehicles)
-    const [projectCount, setProjectCount] = useState(15); // Default to 15 if not set
-    const [modalVisible, setModalVisible] = useState(false);
     const [fetchProject, setFetchProject] = useState(false);
 
     // Track pending offline updates (project id -> status string OR true)
     const [pendingUpdates, setPendingUpdates] = useState({});
 
-    // -------------------- Project Count Logic (NEW) --------------------
-    useEffect(() => {
-        const checkProjectCount = async () => {
-            const value = await AsyncStorage.getItem(PROJECT_COUNT_ASYNC_KEY);
-            if (!value) {
-                setModalVisible(true);
-            } else {
-                setProjectCount(parseInt(value) || 15);
-                setFetchProject(true);
-            }
-        };
-        checkProjectCount();
-    }, []);
-
-    const handleSelect = async (value) => {
-        try {
-            await AsyncStorage.setItem(PROJECT_COUNT_ASYNC_KEY, String(value));
-            setProjectCount(value); // update state
-            setModalVisible(false); // close modal
-            setFetchProject(true);
-            // Optionally, refetch projects with new limit
-            await fetchProjects(1); // first page
-        } catch (err) {
-            console.log("Error handling project count select:", err);
-        }
-    };
+    //  Custom reusable hook (only change key per page)
+    const {
+        modalVisible,
+        storedValue: projectCount,
+        saveValue: setProjectCount,
+        setModalVisible
+    } = usePersistentValue("@my-projects-count");
 
     const parseFlag = (v) => {
         if (v === true || v === "1" || v === 1) return true;
         return false;
     };
 
+    useEffect(() => {
+        if (projectCount) setFetchProject(true);
+    }, [projectCount]);
+
+
     // -------------------- FETCH PROJECTS --------------------
     const fetchProjects = async (pageNumber = 1, currentOrder = order, shouldUpdateCache = false) => {
-        if (!fetchProject) return;
         const fetchStatus = activeTab.toLowerCase();
         try {
             setLoading(true);
@@ -274,23 +255,24 @@ const MyProjects = () => {
 
 
 
-    const toggleProjectSelect = (ids) => {
+    const toggleProjectSelect = (id) => {
         setSelectedProjects(prev => {
             let updated;
-            if (prev.includes(ids)) {
-                updated = prev.filter((id) => !id == ids)
-            }
-            else {
-                updated = [...prev, ids]
+            if (prev.includes(id)) {
+                updated = prev.filter(i => i !== id);
+            } else {
+                updated = [...prev, id];
             }
 
-            const filteredIds = filteredProjects
-                .map(item => item.id).filter(Boolean);
-            setSelectAll(updated.length === filteredIds.length)
-            return updated
-        })
+            const filteredIds = projects
+                .filter(item => item?.project?.toLowerCase().includes(searchQuery.toLowerCase()))
+                .map(item => item.id)
+                .filter(Boolean);
 
-    }
+            setSelectAll(updated.length === filteredIds.length);
+            return updated;
+        });
+    };
 
     const handleCancel = () => {
         setSelectionMode(false);
@@ -645,7 +627,11 @@ const MyProjects = () => {
             <ProjectCountModal
                 visible={modalVisible}
                 onClose={() => setModalVisible(false)}
-                onSelect={handleSelect}
+                onSelect={(val) => {
+                    setProjectCount(val);
+                    setFetchProject(true)
+                    setModalVisible(false)
+                }}
             />
         </SafeAreacontext>
     );
