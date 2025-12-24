@@ -172,6 +172,15 @@ const Expenses = () => {
         setExpensesReports(updated);
         showModal(`${ids.length} record(s) deleted successfully`, "success");
         handleCancel();
+
+        // setExpensesReports(prev => prev.filter(v => !ids.includes(v.id)));
+        // const cachedWrap = await readCache(CACHE_KEY) || { data: [] };
+        // const cachedList = Array.isArray(cachedWrap.data) ? cachedWrap.data : [];
+        // const updatedCache = cachedList.filter(v => !ids.includes(v.id));
+        // await storeCache(CACHE_KEY, { data: updatedCache });
+        // await storeCache("recordDeleted", true);
+        // showModal(res.data || "Projects deleted successfully.", "success");
+        // handleCancel();
     };
 
     const handleSelectAll = () => {
@@ -227,8 +236,14 @@ const Expenses = () => {
                 activeOpacity={0.8}
                 className="mb-4"
             >
-                <ThemedView
-                    className={`rounded-xl p-4 shadow-sm border ${isSelected ? "border-blue-500 bg-blue-50" : "border-gray-200"} flex-row`}
+                <View
+                    className={`rounded-xl p-4 shadow-sm border  flex-row
+                        ${isSelected
+                            ? darkMode ? "border-blue-500  " : "border-blue-500 bg-white"
+                            : item.pending // <-- offline/pending items
+                                ? darkMode ?  "border-gray-700 " : "border-yellow-400 bg-yellow-50"
+                                : darkMode ? "border-gray-700 " : 'bg-white border-gray-100'
+                        }`}
                     style={{ elevation: 5 }}
                 >
 
@@ -292,7 +307,7 @@ const Expenses = () => {
                         </View>
 
                     </View>
-                </ThemedView>
+                </View>
             </TouchableOpacity>
         );
     };
@@ -315,7 +330,7 @@ const Expenses = () => {
                 onMenuPress={() => router.push("/otherPages/expenses/expense")}
             />
 
-            <View className="px-4 flex-1">
+            <View className="px-3 flex-1">
 
                 <View className="my-4">
                     <Tabs tabs={timeFilters} activeTab={activeTab} setActiveTab={setActiveTab} />
@@ -333,7 +348,7 @@ const Expenses = () => {
                 </View>
 
                 <Input
-                    className={`${inputBgColor} mb-3`}
+                    className={`${inputBgColor} mb-3 `}
                     placeholder="Search expenses..."
                     icon={true}
                     border={false}
@@ -352,7 +367,7 @@ const Expenses = () => {
                 )}
 
                 {loading ? (
-                    <LoadingSkeleton count={4} />
+                    <LoadingSkeleton count={4} height={89} />
                 ) : (
                     <FlatList
                         data={filteredExpenses}

@@ -2,9 +2,9 @@
 import React, { useState, useCallback, useContext, useEffect } from "react";
 import { View, Text, TouchableOpacity, FlatList, RefreshControl } from "react-native";
 import { FontAwesome5, FontAwesome6 } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 import { router } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 
 // ---------Components -------------------
 import ProjectCountModal from "../../../src/components/ProjectCountModal";
@@ -490,7 +490,7 @@ const MyVehicles = () => {
     <SafeAreacontext bgColor="#eff6ff" className="flex-1 ">
       <PageHeader routes="My Vehicles" />
 
-      <View className="px-4 flex-1">
+      <View className="px-3 flex-1">
 
         <AddItemCard
           className="my-4"
@@ -519,7 +519,7 @@ const MyVehicles = () => {
         )}
 
         {loading ? (
-          <LoadingSkeleton />
+          <LoadingSkeleton height={98}/>
         ) : filteredVehicles.length > 0 ? (
           <FlatList
             data={filteredVehicles}
@@ -544,6 +544,7 @@ const MyVehicles = () => {
 
         ) : (
           <ThemedView className=" rounded-md shadow-md p-4">
+            <Ionicons name="receipt-outline" size={58} color="#9ca3af"  className="mx-auto my-4"/>
             <ThemedText color="#374151" className="text-lg ">
               You have not saved any vehicles yet. Saving a vehicle allows you to select it from the list of saved vehicles, enabling you to track trips as well as fuel consumption
             </ThemedText>

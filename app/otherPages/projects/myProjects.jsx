@@ -25,6 +25,7 @@ import PageHeader from "../../../src/components/PageHeader";
 import BottomActionBar from "../../../src/components/ActionBar";
 import ProjectCountModal from "../../../src/components/ProjectCountModal";
 import { ThemedView, ThemedText, SafeAreacontext } from "../../../src/components/ThemedColor";
+import { AddItemCard } from "../../../src/components/AddEntityCard";
 
 const CACHE_KEY = "my-projects";
 
@@ -486,7 +487,7 @@ const MyProjects = () => {
                 delayLongPress={500}
                 className="mb-3"
             >
-                <ThemedView className={` rounded-md shadow-sm p-4 ${isPending ? "border-2 border-yellow-400 bg-yellow-50" : ""}`}
+                <ThemedView className={` rounded-lg shadow-sm p-4 ${isPending ? "border-2 border-yellow-400 bg-yellow-50" : ""}`}
                     style={{ elevation: 5 }}>
                     <View className={` ${darkMode ? 'border-gray-700' : 'border-orange-300'} 
                       flex-row items-center border-b  pb-2 mb-2`}>
@@ -549,17 +550,14 @@ const MyProjects = () => {
         <SafeAreacontext bgColor={'#eff6ff'} className="flex-1">
             <PageHeader routes="My Projects" />
 
-            <ThemedView className=" rounded-md shadow-md flex-row justify-between items-center p-4 m-4">
-                <View className="flex-row items-center">
-                    <FontAwesome6 name="file-shield" size={20} color="#198754" />
-                    <Text className="ml-2 text-lg font-medium text-[#198754]">Add New Project</Text>
-                </View>
-                <TouchableOpacity onPress={() => router.push("otherPages/projects/addingProject")}>
-                    <Ionicons name="add-circle" size={26} color="#10b981" />
-                </TouchableOpacity>
-            </ThemedView>
+            <AddItemCard 
+              className="mx-3 my-4"
+              title="Add New Project"  
+              icon={<FontAwesome6 name="file-shield" size={20} color="#10b981" />}   
+              onchange={()=>router.push("otherPages/projects/addingProject")}       
+            />
 
-            <View className="px-4 flex-1">
+            <View className="px-3 flex-1">
                 <Tabs tabs={tabs} activeTab={activeTab} setActiveTab={setActiveTab} />
                 <Input
                     className={`${inputBgColor} my-4 `}
@@ -582,7 +580,7 @@ const MyProjects = () => {
                 )}
 
                 {loading ? (
-                    <LoadingSkeleton />
+                    <LoadingSkeleton  height={99}/>
                 ) : filteredProjects.length > 0 ? (
                     <FlatList
                         data={filteredProjects}
@@ -602,7 +600,8 @@ const MyProjects = () => {
                         }
                     />
                 ) : (
-                    <ThemedView className=" rounded-md shadow-md p-4" style={{ eveltion: 5 }}>
+                    <ThemedView className=" rounded-lg shadow-md p-4" style={{ eveltion: 5 }}>
+                        <Ionicons name="receipt-outline" size={58} color="#9ca3af"  className="mx-auto my-4"/>
                         <ThemedText color={'#374151'} className="text-lg ">
                             You have not saved any projects under the selected status.
                             Saving a project allows you to select it from the list of saved projects.

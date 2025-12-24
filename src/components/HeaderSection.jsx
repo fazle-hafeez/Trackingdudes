@@ -32,9 +32,9 @@ const HeaderSection = () => {
             resizeMode={'cover'}
         >
             <View className={`${darkMode ? 'bg-[#121212]' :'bg-customBlue'} p-4`} >
-                <Text className="text-white text-2xl text-center font-semibold ">
+                <ThemedText color={"#fff"} className="text-white text-2xl text-center font-semibold ">
                     TRACKING DUDES LLC
-                </Text>
+                </ThemedText>
             </View>
         </ImageBackground>
     );

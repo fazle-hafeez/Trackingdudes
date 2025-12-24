@@ -1,15 +1,13 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, TextInput, StatusBar, Platform, } from "react-native";
+import { View, Platform, } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Link, useRouter } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
 import * as SecureStore from 'expo-secure-store';
 import { useLocalSearchParams } from "expo-router";
 
 //Hooks
 import { useApi } from "../../src/hooks/useApi";
 import { useAuth } from "../../src/context/UseAuth";
-import { useTheme } from "../../src/context/ThemeProvider";
 
 //components
 import CheckBox from "../../src/components/CheckBox";
@@ -140,7 +138,7 @@ const Login = () => {
         showModal(result.data || "you are  Login successful!", "success");
         setTimeout(() => {
           router.push("/dashboard/dashboardPage");
-        }, 2500);
+        }, 3000);
       }
       else if (result?.status === "error") {
         if (lastTriedUser === cleanUsername) {
@@ -163,7 +161,7 @@ const Login = () => {
     }
   };
   return (
-    <SafeAreacontext className="flex-1">
+    <SafeAreacontext bgColor={"#fff"} className="flex-1">
       <HeaderSection />
 
       <View className="flex-1 p-3">

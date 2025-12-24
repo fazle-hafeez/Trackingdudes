@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { FlatList, View, TouchableOpacity } from "react-native";
+import { FlatList, View, TouchableOpacity,Text } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { ThemedView, ThemedText, SafeAreacontext } from "../../../src/components/ThemedColor";
 import PageHeader from "../../../src/components/PageHeader";
@@ -8,160 +8,176 @@ import { AddFilterCard } from "../../../src/components/AddEntityCard";
 import Input from "../../../src/components/Input";
 import LoadingSkeleton from "../../../src/components/LoadingSkeleton";
 import BottomActionBar from "../../../src/components/ActionBar";
+import { useFocusEffect } from "@react-navigation/native";
 import CheckBox from "../../../src/components/CheckBox";
 import { useTheme } from "../../../src/context/ThemeProvider";
 import { router } from "expo-router";
+import { useAuth } from "../../../src/context/UseAuth";
+import { readCache, storeCache } from "../../../src/offline/cache";
 
 const Expense = () => {
+    const { showModal, hideModal, setGlobalLoading } = useAuth();
     const { darkMode } = useTheme();
-    const inputBgColor = darkMode ? 'bg-transparent' : 'bg-white';
+
     const tabs = ["vendor", "payment-type", "reporting", "category"];
     const [activeTab, setActiveTab] = useState("vendor");
+
     const [selectAll, setSelectAll] = useState(false);
     const [selectionMode, setSelectionMode] = useState(false);
     const [selectedItems, setSelectedItems] = useState([]);
 
     const [data, setData] = useState([]);
-    const [filterItem, setFilterItem] = useState("")
+    const [filterItem, setFilterItem] = useState("");
     const [loading, setLoading] = useState(false);
 
-    const getVendors = async () => {
-        return new Promise((resolve) => {
-            setTimeout(() => {
-                resolve([
-                    { id: "1", name: "ABC Supplier", icon: "storefront-outline" },
-                    { id: "2", name: "Khan Traders", icon: "business-outline" },
-                    { id: "3", name: "OfficePro", icon: "cube-outline" },
-                ]);
-            }, 600);
-        });
-    };
+    const CACHE_KEY = "expense_cache_data";
 
-    const getPaymentTypes = async () => {
-        return new Promise((resolve) => {
-            setTimeout(() => {
-                resolve([
-                    { id: "1", type: "Cash", icon: "cash-outline" },
-                    { id: "2", type: "Bank Transfer", icon: "business-outline" },
-                    { id: "3", type: "Card Payment", icon: "card-outline" },
-                    { id: "4", type: "Online", icon: "globe-outline" },
-                ]);
-            }, 600);
-        });
+    // STATIC DATA
+    const staticData = {
+        vendor: [
+            { id: "1", label: "ABC Supplier", icon: "storefront-outline" },
+            { id: "2", label: "Khan Traders", icon: "business-outline" },
+            { id: "3", label: "OfficePro", icon: "cube-outline" },
+        ],
+        "payment-type": [
+            { id: "1", label: "Cash", icon: "cash-outline" },
+            { id: "2", label: "Bank Transfer", icon: "business-outline" },
+            { id: "3", label: "Card Payment", icon: "card-outline" },
+            { id: "4", label: "Online", icon: "globe-outline" },
+        ],
+        reporting: [
+            { id: "1", label: "Monthly Expense Report", icon: "calendar-outline" },
+            { id: "2", label: "Yearly Summary", icon: "bar-chart-outline" },
+            { id: "3", label: "Vendor Wise Report", icon: "pie-chart-outline" },
+        ],
+        category: [
+            { id: "1", label: "Office Expense", icon: "briefcase-outline" },
+            { id: "2", label: "Travel Expense", icon: "airplane-outline" },
+            { id: "3", label: "Utility Bills", icon: "flash-outline" },
+        ],
     };
-
-    const getReports = async () => {
-        return new Promise((resolve, reject) => {
-            setTimeout(() => {
-                resolve([
-                    { id: "1", title: "Monthly Expense Report", icon: "calendar-outline" },
-                    { id: "2", title: "Yearly Summary", icon: "bar-chart-outline" },
-                    { id: "3", title: "Vendor Wise Report", icon: "pie-chart-outline" },
-                ]);
-                reject("Something went wrong please try again")
-            }, 600);
-        });
-    };
-
-    const getCategories = async () => {
-        return new Promise((resolve) => {
-            setTimeout(() => {
-                resolve([
-                    { id: "1", name: "Office Expense", icon: "briefcase-outline" },
-                    { id: "2", name: "Travel Expense", icon: "airplane-outline" },
-                    { id: "3", name: "Utility Bills", icon: "flash-outline" },
-                ]);
-            }, 600);
-        });
-    };
-
 
     const removeHyphens = (str = "") =>
         str
             .split("-")
             .map((word, index) =>
-                index === 0
-                    ? word
-                    : word.charAt(0).toUpperCase() + word.slice(1)
+                index === 0 ? word : word.charAt(0).toUpperCase() + word.slice(1)
             )
             .join("");
 
+    const capitalizeFirst = (str = "") => str.charAt(0).toUpperCase() + str.slice(1);
 
-    const capitalizeFirst = (str = "") =>
-        str.charAt(0).toUpperCase() + str.slice(1);
+    const getItemText = (item) => item.name || item.label || item.title || "";
 
-    const getItemText = (item) =>
-        item.name || item.type || item.title || "";
+    const filteredData = data.filter((item) =>
+        getItemText(item).toLowerCase().includes(filterItem.toLowerCase())
+    );
 
+    // LOAD DATA (CACHE + STATIC) AND MERGE OFFLINE RECORDS
+    const loadExpenseData = async () => {
+        setLoading(true);
+        const cached = await readCache(CACHE_KEY);
 
+        const cachedList = cached?.[activeTab] || [];
+        const freshData = staticData[activeTab] || [];
 
-    const filteredData = data.filter(item =>
-        getItemText(item)
-            .toLowerCase()
-            .includes(filterItem.toLowerCase())
+        // Merge cached offline records with static data (avoid duplicates)
+        const merged = [
+            ...cachedList,
+            ...freshData.filter((f) => !cachedList.some((c) => c.id === f.id)),
+        ].map(item => ({
+            ...item,
+            pending: item.pending || false
+        }));
+
+        setData(merged);
+
+        // Update cache with merged data
+        const updatedCache = cached || {};
+        updatedCache[activeTab] = merged;
+        await storeCache(CACHE_KEY, updatedCache);
+
+        setLoading(false);
+    };
+
+    useFocusEffect(
+        React.useCallback(() => {
+            // Reload data when screen comes into focus
+            loadExpenseData();
+        }, [activeTab])
     );
 
 
-    useEffect(() => {
-        setLoading(true);
-
-        if (activeTab === "vendor") {
-            getVendors().then(res => setData(res)).finally(() => setLoading(false));
-        }
-
-        if (activeTab === "payment-type") {
-            getPaymentTypes().then(res => setData(res)).finally(() => setLoading(false));
-        }
-
-        if (activeTab === "reporting") {
-            getReports().then(res => setData(res)).catch(res => setData(res)).finally(() => setLoading(false));
-        }
-
-        if (activeTab === "category") {
-            getCategories().then(res => setData(res)).finally(() => setLoading(false));
-        }
-    }, [activeTab]);
-
-
+    // SELECTION LOGIC
     const toggleSelect = (id) => {
-        setSelectedItems(prev => {
+        setSelectedItems((prev) => {
             let updated;
-
-            if (prev.includes(id)) {
-                updated = prev.filter(v => v !== id);
-            } else {
-                updated = [...prev, id];
-            }
-
-            // 🔹 auto sync Select All
+            if (prev.includes(id)) updated = prev.filter((v) => v !== id);
+            else updated = [...prev, id];
             setSelectAll(updated.length === filteredData.length);
-
             return updated;
         });
     };
 
-
     const handleSelectAll = () => {
-        setSelectAll(prev => {
+        setSelectAll((prev) => {
             const newValue = !prev;
-
-            setSelectedItems(
-                newValue
-                    ? filteredData.map(item => item.id) // sab select
-                    : [] // clear
-            );
-
+            setSelectedItems(newValue ? filteredData.map((item) => item.id) : []);
             return newValue;
         });
     };
-
 
     const handleCancel = () => {
         setSelectionMode(false);
         setSelectedItems([]);
     };
 
+    // DELETE WITH CACHE UPDATE
+    const confirmDelete = async (ids) => {
+        setGlobalLoading(true);
 
+        setData((prev) => prev.filter((item) => !ids.includes(item.id)));
+
+        const cached = (await readCache(CACHE_KEY)) || {};
+        const currentList = cached[activeTab] || [];
+        cached[activeTab] = currentList.filter((item) => !ids.includes(item.id));
+        await storeCache(CACHE_KEY, cached);
+
+        setTimeout(() => {
+            showModal(`${capitalizeFirst(activeTab)} deleted successfully!`, "success");
+            setGlobalLoading(false);
+        }, 500);
+
+        setSelectedItems([]);
+        setSelectionMode(false);
+        setSelectAll(false);
+    };
+
+    const deleteItems = () => {
+        if (selectedItems.length === 0) {
+            showModal("Please select at least one item to delete.", "error");
+            return;
+        }
+
+        showModal(
+            "You're about to permanently remove selected item(s).",
+            "warning",
+            "Delete?",
+            [
+                {
+                    label: "Yes, delete",
+                    bgColor: "bg-red-600",
+                    onPress: () => {
+                        hideModal();
+                        confirmDelete(selectedItems);
+                    },
+                },
+                { label: "Cancel", bgColor: "bg-green-600", onPress: () => hideModal() },
+            ]
+        );
+    };
+
+    // RENDER ITEM WITH OFFLINE PENDING STATUS
     const renderItem = ({ item }) => {
         const isSelected = selectedItems.includes(item.id);
 
@@ -174,70 +190,91 @@ const Expense = () => {
                     }
                 }}
                 onPress={() => {
-                    if (selectionMode) {
-                        toggleSelect(item.id);
-                    } else {
-                        console.log("Normal press (open detail / edit)");
-                    }
+                    if (selectionMode) toggleSelect(item.id);
                 }}
                 activeOpacity={0.8}
             >
-                <ThemedView
-                    className={`flex-row items-center p-4 mt-4 rounded-xl border
-          ${isSelected ? "border-blue-500 bg-blue-50" : "border-gray-200"}
-        `}
+                <View
+                    className={` p-4 mt-4 rounded-xl border shadow ${isSelected
+                            ? darkMode ? "border-blue-500  " : "border-blue-500 bg-white"
+                            : item.pending // <-- offline/pending items
+                                ? darkMode ?  "border-gray-700 " : "border-yellow-400 bg-yellow-50"
+                                : darkMode ? "border-gray-700 " : 'bg-white border-gray-100'
+                        }`}
                 >
-                    {selectionMode && (
-                        <View className="mr-3">
-                            <CheckBox
-                                value={isSelected}
-                                onClick={() => toggleSelect(item.id)}
+                    <View className="flex-row items-center">
+                        {selectionMode && (
+                            <View className="mr-3">
+                                <CheckBox value={isSelected} onClick={() => toggleSelect(item.id)} />
+                            </View>
+                        )}
+
+                        <View
+                            className={`w-25 h-25 p-2 rounded-xl border items-center justify-center mr-5 ${darkMode ? "border-gray-700" : "border-gray-400"
+                                }`}
+                        >
+                            <Ionicons
+                                name={item.icon}
+                                size={30}
+                                color={"#2563eb"} // brownish icon for pending
                             />
                         </View>
+
+                        <ThemedText
+                            color={"#646060ff"} // brown text for pending
+                            className="text-lg font-medium"
+                        >
+                            {getItemText(item)}
+                        </ThemedText>
+
+                    </View>
+
+                    {item.pending && (
+                        <Text className="text-yellow-600 mt-3 text-xs font-medium">
+                            {item.id ? "⏳ Status/Update pending sync..." : "⏳ New record pending sync..."}
+                        </Text>
                     )}
-
-                    <ThemedView
-                        className="w-12 h-12 rounded-full border border-gray-900 items-center justify-center mr-4">
-                        <Ionicons name={item.icon} size={25} color="#2563eb" />
-                    </ThemedView>
-
-                    <ThemedText className="text-base font-semibold">
-                        {item.name || item.type || item.title}
-                    </ThemedText>
-                </ThemedView>
+                </View>
             </TouchableOpacity>
         );
     };
 
 
+    const EmptyList = () => (
+        <ThemedView className="items-center justify-center py-10 mt-4 rounded-lg shadow">
+            <Ionicons name="receipt-outline" size={48} color="#9ca3af" />
+            <ThemedText className="mt-4 text-base text-gray-400">
+                No {activeTab} listed yet
+            </ThemedText>
+            <ThemedText className="text-sm text-gray-400 mt-1">
+                Start by adding your first {activeTab}
+            </ThemedText>
+        </ThemedView>
+    );
+
     return (
         <SafeAreacontext bgColor="#eff6ff" className="flex-1">
-            <PageHeader routes="Expense" />
+            <PageHeader routes="Expense Tracking" />
 
-            <View className="p-4">
-
-                <Tabs
-                    className={"mb-4"}
-                    tabs={tabs}
-                    activeTab={activeTab}
-                    setActiveTab={setActiveTab}
-                />
+            <View className="flex-1 px-3 py-4">
+                <Tabs tabs={tabs} activeTab={activeTab} setActiveTab={setActiveTab} className="mb-4" />
 
                 <AddFilterCard
-                    filterItem={() => console.log("filter func is calling")}
                     title={`Add ${capitalizeFirst(activeTab)}`}
-                    onchange={() => router.push(`/otherPages/expenses/${removeHyphens(activeTab)}`)}
+                    filterItem={() => { }}
+                    onchange={() =>
+                        router.push(`/otherPages/expenses/${removeHyphens(activeTab)}`)
+                    }
                 />
 
                 <Input
-                    className={` ${inputBgColor}`}
                     value={filterItem}
                     placeholder="Search items ..."
                     icon={true}
                     border={false}
                     elevation={1}
                     onchange={setFilterItem}
-
+                    className={darkMode ? "bg-transparent" : "bg-white"}
                 />
 
                 {selectionMode && filteredData.length > 0 && (
@@ -250,29 +287,25 @@ const Expense = () => {
                 )}
 
                 {loading ? (
-                    <LoadingSkeleton count={4} />
+                    <View className="mt-2">
+                        <LoadingSkeleton count={4} height={100} />
+                    </View>
                 ) : (
                     <FlatList
                         data={filteredData}
-                        keyExtractor={item => item.id}
+                        keyExtractor={(item) => item.id}
                         renderItem={renderItem}
-                        showsVerticalScrollIndicator={false}
-                        contentContainerStyle={{
-                            paddingBottom: selectionMode ? 70 : 0
-                        }}
+                        ListEmptyComponent={EmptyList}
+                        contentContainerStyle={{ paddingBottom: selectionMode ? 80 : 0 }}
                     />
                 )}
             </View>
 
             {selectionMode && (
                 <View className="absolute bottom-0 left-0 right-0">
-                    <BottomActionBar
-                        handleDelete={() => console.log("delete pressed", selectedItems)}
-                        handleCancel={handleCancel}
-                    />
+                    <BottomActionBar handleDelete={deleteItems} handleCancel={handleCancel} />
                 </View>
             )}
-
         </SafeAreacontext>
     );
 };

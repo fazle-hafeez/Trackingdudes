@@ -28,8 +28,8 @@ export const AddItemCard = ({ icon , title = "", onchange, className }) => {
 
 export const AddFilterCard = ({ title = "", onchange, filterItem }) => {
     return (
-        <ThemedView className="flex-row  items-center justify-between mb-4 py-4 px-4 rounded-lg "
-            style={{ elevation: 1 }}>
+        <ThemedView className="flex-row  items-center shadow-md justify-between mb-4 py-5 px-4 rounded-lg "
+            >
             <View className="flex-row ">
                 {/* <Ionicons name="filter-outline" size={24} color="#3b82f6" onPress={filterItem} /> */}
                 {/* <Fontisto name="filter" size={20} color="#3b82f6" onPress={filterItem} /> */}

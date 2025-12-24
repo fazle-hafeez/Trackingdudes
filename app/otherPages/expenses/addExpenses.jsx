@@ -12,6 +12,9 @@ import { useTheme } from "../../../src/context/ThemeProvider";
 import Select from "../../../src/components/Select";
 import { useApi } from "../../../src/hooks/useApi";
 import { OfflineContext } from "../../../src/offline/OfflineProvider";
+import { readCache, storeCache } from "../../../src/offline/cache";
+
+const CACHE_KEY = "expenses-reporting";
 
 const AddExpenses = () => {
     const { darkMode } = useTheme();
@@ -160,21 +163,79 @@ const AddExpenses = () => {
 
 
     // --- Submit Form ---
-    const handleSubmit = () => {
+     const handleSubmit = async () => {
         let errors = { amount: "", category: "", vendor: "", paymentType: "", project: "" };
         let hasError = false;
 
         if (!formData.amount) { errors.amount = "Amount is required"; hasError = true; }
-        if (!selectedCategory) { errors.category = "Category is required"; hasError = true; }
-        if (!selectedVendor) { errors.vendor = "Vendor is required"; hasError = true; }
-        if (!selectedPayment) { errors.paymentType = "Payment type is required"; hasError = true; }
-        if (!selectedProject) { errors.project = "Project is required"; hasError = true; }
+        // if (!selectedCategory) { errors.category = "Category is required"; hasError = true; }
+        // if (!selectedVendor) { errors.vendor = "Vendor is required"; hasError = true; }
+        // if (!selectedPayment) { errors.paymentType = "Payment type is required"; hasError = true; }
+        // if (!selectedProject) { errors.project = "Project is required"; hasError = true; }
 
         setFormErrors(errors);
         if (hasError) return;
 
-        alert("Expense submitted successfully!");
+        const newExpense = {
+            id: Date.now().toString(),
+            amount: formData.amount,
+            category: selectedCategory,
+            vendor: selectedVendor,
+            paymentType: selectedPayment,
+            project: selectedProject,
+            memo: formData.memo,
+            date: date.toISOString(),
+            receipt,
+            pending: true,
+        };
+
+        try {
+            // Read previous cache
+            const cachedWrap = (await readCache(CACHE_KEY)) || {};
+            const prevExpenses = Array.isArray(cachedWrap.expenses) ? cachedWrap.expenses : [];
+
+            // Merge new expense with previous cache
+            cachedWrap.expenses = [...prevExpenses, newExpense];
+            await storeCache(CACHE_KEY, cachedWrap);
+
+            // Attempt online save
+            let isOffline = false;
+            if (isConnected) {
+                try {
+                    await post("/expenses/create", newExpense);
+                    newExpense.pending = false;
+                } catch (err) {
+                    isOffline = true;
+                }
+            } else {
+                isOffline = true;
+            }
+
+            // Update cache with online status
+            cachedWrap.expenses = cachedWrap.expenses.map(exp =>
+                exp.id === newExpense.id ? newExpense : exp
+            );
+            await storeCache(CACHE_KEY, cachedWrap);
+
+            alert(isOffline
+                ? "Expense saved locally. It will sync when online."
+                : "Expense submitted successfully!"
+            );
+
+            // Clear form
+            setFormData({ amount: "", category: "", vendor: "", paymentType: "", project: "", memo: "" });
+            setReceipt(null);
+            setSelectedCategory(null);
+            setSelectedVendor(null);
+            setSelectedProject(null);
+            setSelectedPayment(null);
+
+        } catch (err) {
+            console.error(err);
+            alert("Failed to save expense");
+        }
     };
+
 
     const bgColor = darkMode ? "bg-gray-800" : "bg-white";
 

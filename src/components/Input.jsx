@@ -68,7 +68,7 @@ const Input = ({
   })
 
   return (
-    <View className="">
+    <View className="shadow">
       {/* Shadow wrapper fixes Android/iOS border bug */}
       <View style={{
         shadowColor: focus ? focusColor : '#000',

@@ -194,7 +194,7 @@ export default function Dashboard() {
 
 const Section = ({ title, children, darkMode }) => (
   <View
-    className={`m-3 rounded-xl p-4  ${darkMode ? 'border border-gray-700' : ''}`}
+    className={`m-3 rounded-xl p-4 shadow-md  ${darkMode ? 'border border-gray-700' : ''}`}
     style={{ backgroundColor: darkMode ? "#121212" : "white", elevation:4}}
   >
     <Text

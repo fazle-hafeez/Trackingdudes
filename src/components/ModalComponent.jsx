@@ -1,8 +1,12 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { Modal, View, Text, TouchableOpacity, Image, StyleSheet } from "react-native";
+import React, { useEffect, useState, useRef } from "react";
+import { Modal, View, Text, TouchableOpacity, Image, StyleSheet, StatusBar, Platform, Dimensions } from "react-native";
 import { playSound } from "../hooks/useSound";
 import { useTheme } from "../context/ThemeProvider";
 import { ThemedView, ThemedText } from "./ThemedColor";
+import ConfettiCannon from "react-native-confetti-cannon";
+import * as NavigationBar from "expo-navigation-bar";
+
+const { height, width } = Dimensions.get("window");
 
 const ModalComponent = ({
   visible,
@@ -13,14 +17,42 @@ const ModalComponent = ({
   title,
   autoHideProp,
 }) => {
-  const { darkMode } = useTheme()
+  const { darkMode } = useTheme();
   const [imageSource, setImageSource] = useState(null);
   const [autoHide, setAutoHide] = useState(false);
-  const buttonColored = darkMode ? "border border-gray-500" : "bg-customBlue"
+  const [confettiKey, setConfettiKey] = useState(0);
 
-  // Handle image and sound based on errorType
+  // Refs for both cannons
+  const confettiLeftRef = useRef(null);
+  const confettiRightRef = useRef(null);
+
+  const buttonColored = darkMode ? "border border-gray-500" : "bg-customBlue";
+
+  // Modal Styles Effect
   useEffect(() => {
-    if (!visible) return; // Only play when modal opens
+    if (!visible) return;
+    const ORIGINAL_STATUSBAR_STYLE = darkMode ? "light-content" : "dark-content";
+    const ORIGINAL_STATUSBAR_COLOR = darkMode ? "#121212" : "#00f";
+    const ORIGINAL_NAVBUTTON_STYLE = darkMode ? "light" : "dark";
+
+    try {
+      StatusBar.setBarStyle("light-content", true);
+      if (Platform.OS === "android") StatusBar.setBackgroundColor("rgba(0,0,0,0.85)", true);
+      NavigationBar.setButtonStyleAsync("light");
+    } catch (e) { }
+
+    return () => {
+      try {
+        StatusBar.setBarStyle(ORIGINAL_STATUSBAR_STYLE, true);
+        if (Platform.OS === "android") StatusBar.setBackgroundColor(ORIGINAL_STATUSBAR_COLOR, true);
+        NavigationBar.setButtonStyleAsync(ORIGINAL_NAVBUTTON_STYLE);
+      } catch (e) { }
+    };
+  }, [visible, darkMode]);
+
+  // Main Logic Effect
+  useEffect(() => {
+    if (!visible) return;
 
     let img, hide = false;
 
@@ -33,6 +65,13 @@ const ModalComponent = ({
         img = require("../../assets/images/check-markup.png");
         hide = autoHideProp === undefined ? true : autoHideProp;
         playSound("success");
+
+        // Sync both cannons and fire from bottom
+        setConfettiKey(Date.now());
+        setTimeout(() => {
+          confettiLeftRef.current?.start();
+          confettiRightRef.current?.start();
+        }, 150);
         break;
       case "warning":
         img = null;
@@ -46,26 +85,59 @@ const ModalComponent = ({
     setAutoHide(hide);
   }, [visible, errorType, autoHideProp]);
 
-
-  // Auto-hide logic
+  // Auto Hide Effect
   useEffect(() => {
     if (visible && autoHide) {
-      const timer = setTimeout(onClose, 2000);
+      const timer = setTimeout(onClose, 2500); // 2.5s for better effect view
       return () => clearTimeout(timer);
     }
   }, [visible, autoHide, onClose]);
 
-  // Render Modal
   return (
     <Modal transparent visible={visible} animationType="fade">
-      <View className={`flex-1 justify-center items-center bg-black/85`}>
-        <ThemedView darkBgColor={"#1f2937"} bgColor={"rgba(255,255,255,0.9)"}
-          className="p-4 rounded-2xl w-11/12 max-w-sm items-center">
+      <View className="flex-1 justify-center items-center bg-black/85">
+        
+        {visible && errorType === "success" && (
+          <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 999 }} pointerEvents="none">
+            {/* Bottom Left Blast */}
+            <ConfettiCannon
+              ref={confettiLeftRef}
+              key={"left-" + confettiKey}
+              count={50}
+              origin={{ x: -10, y: height }} // Exact bottom left
+              autoStart={false}
+              fadeOut={true}
+              fallSpeed={2000} // Fast falling
+              explosionSpeed={350}
+              angle={-60} // Shots up towards center
+              colors={["#D0021B", "#F5A623", "#F8E71C"]}
+            />
 
+            {/* Bottom Right Blast */}
+            <ConfettiCannon
+              ref={confettiRightRef}
+              key={"right-" + confettiKey}
+              count={50}
+              origin={{ x: width + 10, y: height }} // Exact bottom right
+              autoStart={false}
+              fadeOut={true}
+              fallSpeed={2000} // Fast falling
+              explosionSpeed={350}
+              angle={-120} // Shots up towards center
+              colors={["#4A90E2", "#50E3C2", "#F8E71C"]}
+            />
+          </View>
+        )}
+
+        <ThemedView
+          darkBgColor={"#1f2937"}
+          bgColor={"rgba(255,255,255,0.9)"}
+          className="p-4 rounded-2xl w-11/12 max-w-sm items-center"
+        >
           {/* Icon */}
-          <View className="mb-1">
+          <View className="mb-2">
             {errorType === "warning" ? (
-              <View className="justify-center items-center mt-2 mb-4" style={styles.warningIcon}>
+              <View style={styles.warningIcon} className="justify-center items-center mt-2 mb-4">
                 <Text style={{ fontSize: 48, color: "orange", fontWeight: "bold" }}>!</Text>
               </View>
             ) : (
@@ -83,11 +155,11 @@ const ModalComponent = ({
           )}
 
           {/* Message */}
-          {message ? (
-            <ThemedText color={"#646060ff"} className="text-2xl mb-4  font-medium text-center">
+          {message && (
+            <ThemedText color={"#646060ff"} className="text-2xl mb-4 font-medium text-center">
               {message}
             </ThemedText>
-          ) : null}
+          )}
 
           {/* Buttons */}
           {buttons.length > 0 ? (
@@ -96,9 +168,7 @@ const ModalComponent = ({
                 <TouchableOpacity
                   key={index}
                   onPress={btn.onPress}
-                  className={`flex-1 p-3 rounded-md ${btn.bgColor || "bg-customBlue"} ${index > 0 ? "ml-3" : ""
-                    }`}
-                  activeOpacity={0.6}
+                  className={`flex-1 p-3 rounded-md ${btn.bgColor || "bg-customBlue"} ${index > 0 ? "ml-3" : ""}`}
                 >
                   <Text className="font-semibold text-white text-center text-xl">
                     {btn.label}
@@ -111,9 +181,10 @@ const ModalComponent = ({
               <TouchableOpacity
                 onPress={onClose}
                 className={`mt-2 w-full ${buttonColored} p-3 rounded-md mb-1`}
-                activeOpacity={0.6}
               >
-                <ThemedText color={"white"} className="font-semibold  text-center text-xl">Close</ThemedText>
+                <ThemedText color={"white"} className="font-semibold text-center text-xl">
+                  Close
+                </ThemedText>
               </TouchableOpacity>
             )
           )}
