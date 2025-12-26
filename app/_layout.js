@@ -8,7 +8,7 @@ import { OfflineProvider } from "../src/offline/OfflineProvider";
 import ModalComponent from "../src/components/ModalComponent";
 import LoadingComponent from "../src/components/LoadingComponent";
 import { ThemeProvider, useTheme } from "../src/context/ThemeProvider";
-import * as NavigationBar from "expo-navigation-bar";
+import * as NavigationBar from 'expo-navigation-bar';
 
 // -----------------------------
 // Remember last visited path

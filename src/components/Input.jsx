@@ -19,6 +19,7 @@ const Input = ({
   keyboardType = 'default',
   autoCapitalize = 'words',
   border = true,
+  editable = true
 }) => {
 
   const [focus, setFocus] = useState(false)
@@ -95,6 +96,7 @@ const Input = ({
             autoCapitalize={autoCapitalize}
             placeholderTextColor={finalColor}
             multiline={multiline}
+            editable={editable}
             value={value}
             onChangeText={(val) => {
               onchange(val)

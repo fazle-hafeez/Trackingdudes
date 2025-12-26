@@ -15,7 +15,6 @@ const Home = () => {
 
   return (
     <SafeAreaView className="flex-1 bg-black">
-      <StatusBar barStyle="light-content" backgroundColor="#0000ff" />
       <ImageBackground
         source={require("../../assets/images/clean5.png")}
         className="h-[400px] w-full  relative"

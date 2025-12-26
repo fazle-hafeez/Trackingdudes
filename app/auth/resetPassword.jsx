@@ -28,7 +28,6 @@ export default function ResetPassword() {
 
     return (
         <SafeAreaView className="flex-1 bg-white">
-            <StatusBar barStyle="light-content" backgroundColor="#0000ff" />
             <HeaderSection />
             <View className="flex-1 p-4">
                 <View className={`bg-[rgba(255,255,255,0.9)] rounded-xl p-6 ${Platform.OS === "ios" ? " shadow-sm" : ''

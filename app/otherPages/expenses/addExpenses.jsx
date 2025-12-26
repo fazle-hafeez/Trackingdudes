@@ -3,6 +3,7 @@ import { View, TouchableOpacity, Image, ScrollView, Platform } from "react-nativ
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { useLocalSearchParams } from "expo-router";
 
 import PageHeader from "../../../src/components/PageHeader";
 import { ThemedView, SafeAreacontext, ThemedText } from "../../../src/components/ThemedColor";
@@ -14,12 +15,13 @@ import { useApi } from "../../../src/hooks/useApi";
 import { OfflineContext } from "../../../src/offline/OfflineProvider";
 import { readCache, storeCache } from "../../../src/offline/cache";
 
-const CACHE_KEY = "expenses-reporting";
+const CACHE_KEY = "expenses-cache";
 
 const AddExpenses = () => {
     const { darkMode } = useTheme();
     const { isConnected } = useContext(OfflineContext);
     const { get } = useApi();
+    const { id = null } = useLocalSearchParams()
 
     const [receipt, setReceipt] = useState(null);
     const [date, setDate] = useState(new Date())
@@ -59,6 +61,30 @@ const AddExpenses = () => {
     const [selectedCategory, setSelectedCategory] = useState(null);
     const [selectedVendor, setSelectedVendor] = useState(null);
     const [selectedPayment, setSelectedPayment] = useState(null);
+
+    useEffect(() => {
+        const loadRecord = async () => {
+            const cashed = (await readCache(CACHE_KEY)) || { data: [] }
+            if (!cashed.data) return;
+            const cashedList = Array.isArray(cashed.data) ? cashed.data : []
+            if (id) {
+                const finalofflinerRecored = cashedList.find(item => item.id.toString() === id.toString());
+                console.log("ogora dab dab zuma", finalofflinerRecored);
+
+                if (finalofflinerRecored) {
+                    setFormData({
+                        amount: finalofflinerRecored.amount,
+                        category: finalofflinerRecored.category,
+                        project: finalofflinerRecored.project,
+                        vendor: finalofflinerRecored.vendor,
+                        paymentType: finalofflinerRecored.paymentType
+                    })
+                }
+            }
+
+        }
+        loadRecord()
+    }, [id])
 
     // --- Pick Image ---
     const pickImage = async () => {
@@ -114,15 +140,18 @@ const AddExpenses = () => {
         const config = DESTINATION_MAP[destination];
         if (!config) return;
 
-        if (config.items.length > 0) return; // ✅ cache hit
+        if (config.items.length > 0) return;
 
         config.setLoading(true);
 
         try {
             const response = await get(
-                `my-projects/show-in?destination=${destination}`,
+                `my-projects/show-in?destination=${destination}&_t=${isConnected ? Date.now() : 0}`,
                 { useBearerAuth: true }
             );
+
+            console.log("expenses :", response);
+
 
             if (response?.status === "success") {
                 config.setItems(
@@ -145,7 +174,7 @@ const AddExpenses = () => {
         let mounted = true;
 
         const loadAll = async () => {
-            if (!mounted) return;
+            if (!mounted && !id) return;
 
             await fetchItems("expenses");
             await fetchItems("categories");
@@ -162,16 +191,15 @@ const AddExpenses = () => {
     }, []);
 
 
-    // --- Submit Form ---
-     const handleSubmit = async () => {
+    const handleSubmit = async () => {
         let errors = { amount: "", category: "", vendor: "", paymentType: "", project: "" };
         let hasError = false;
 
         if (!formData.amount) { errors.amount = "Amount is required"; hasError = true; }
         // if (!selectedCategory) { errors.category = "Category is required"; hasError = true; }
-        // if (!selectedVendor) { errors.vendor = "Vendor is required"; hasError = true; }
-        // if (!selectedPayment) { errors.paymentType = "Payment type is required"; hasError = true; }
-        // if (!selectedProject) { errors.project = "Project is required"; hasError = true; }
+        //     // if (!selectedVendor) { errors.vendor = "Vendor is required"; hasError = true; }
+        //     // if (!selectedPayment) { errors.paymentType = "Payment type is required"; hasError = true; }
+        //     // if (!selectedProject) { errors.project = "Project is required"; hasError = true; }
 
         setFormErrors(errors);
         if (hasError) return;
@@ -190,40 +218,60 @@ const AddExpenses = () => {
         };
 
         try {
-            // Read previous cache
-            const cachedWrap = (await readCache(CACHE_KEY)) || {};
-            const prevExpenses = Array.isArray(cachedWrap.expenses) ? cachedWrap.expenses : [];
+            // --- Read previous cached expenses ---
+            let cachedData = await readCache(CACHE_KEY);
 
-            // Merge new expense with previous cache
-            cachedWrap.expenses = [...prevExpenses, newExpense];
-            await storeCache(CACHE_KEY, cachedWrap);
-
-            // Attempt online save
-            let isOffline = false;
-            if (isConnected) {
-                try {
-                    await post("/expenses/create", newExpense);
-                    newExpense.pending = false;
-                } catch (err) {
-                    isOffline = true;
-                }
-            } else {
-                isOffline = true;
+            if (!cachedData || typeof cachedData !== "object") {
+                cachedData = { data: [] };   // FIXED
             }
 
-            // Update cache with online status
-            cachedWrap.expenses = cachedWrap.expenses.map(exp =>
-                exp.id === newExpense.id ? newExpense : exp
-            );
-            await storeCache(CACHE_KEY, cachedWrap);
+            const prevExpenses = Array.isArray(cachedData.data)
+                ? cachedData.data
+                : [];
 
-            alert(isOffline
-                ? "Expense saved locally. It will sync when online."
+
+            // --- Add new expense to cache (prev + new) ---
+            cachedData.data = [...prevExpenses, newExpense];
+            await storeCache(CACHE_KEY, cachedData);
+
+            // --- Try sending online ---
+            let offline = false;
+            if (isConnected) {
+                try {
+                    const response = await post("/expenses/create", newExpense);
+                    if (response?.status === "success") {
+                        newExpense.pending = false;
+                    } else {
+                        offline = true;
+                    }
+                } catch (err) {
+                    offline = true;
+                }
+            } else {
+                offline = true;
+            }
+
+            // --- Update cache after online result ---
+            cachedData.data = cachedData.data.map(e =>
+                e.id === newExpense.id ? newExpense : e
+            );
+            await storeCache(CACHE_KEY, cachedData);
+
+            alert(offline
+                ? "Expense saved locally. It will sync when you are online."
                 : "Expense submitted successfully!"
             );
 
-            // Clear form
-            setFormData({ amount: "", category: "", vendor: "", paymentType: "", project: "", memo: "" });
+            // --- Reset form ---
+            setFormData({
+                amount: "",
+                category: "",
+                vendor: "",
+                paymentType: "",
+                project: "",
+                memo: ""
+            });
+
             setReceipt(null);
             setSelectedCategory(null);
             setSelectedVendor(null);
@@ -231,17 +279,22 @@ const AddExpenses = () => {
             setSelectedPayment(null);
 
         } catch (err) {
-            console.error(err);
-            alert("Failed to save expense");
+            console.log("Expenses Error:", err);
+            alert("Failed to save expense locally");
         }
     };
+
+    const updateExpense = () => {
+        console.log("yalla");
+
+    }
 
 
     const bgColor = darkMode ? "bg-gray-800" : "bg-white";
 
     return (
         <SafeAreacontext className="flex-1">
-            <PageHeader routes="Add Expenses" />
+            <PageHeader routes={` ${id ? "Edite Expense" : "Add Expenses"}`} />
             <ScrollView className="p-3">
 
                 {/* Receipt */}
@@ -262,12 +315,40 @@ const AddExpenses = () => {
                 {/* Date */}
                 <ThemedView className={`mb-4 p-4 rounded-lg ${bgColor} border border-gray-300`} style={{ elevation: 3 }}>
                     <ThemedText className="mb-1 text-base">Date of purchase:</ThemedText>
-                    <TouchableOpacity className="flex-row justify-between items-center" onPress={() => setShowDatePicker(true)}>
-                        <Input value={date.toDateString()} onchange={() => { }} placeholder="Date of Purchase" inputError="" />
-                        <Ionicons name="calendar-outline" size={24} color={darkMode ? "#fff" : "#1f2937"} />
+
+                    <TouchableOpacity
+                        className="flex-row items-center"
+                        onPress={() => !id && setShowDatePicker(true)}
+                        disabled={!!id}
+                        style={{ width: "100%" }}
+                    >
+                        <View style={{ flex: 1, marginRight: !id ? 60 : 0 }}>
+                            <Input
+                                value={date.toDateString()}
+                                onchange={() => { }}
+                                placeholder="Date of Purchase"
+                                inputError=""
+                                editable={!id}
+                            />
+                        </View>
+
+                        {!id && (
+                            <Ionicons
+                                name="calendar-outline"
+                                size={24}
+                                color={darkMode ? "#fff" : "#1f2937"}
+                            />
+                        )}
                     </TouchableOpacity>
-                    {showDatePicker && (
-                        <DateTimePicker value={date} mode="date" display="default" onChange={handleDateChange} maximumDate={new Date()} />
+
+                    {showDatePicker && !id && (
+                        <DateTimePicker
+                            value={date}
+                            mode="date"
+                            display="default"
+                            onChange={handleDateChange}
+                            maximumDate={new Date()}
+                        />
                     )}
                 </ThemedView>
 
@@ -355,7 +436,9 @@ const AddExpenses = () => {
 
                 {/* Submit */}
                 <View className="mb-6">
-                    <Button title="Submit" onClickEvent={handleSubmit} />
+                    <Button title={` ${id ? "Update" : "Submit"}`}
+                        onClickEvent={id ? updateExpense : handleSubmit}
+                    />
                 </View>
 
             </ScrollView>

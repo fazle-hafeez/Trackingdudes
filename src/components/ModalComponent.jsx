@@ -1,10 +1,10 @@
 import React, { useEffect, useState, useRef } from "react";
-import { Modal, View, Text, TouchableOpacity, Image, StyleSheet, StatusBar, Platform, Dimensions } from "react-native";
+import { Modal, View, Text, TouchableOpacity, Image, StyleSheet, Dimensions } from "react-native";
 import { playSound } from "../hooks/useSound";
 import { useTheme } from "../context/ThemeProvider";
 import { ThemedView, ThemedText } from "./ThemedColor";
-import ConfettiCannon from "react-native-confetti-cannon";
-import * as NavigationBar from "expo-navigation-bar";
+import { useModalBars } from "../hooks/useModalBar";
+import CustomConffeti from "./CustomConffeti";
 
 const { height, width } = Dimensions.get("window");
 
@@ -28,27 +28,7 @@ const ModalComponent = ({
 
   const buttonColored = darkMode ? "border border-gray-500" : "bg-customBlue";
 
-  // Modal Styles Effect
-  useEffect(() => {
-    if (!visible) return;
-    const ORIGINAL_STATUSBAR_STYLE = darkMode ? "light-content" : "dark-content";
-    const ORIGINAL_STATUSBAR_COLOR = darkMode ? "#121212" : "#00f";
-    const ORIGINAL_NAVBUTTON_STYLE = darkMode ? "light" : "dark";
-
-    try {
-      StatusBar.setBarStyle("light-content", true);
-      if (Platform.OS === "android") StatusBar.setBackgroundColor("rgba(0,0,0,0.85)", true);
-      NavigationBar.setButtonStyleAsync("light");
-    } catch (e) { }
-
-    return () => {
-      try {
-        StatusBar.setBarStyle(ORIGINAL_STATUSBAR_STYLE, true);
-        if (Platform.OS === "android") StatusBar.setBackgroundColor(ORIGINAL_STATUSBAR_COLOR, true);
-        NavigationBar.setButtonStyleAsync(ORIGINAL_NAVBUTTON_STYLE);
-      } catch (e) { }
-    };
-  }, [visible, darkMode]);
+  useModalBars(visible, darkMode);
 
   // Main Logic Effect
   useEffect(() => {
@@ -88,7 +68,7 @@ const ModalComponent = ({
   // Auto Hide Effect
   useEffect(() => {
     if (visible && autoHide) {
-      const timer = setTimeout(onClose, 2500); // 2.5s for better effect view
+      const timer = setTimeout(onClose, 2500);
       return () => clearTimeout(timer);
     }
   }, [visible, autoHide, onClose]);
@@ -96,36 +76,11 @@ const ModalComponent = ({
   return (
     <Modal transparent visible={visible} animationType="fade">
       <View className="flex-1 justify-center items-center bg-black/85">
-        
+
         {visible && errorType === "success" && (
           <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 999 }} pointerEvents="none">
-            {/* Bottom Left Blast */}
-            <ConfettiCannon
-              ref={confettiLeftRef}
-              key={"left-" + confettiKey}
-              count={50}
-              origin={{ x: -10, y: height }} // Exact bottom left
-              autoStart={false}
-              fadeOut={true}
-              fallSpeed={2000} // Fast falling
-              explosionSpeed={350}
-              angle={-60} // Shots up towards center
-              colors={["#D0021B", "#F5A623", "#F8E71C"]}
-            />
-
-            {/* Bottom Right Blast */}
-            <ConfettiCannon
-              ref={confettiRightRef}
-              key={"right-" + confettiKey}
-              count={50}
-              origin={{ x: width + 10, y: height }} // Exact bottom right
-              autoStart={false}
-              fadeOut={true}
-              fallSpeed={2000} // Fast falling
-              explosionSpeed={350}
-              angle={-120} // Shots up towards center
-              colors={["#4A90E2", "#50E3C2", "#F8E71C"]}
-            />
+            {/* Bottom Left Burst */}
+            <CustomConffeti trigger={visible} />
           </View>
         )}
 
