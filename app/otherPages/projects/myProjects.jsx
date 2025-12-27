@@ -79,7 +79,7 @@ const MyProjects = () => {
 
             const result = await get(
                 `my-projects?status=${fetchStatus}&order=${currentOrder}&limit=${projectCount}&page=${pageNumber}&_t=${isConnected ? Date.now() : 0}`,
-                { useBearerAuth: true }
+                true
             );
 
             let projectsData = Array.isArray(result?.data) ? result.data : [];

@@ -111,12 +111,14 @@ const Login = () => {
         { useBasicAuth: true }
       );
       if (result?.status === "success") {
+        await AsyncStorage.setItem("tokens", JSON.stringify(result.tokens));
         const userData = result?.user || { username: cleanUsername };
         //  Call global login handler
         await login(userData, result.tokens, {
           remember,
           keepLoggedIn
         });
+       
         // Manage remembered username
         // Manage remembered credentials securely
         if (keepLoggedIn) {
@@ -138,7 +140,7 @@ const Login = () => {
         showModal(result.data || "you are  Login successful!", "success");
         setTimeout(() => {
           router.push("/dashboard/dashboardPage");
-        }, 3000);
+        }, 3500);
       }
       else if (result?.status === "error") {
         if (lastTriedUser === cleanUsername) {

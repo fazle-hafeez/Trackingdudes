@@ -203,6 +203,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../context/ThemeProvider";
 import Input from "./Input";
 import { ThemedText } from "./ThemedColor";
+import { useModalBars } from "../hooks/useModalBar";
 
 const { height } = Dimensions.get("window");
 
@@ -224,6 +225,8 @@ const Select = ({
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [filteredItems, setFilteredItems] = useState(items);
+
+  useModalBars( open, darkMode)
 
   const slideAnim = useRef(new Animated.Value(height)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;

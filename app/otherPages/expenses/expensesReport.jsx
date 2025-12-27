@@ -51,12 +51,63 @@ const Expenses = () => {
     const inputBgColor = darkMode ? "bg-transparent" : "bg-white";
 
     const [expensesReports, setExpensesReports] = useState([
-        { id: "1", project: "Mosque Project", amount: "$1200", date: "02/03/2025", vendor: "ABC Supplier", paymentType: "Bank", category: "Construction" },
-        { id: "2", project: "School Repair", amount: "$800", date: "05/03/2025", vendor: "XYZ Store", paymentType: "Cash", category: "Maintenance" },
-        { id: "3", project: "Hospital Plumbing", amount: "$1500", date: "10/03/2025", vendor: "Khan Traders", paymentType: "Bank", category: "Plumbing" },
-        { id: "4", project: "Road Maintenance", amount: "$600", date: "15/03/2025", vendor: "RoadFix Co.", paymentType: "Cash", category: "Infrastructure" },
-        { id: "5", project: "Office Supplies", amount: "$300", date: "18/03/2025", vendor: "OfficePro", paymentType: "Online", category: "Stationary" },
+        {
+            id: "1",
+            project: "Mosque Project",
+            amount: "$1200",
+            date: "02/03/2025",
+            vendor: "ABC Supplier",
+            paymentType: "Bank",
+            category: "Construction",
+            image: "https://cdn-icons-png.flaticon.com/512/3064/3064197.png",
+            memo: "Purchased cement and bricks for the mosque foundation."
+        },
+        {
+            id: "2",
+            project: "School Repair",
+            amount: "$800",
+            date: "05/03/2025",
+            vendor: "XYZ Store",
+            paymentType: "Cash",
+            category: "Maintenance",
+            image: "https://cdn-icons-png.flaticon.com/512/1046/1046857.png",
+            memo: "Bought paint and repair materials for classrooms."
+        },
+        {
+            id: "3",
+            project: "Hospital Plumbing",
+            amount: "$1500",
+            date: "10/03/2025",
+            vendor: "Khan Traders",
+            paymentType: "Bank",
+            category: "Plumbing",
+            image: "https://cdn-icons-png.flaticon.com/512/639/639365.png",
+            memo: "Replaced broken pipes and installed new valves."
+        },
+        {
+            id: "4",
+            project: "Road Maintenance",
+            amount: "$600",
+            date: "15/03/2025",
+            vendor: "RoadFix Co.",
+            paymentType: "Cash",
+            category: "Infrastructure",
+            image: "https://cdn-icons-png.flaticon.com/512/861/861386.png",
+            memo: "Filling potholes and surface leveling."
+        },
+        {
+            id: "5",
+            project: "Office Supplies",
+            amount: "$300",
+            date: "18/03/2025",
+            vendor: "OfficePro",
+            paymentType: "Online",
+            category: "Stationary",
+            image: "https://cdn-icons-png.flaticon.com/512/906/906334.png",
+            memo: "Purchased pens, A4 papers, markers and toner."
+        }
     ]);
+
 
     // SAVE DATA TO CACHE HELPER
     const updateCache = async (newList) => {
@@ -69,14 +120,18 @@ const Expenses = () => {
         const loadExpenses = async () => {
             const cached = await readCache("expenses-cache");
 
-            if (cached.data) {
+            if (cached?.data && cached.data.length > 0) {
                 setExpensesReports(cached.data);
             } else {
+                // Cache empty → default data save & use karo
                 await storeCache("expenses-cache", { data: expensesReports });
+                setExpensesReports(expensesReports);
             }
         };
+
         loadExpenses();
     }, []);
+
 
     // REFRESH SCREEN WHEN FOCUSED (WHEN RETURNING FROM ADD EXPENSES)
     useFocusEffect(
@@ -129,7 +184,12 @@ const Expenses = () => {
             "Deleting?",
             [
                 { label: "Yes, delete", bgColor: "bg-red-600", onPress: () => { hideModal(); confirmDelete(selectedExpenses); } },
-                { label: "Cancel", bgColor: "bg-green-600", onPress: () => hideModal() }
+                {
+                    label: "Cancel", bgColor: "bg-green-600", onPress: () => {
+                        hideModal();
+                        handleCancel()
+                    }
+                }
             ]
         );
     };
@@ -163,7 +223,7 @@ const Expenses = () => {
     // SEARCH FILTER
     const filteredExpenses = useMemo(() => {
         return expensesReports.filter(item => {
-            const cat = item.category || ""; 
+            const cat = item.category || "";
             return cat.toLowerCase().includes(searchQuery.toLowerCase());
         });
     }, [expensesReports, searchQuery]);
@@ -184,8 +244,8 @@ const Expenses = () => {
                 onPress={() => {
                     if (selectionMode) toggleSelect(item.id);
                     else router.push({
-                        pathname:"/otherPages/expenses/addExpenses",
-                        params:{id:item.id}
+                        pathname: "/otherPages/expenses/addExpenses",
+                        params: { id: item.id }
                     });
                 }}
                 activeOpacity={0.8}
@@ -194,7 +254,7 @@ const Expenses = () => {
                 <View
                     className={`
                         rounded-xl p-4 shadow-sm border flex-row
-                        ${isSelected ? "border-blue-500" :
+                        ${isSelected ? "border-blue-500 bg-white" :
                             item.pending ? "border-yellow-400 bg-yellow-50" :
                                 darkMode ? "border-gray-700" : "bg-white border-gray-100"}
                     `}
@@ -257,6 +317,15 @@ const Expenses = () => {
                             </View>
                         </View>
 
+                        {/* MEMO SECTION */}
+                        {item.memo && (
+                            <View className="mt-3 px-2">
+                                <ThemedText className="text-sm text-gray-600 mt-1">
+                                    {item.memo}
+                                </ThemedText>
+                            </View>
+                        )}
+
                     </View>
                 </View>
             </TouchableOpacity>
@@ -273,7 +342,6 @@ const Expenses = () => {
 
     return (
         <SafeAreacontext className="flex-1">
-
             {/* Header */}
             <PageHeader
                 routes="Expenses Tracking"

@@ -1,5 +1,5 @@
 import React, { useState, useContext, useEffect } from "react";
-import { View, TouchableOpacity, Image, ScrollView, Platform } from "react-native";
+import { View, TouchableOpacity, Image, ScrollView, Platform, Text, Modal, StatusBar } from "react-native";
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -14,18 +14,21 @@ import Select from "../../../src/components/Select";
 import { useApi } from "../../../src/hooks/useApi";
 import { OfflineContext } from "../../../src/offline/OfflineProvider";
 import { readCache, storeCache } from "../../../src/offline/cache";
+import { useModalBars } from "../../../src/hooks/useModalBar";
 
 const CACHE_KEY = "expenses-cache";
 
 const AddExpenses = () => {
     const { darkMode } = useTheme();
     const { isConnected } = useContext(OfflineContext);
-    const { get } = useApi();
-    const { id = null } = useLocalSearchParams()
+    const { get, post } = useApi();
+    const { id = null } = useLocalSearchParams();
 
+    const [imageFullSize, setImageFullSize] = useState(false);
     const [receipt, setReceipt] = useState(null);
-    const [date, setDate] = useState(new Date())
+    const [date, setDate] = useState(new Date());
     const [showDatePicker, setShowDatePicker] = useState(false);
+    const [editingRecord, setEditingRecord] = useState(null);
 
     const [formData, setFormData] = useState({
         amount: "",
@@ -62,30 +65,6 @@ const AddExpenses = () => {
     const [selectedVendor, setSelectedVendor] = useState(null);
     const [selectedPayment, setSelectedPayment] = useState(null);
 
-    useEffect(() => {
-        const loadRecord = async () => {
-            const cashed = (await readCache(CACHE_KEY)) || { data: [] }
-            if (!cashed.data) return;
-            const cashedList = Array.isArray(cashed.data) ? cashed.data : []
-            if (id) {
-                const finalofflinerRecored = cashedList.find(item => item.id.toString() === id.toString());
-                console.log("ogora dab dab zuma", finalofflinerRecored);
-
-                if (finalofflinerRecored) {
-                    setFormData({
-                        amount: finalofflinerRecored.amount,
-                        category: finalofflinerRecored.category,
-                        project: finalofflinerRecored.project,
-                        vendor: finalofflinerRecored.vendor,
-                        paymentType: finalofflinerRecored.paymentType
-                    })
-                }
-            }
-
-        }
-        loadRecord()
-    }, [id])
-
     // --- Pick Image ---
     const pickImage = async () => {
         const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -99,6 +78,7 @@ const AddExpenses = () => {
             allowsEditing: true
         });
         if (!result.canceled) setReceipt(result.assets[0].uri);
+        StatusBar.setBackgroundColor(darkMode ? "#121212" : "#00f", true);
     };
 
     // --- Date Handler ---
@@ -113,34 +93,64 @@ const AddExpenses = () => {
             items: projectItems,
             setItems: setProjectItems,
             setLoading: setProjectLoading,
-            label: i => i.project || i.name
+            label: i => i.project || i.name,
+            selectedValue: selectedProject
         },
-        categories: {
+        inShift: {
             items: categoryItems,
             setItems: setCategoryItems,
             setLoading: setCategoryLoading,
-            label: i => i.name
+            label: i => i.name,
+            selectedValue: selectedCategory
         },
-        vendors: {
+        inTrips: {
             items: vendorItems,
             setItems: setVendorItems,
             setLoading: setVendorLoading,
-            label: i => i.name
+            label: i => i.name,
+            selectedValue: selectedVendor
         },
-        "payment-types": {
+        inTims: {
             items: paymentItems,
             setItems: setPaymentItems,
             setLoading: setPaymentLoading,
-            label: i => i.name
+            label: i => i.name,
+            selectedValue: selectedPayment
         }
     };
 
+    // --- Load Editing Record from cache ---
+    useEffect(() => {
+        const loadRecord = async () => {
+            const cashed = (await readCache(CACHE_KEY)) || { data: [] };
+            const cashedList = Array.isArray(cashed.data) ? cashed.data : [];
+            if (id) {
+                const r = cashedList.find(item => item.id.toString() === id.toString());
+                if (r) {
+                    setEditingRecord(r);
+                    setFormData({
+                        amount: r.amount,
+                        category: r.category,
+                        project: r.project,
+                        vendor: r.vendor,
+                        paymentType: r.paymentType,
+                        memo: r.memo
+                    });
+                    setReceipt(r?.image || null);
+                    setSelectedProject(r.project);
+                    setSelectedCategory(r.category);
+                    setSelectedVendor(r.vendor);
+                    setSelectedPayment(r.paymentType);
+                    setDate(r.date ? new Date(r.date) : new Date());
+                }
+            }
+        };
+        loadRecord();
+    }, [id]);
 
     const fetchItems = async (destination) => {
         const config = DESTINATION_MAP[destination];
         if (!config) return;
-
-        if (config.items.length > 0) return;
 
         config.setLoading(true);
 
@@ -150,17 +160,29 @@ const AddExpenses = () => {
                 { useBearerAuth: true }
             );
 
-            console.log("expenses :", response);
-
-
-            if (response?.status === "success") {
-                config.setItems(
-                    response.data.map(i => ({
-                        label: config.label(i),
-                        value: config.label(i)
-                    }))
-                );
+            let items = [];
+            if (response?.status === "success" && Array.isArray(response.data)) {
+                items = response.data.map(i => ({
+                    label: config.label(i),
+                    value: config.label(i)
+                }));
             }
+
+            // --- Edit mode fallback ---
+            let currentValue;
+            if (editingRecord) {
+                switch (destination) {
+                    case "expenses": currentValue = editingRecord.project; break;
+                    case "inShift": currentValue = editingRecord.category; break;
+                    case "inTrips": currentValue = editingRecord.vendor; break;
+                    case "inTims": currentValue = editingRecord.paymentType; break;
+                }
+                if (currentValue && !items.find(i => i.value === currentValue)) {
+                    items = [{ label: currentValue, value: currentValue }, ...items];
+                }
+            }
+
+            config.setItems(items);
         } catch (e) {
             console.log(destination, e);
             config.setItems([]);
@@ -169,37 +191,23 @@ const AddExpenses = () => {
         }
     };
 
-
+    // --- Load all select items once on mount ---
     useEffect(() => {
-        let mounted = true;
-
-        const loadAll = async () => {
-            if (!mounted && !id) return;
-
+        const loadFund = async () => {
             await fetchItems("expenses");
-            await fetchItems("categories");
-            await fetchItems("vendors");
-            await fetchItems("payment-types");
-        };
+            await fetchItems("inShift");
+            await fetchItems("inTrips");
+            await fetchItems("inTims");
 
-        loadAll();
-
-        //  cleanup MUST be a function
-        return () => {
-            mounted = false;
-        };
-    }, []);
-
+        }
+        loadFund()
+    }, [editingRecord]); //  keep editingRecord as dependency to fetch fallback
 
     const handleSubmit = async () => {
         let errors = { amount: "", category: "", vendor: "", paymentType: "", project: "" };
         let hasError = false;
 
         if (!formData.amount) { errors.amount = "Amount is required"; hasError = true; }
-        // if (!selectedCategory) { errors.category = "Category is required"; hasError = true; }
-        //     // if (!selectedVendor) { errors.vendor = "Vendor is required"; hasError = true; }
-        //     // if (!selectedPayment) { errors.paymentType = "Payment type is required"; hasError = true; }
-        //     // if (!selectedProject) { errors.project = "Project is required"; hasError = true; }
 
         setFormErrors(errors);
         if (hasError) return;
@@ -218,43 +226,22 @@ const AddExpenses = () => {
         };
 
         try {
-            // --- Read previous cached expenses ---
             let cachedData = await readCache(CACHE_KEY);
-
-            if (!cachedData || typeof cachedData !== "object") {
-                cachedData = { data: [] };   // FIXED
-            }
-
-            const prevExpenses = Array.isArray(cachedData.data)
-                ? cachedData.data
-                : [];
-
-
-            // --- Add new expense to cache (prev + new) ---
+            if (!cachedData || typeof cachedData !== "object") cachedData = { data: [] };
+            const prevExpenses = Array.isArray(cachedData.data) ? cachedData.data : [];
             cachedData.data = [...prevExpenses, newExpense];
             await storeCache(CACHE_KEY, cachedData);
 
-            // --- Try sending online ---
             let offline = false;
             if (isConnected) {
                 try {
                     const response = await post("/expenses/create", newExpense);
-                    if (response?.status === "success") {
-                        newExpense.pending = false;
-                    } else {
-                        offline = true;
-                    }
-                } catch (err) {
-                    offline = true;
-                }
-            } else {
-                offline = true;
-            }
+                    if (response?.status === "success") newExpense.pending = false;
+                    else offline = true;
+                } catch (err) { offline = true; }
+            } else offline = true;
 
-            // --- Update cache after online result ---
-            cachedData.data = cachedData.data.map(e =>
-                e.id === newExpense.id ? newExpense : e
-            );
+            cachedData.data = cachedData.data.map(e => e.id === newExpense.id ? newExpense : e);
             await storeCache(CACHE_KEY, cachedData);
 
             alert(offline
@@ -262,22 +249,12 @@ const AddExpenses = () => {
                 : "Expense submitted successfully!"
             );
 
-            // --- Reset form ---
-            setFormData({
-                amount: "",
-                category: "",
-                vendor: "",
-                paymentType: "",
-                project: "",
-                memo: ""
-            });
-
+            setFormData({ amount: "", category: "", vendor: "", paymentType: "", project: "", memo: "" });
             setReceipt(null);
             setSelectedCategory(null);
             setSelectedVendor(null);
             setSelectedProject(null);
             setSelectedPayment(null);
-
         } catch (err) {
             console.log("Expenses Error:", err);
             alert("Failed to save expense locally");
@@ -285,16 +262,14 @@ const AddExpenses = () => {
     };
 
     const updateExpense = () => {
-        console.log("yalla");
-
+        console.log("Update expense called");
     }
-
 
     const bgColor = darkMode ? "bg-gray-800" : "bg-white";
 
     return (
         <SafeAreacontext className="flex-1">
-            <PageHeader routes={` ${id ? "Edite Expense" : "Add Expenses"}`} />
+            <PageHeader routes={` ${id ? "Edit Expense" : "Add Expenses"}`} />
             <ScrollView className="p-3">
 
                 {/* Receipt */}
@@ -305,7 +280,12 @@ const AddExpenses = () => {
                             <ThemedText className="ml-3 text-base">Attach Receipt</ThemedText>
                         </View>
                         {receipt ? (
-                            <Image source={{ uri: receipt }} style={{ width: 50, height: 40, borderRadius: 8 }} />
+                            <View>
+                                <Image source={{ uri: receipt }} style={{ width: 40, height: 40, borderRadius: 8 }} className="ml-5" />
+                                <TouchableOpacity onPress={() => setImageFullSize(true)}>
+                                    <Text className="text-blue-700 underline">View receipt</Text>
+                                </TouchableOpacity>
+                            </View>
                         ) : (
                             <Ionicons name="image-outline" size={26} color={darkMode ? "#aaa" : "#1f2937"} />
                         )}
@@ -313,44 +293,32 @@ const AddExpenses = () => {
                 </ThemedView>
 
                 {/* Date */}
-                <ThemedView className={`mb-4 p-4 rounded-lg ${bgColor} border border-gray-300`} style={{ elevation: 3 }}>
-                    <ThemedText className="mb-1 text-base">Date of purchase:</ThemedText>
-
-                    <TouchableOpacity
-                        className="flex-row items-center"
-                        onPress={() => !id && setShowDatePicker(true)}
-                        disabled={!!id}
-                        style={{ width: "100%" }}
-                    >
-                        <View style={{ flex: 1, marginRight: !id ? 60 : 0 }}>
-                            <Input
-                                value={date.toDateString()}
-                                onchange={() => { }}
-                                placeholder="Date of Purchase"
-                                inputError=""
-                                editable={!id}
-                            />
-                        </View>
-
-                        {!id && (
-                            <Ionicons
-                                name="calendar-outline"
-                                size={24}
-                                color={darkMode ? "#fff" : "#1f2937"}
+                {!id && (
+                    <ThemedView className={`mb-4 p-4 rounded-lg ${bgColor} border border-gray-300`} style={{ elevation: 3 }}>
+                        <ThemedText className="mb-1 text-base">Date of purchase:</ThemedText>
+                        <TouchableOpacity className="flex-row items-center" onPress={() => setShowDatePicker(true)} style={{ width: "100%" }}>
+                            <View style={{ flex: 1, marginRight: 60 }}>
+                                <Input
+                                    value={date.toDateString()}
+                                    onchange={() => { }}
+                                    placeholder="Date of Purchase"
+                                    inputError=""
+                                    editable={true}
+                                />
+                            </View>
+                            <Ionicons name="calendar-outline" size={24} color={darkMode ? "#fff" : "#1f2937"} />
+                        </TouchableOpacity>
+                        {showDatePicker && (
+                            <DateTimePicker
+                                value={date}
+                                mode="date"
+                                display="default"
+                                onChange={handleDateChange}
+                                maximumDate={new Date()}
                             />
                         )}
-                    </TouchableOpacity>
-
-                    {showDatePicker && !id && (
-                        <DateTimePicker
-                            value={date}
-                            mode="date"
-                            display="default"
-                            onChange={handleDateChange}
-                            maximumDate={new Date()}
-                        />
-                    )}
-                </ThemedView>
+                    </ThemedView>
+                )}
 
                 {/* Amount */}
                 <ThemedView className={`mb-4 p-4 rounded-lg ${bgColor} border border-gray-300`} style={{ elevation: 3 }}>
@@ -366,65 +334,26 @@ const AddExpenses = () => {
                 </ThemedView>
 
                 {/* Select Fields */}
-                <ThemedView className={`mb-4 p-4 rounded-lg ${bgColor} border border-gray-300`}
-                    style={{ elevation: 3 }}>
-                    <ThemedText className="mb-1 text-base">Project:</ThemedText>
-                    <Select
-                        items={projectItems}
-                        value={selectedProject}
-                        onChange={setSelectedProject}
-                        placeholder="Choose project"
-                        loading={projectLoading}
-                        message="To select a project,just click on it . if the desired project is not in the list.it could be because you might have disabled the project"
-                    />
-                </ThemedView>
-
-                <ThemedView className={`mb-4 p-4 rounded-lg ${bgColor} border border-gray-300`}
-                    style={{ elevation: 3 }}>
-                    <ThemedText className="mb-1 text-base">Category:</ThemedText>
-                    <Select
-                        items={categoryItems}
-                        value={selectedCategory}
-                        onChange={setSelectedCategory}
-                        placeholder="Choose category"
-                        loading={categoryLoading}
-                        message="To select a Category,just click on it . if the desired Category is not in the list.it could be because you might have disabled the project"
-
-                    />
-
-                </ThemedView>
-
-                <ThemedView className={`mb-4 p-4 rounded-lg ${bgColor} border border-gray-300`}
-                    style={{ elevation: 3 }}>
-                    <ThemedText className="mb-1 text-base">Vendor:</ThemedText>
-                    <Select
-                        items={vendorItems}
-                        value={selectedVendor}
-                        onChange={setSelectedVendor}
-                        placeholder="Choose vendor"
-                        loading={vendorLoading}
-                        message="To select a project,just click on it . if the desired project is not in the list.it could be because you might have disabled the project"
-
-                    />
-                </ThemedView>
-
-                <ThemedView className={`mb-4 p-4 rounded-lg ${bgColor} border border-gray-300`}
-                    style={{ elevation: 3 }}>
-                    <ThemedText className="mb-1 text-base">Payment Type:</ThemedText>
-                    <Select
-                        items={paymentItems}
-                        value={selectedPayment}
-                        onChange={setSelectedPayment}
-                        placeholder="Choose payment type"
-                        loading={paymentLoading}
-                        message="To select a project,just click on it . if the desired project is not in the list.it could be because you might have disabled the project"
-
-                    />
-                </ThemedView>
+                <SelectField label="Project" items={projectItems} value={selectedProject} onChange={setSelectedProject} loading={projectLoading} 
+                 message={"To select a project,just click on it . if the desired project is not in the list.it could be because you might have disabled the project"}
+                />
+                <SelectField label="Category" items={categoryItems} value={selectedCategory} onChange={setSelectedCategory} loading={categoryLoading} 
+                 message={"To select a project,just click on it . if the desired project is not in the list.it could be because you might have disabled the project"}
+                />
+                <SelectField label="Vendor" items={vendorItems} value={selectedVendor} onChange={setSelectedVendor} loading={vendorLoading} 
+                message={"To select a project,just click on it . if the desired project is not in the list.it could be because you might have disabled the project"}
+                />
+                <SelectField 
+                label="Payment Type" 
+                items={paymentItems} 
+                value={selectedPayment} 
+                onChange={setSelectedPayment} 
+                loading={paymentLoading}
+                message={"To select a project,just click on it . if the desired project is not in the list.it could be because you might have disabled the project"}
+                 />
 
                 {/* Memo */}
-                <ThemedView className={`mb-2 p-4 rounded-lg ${bgColor} border border-gray-300`}
-                    style={{ elevation: 3 }}>
+                <ThemedView className={`mb-2 p-4 rounded-lg ${bgColor} border border-gray-300`} style={{ elevation: 3 }}>
                     <ThemedText className="mb-1 text-base">Memo:</ThemedText>
                     <Input
                         value={formData.memo}
@@ -436,15 +365,46 @@ const AddExpenses = () => {
 
                 {/* Submit */}
                 <View className="mb-6">
-                    <Button title={` ${id ? "Update" : "Submit"}`}
-                        onClickEvent={id ? updateExpense : handleSubmit}
-                    />
+                    <Button title={` ${id ? "Update" : "Submit"}`} onClickEvent={id ? updateExpense : handleSubmit} />
                 </View>
 
+                <ShowImageFullSizeModal visibility={imageFullSize} onPress={() => setImageFullSize(false)} receipt={receipt} />
             </ScrollView>
         </SafeAreacontext>
     );
 };
 
+// --- Reusable SelectField component ---
+const SelectField = ({ label, items, value, onChange, loading,message }) => {
+    const { darkMode } = useTheme();
+    const bgColor = darkMode ? "bg-gray-800" : "bg-white";
+    return (
+        <ThemedView className={`mb-4 p-4 rounded-lg ${bgColor} border border-gray-300`} style={{ elevation: 3 }}>
+            <ThemedText className="mb-1 text-base">{label}:</ThemedText>
+            <Select items={items} value={value} onChange={onChange} placeholder={`Choose ${label.toLowerCase()}`} loading={loading}
+            message={message} />
+        </ThemedView>
+    );
+};
+
+const ShowImageFullSizeModal = ({ visibility, onPress, receipt = null }) => {
+    const { darkMode } = useTheme();
+    useModalBars(visibility, darkMode);
+    return (
+        <Modal visible={visibility} transparent={true} animationType="fade">
+            <View className="flex-1 bg-black/80 justify-center items-center p-4">
+                <View className={`rounded-2xl p-3 shadow-2xl`} style={{
+                    width: "90%", maxHeight: "85%", backgroundColor: darkMode ? "#1f2938" : "#fff",
+                    justifyContent: "center", alignItems: "center",
+                }}>
+                    <Image source={{ uri: receipt }} style={{ width: "100%", height: "100%", resizeMode: "contain" }} />
+                </View>
+                <TouchableOpacity onPress={onPress} className="absolute top-10 right-5" style={{ elevation: 2 }}>
+                    <Ionicons name="close-circle" size={45} color="#fff" />
+                </TouchableOpacity>
+            </View>
+        </Modal>
+    );
+};
 
 export default AddExpenses;

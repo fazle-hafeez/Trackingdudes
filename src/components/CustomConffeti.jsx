@@ -11,7 +11,7 @@ export default function CustomConffeti({ trigger = false }) {
   useEffect(() => {
     if (trigger) {
       leftRef.current?.start();
-      setTimeout(() => rightRef.current?.start(), 120);
+      setTimeout(() => leftRef.current?.start(), 100);
     }
   }, [trigger]);
 
@@ -20,9 +20,9 @@ export default function CustomConffeti({ trigger = false }) {
       {/* BOTTOM LEFT */}
       <ConfettiCannon
         ref={leftRef}
-        count={60}                 // MORE CONFETTI
-        explosionSpeed={700}      // SEND HIGH
-        fallSpeed={1500}           // LONG FALL (FULL SCREEN)
+        count={80}                 // MORE CONFETTI
+        explosionSpeed={600}      // SEND HIGH
+        fallSpeed={2000}           // LONG FALL (FULL SCREEN)
         autoStart={false}
         fadeOut={false}
         origin={{ x: -30, y: height + 20 }}   // TRUE BOTTOM (OUTSIDE SCREEN)
@@ -35,23 +35,6 @@ export default function CustomConffeti({ trigger = false }) {
         ]}
       />
 
-      {/* BOTTOM RIGHT */}
-      <ConfettiCannon
-        ref={rightRef}
-        count={50}
-        explosionSpeed={700}
-        fallSpeed={1500}
-        autoStart={false}
-        fadeOut={false}
-        origin={{ x: width + 30, y: height + 20 }} // TRUE BOTTOM RIGHT
-        colors={[
-          "#ff0066",
-          "#ffcc00",
-          "#33cc33",
-          "#3399ff",
-          "#ff3300",
-        ]}
-      />
     </>
   );
 }
