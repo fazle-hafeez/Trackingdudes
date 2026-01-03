@@ -10,19 +10,23 @@ import { readCache, storeCache } from "../../../src/offline/cache";
 import { OfflineContext } from "../../../src/offline/OfflineProvider";
 import { useApi } from "../../../src/hooks/useApi";
 import { useAuth } from "../../../src/context/UseAuth";
+import { useLocalSearchParams } from "expo-router";
+import { router } from "expo-router";
 
 const CACHE_KEY = "expense_cache_data"; // same cache key as Expense page
 
 const CategoryPage = () => {
-  const { showModal, setGlobalLoading } = useAuth();
-  const { offlineQueue, isConnected } = useContext(OfflineContext);
+  const { showModal, setGlobalLoading, hideModal } = useAuth();
+  const { isConnected } = useContext(OfflineContext);
   const { post } = useApi();
+  const { id = null } = useLocalSearchParams();
 
   const [categoryName, setCategoryName] = useState("");
   const [selectedIcon, setSelectedIcon] = useState("");
   const [message, setMessage] = useState("");
   const [messageStatus, setMessageStatus] = useState(false);
   const [categoryList, setCategoryList] = useState([]);
+  const [isFocused, setIsFocused] = useState(false);
 
   const iconOptions = [
     { icon: "briefcase-outline", label: "Office" },
@@ -33,25 +37,38 @@ const CategoryPage = () => {
     { icon: "heart-outline", label: "Health" },
   ];
 
-  // Load cached categories on mount
+  // Load cached categories & edit mode
   useEffect(() => {
     (async () => {
       const cachedWrap = (await readCache(CACHE_KEY)) || {};
       const cachedCategories = Array.isArray(cachedWrap.category) ? cachedWrap.category : [];
       setCategoryList(cachedCategories);
+
+      if (id) {
+        const old = cachedCategories.find((c) => c.id.toString() === id.toString());
+        if (old) {
+          setCategoryName(old.label);
+          setSelectedIcon(old.icon);
+        }
+      }
     })();
   }, []);
 
   // Check name availability
   useEffect(() => {
+    if (!isFocused) return;
+
     if (!categoryName?.trim()) {
       setMessage("");
       setMessageStatus(false);
       return;
     }
-    const duplicate = categoryList.some(
-      (c) => c?.label?.toLowerCase() === categoryName.trim().toLowerCase()
-    );
+
+    const duplicate = categoryList.some((c) => {
+      if (id && c.id.toString() === id.toString()) return false;
+      return c.label.toLowerCase() === categoryName.trim().toLowerCase();
+    });
+
     if (duplicate) {
       setMessage("This name is already used");
       setMessageStatus(true);
@@ -61,17 +78,19 @@ const CategoryPage = () => {
     }
   }, [categoryName, categoryList]);
 
+  // ADD Category
   const handleAddCategory = async () => {
-    if (!categoryName?.trim() || !selectedIcon) {
-      showModal("Enter category name and select icon", "error");
+    if (!categoryName.trim() || !selectedIcon) {
+      showModal("Enter category name & select icon", "error");
       return;
     }
     if (messageStatus) {
-      showModal("Name already used, choose another", "error");
+      showModal("Duplicate name, choose another", "error");
       return;
     }
 
     setGlobalLoading(true);
+
     try {
       const newCategory = {
         id: Date.now().toString(),
@@ -79,41 +98,40 @@ const CategoryPage = () => {
         name: categoryName.trim(),
         value: categoryName.trim().toLowerCase().replace(/\s/g, "-"),
         icon: selectedIcon,
-        pending: true,
+        pending: !isConnected,
+        serverId: null,
         type: "category",
       };
 
-      // Update UI immediately
       setCategoryList((prev) => [...prev, newCategory]);
       setCategoryName("");
       setSelectedIcon("");
       setMessage("");
       setMessageStatus(false);
 
-      // Update cache
       const cachedWrap = (await readCache(CACHE_KEY)) || {};
-      const prevCategories = Array.isArray(cachedWrap.category) ? cachedWrap.category : [];
-      cachedWrap.category = [...prevCategories, newCategory];
+      const prevList = Array.isArray(cachedWrap.category) ? cachedWrap.category : [];
+      cachedWrap.category = [...prevList, newCategory];
       await storeCache(CACHE_KEY, cachedWrap);
 
-      // Attempt online save
       let isOffline = false;
+
       if (isConnected) {
         try {
-          await post("/category/create", {
+          const res = await post("/category/create", {
             label: newCategory.label,
             value: newCategory.value,
             icon: newCategory.icon,
           });
+          newCategory.serverId = res?.data?.id ?? null;
           newCategory.pending = false;
-        } catch (err) {
+        } catch {
           isOffline = true;
         }
       } else {
         isOffline = true;
       }
 
-      // Update cache with online status
       cachedWrap.category = cachedWrap.category.map((c) =>
         c.id === newCategory.id ? newCategory : c
       );
@@ -121,13 +139,108 @@ const CategoryPage = () => {
 
       showModal(
         isOffline
-          ? "Category saved locally. It will sync when online."
+          ? "Category saved locally. Will sync when online."
           : "Category saved successfully online!",
-        isOffline ? "warning" : "success"
+        isOffline ? "warning" : "success",
+        false,
+        [
+          {
+            label: "Add More",
+            bgColor: "bg-green-600",
+            onPress: () => hideModal(),
+          },
+          {
+            label: "View All",
+            bgColor: "bg-blue-600",
+            onPress: () => {
+              hideModal();
+              router.back();
+            },
+          },
+        ]
       );
-    } catch (err) {
-      console.error(err);
-      showModal("Failed to save category", "error");
+    } finally {
+      setGlobalLoading(false);
+    }
+  };
+
+  // UPDATE Category
+  const handleUpdateCategory = async () => {
+    if (!categoryName.trim() || !selectedIcon) {
+      showModal("Enter category name & select icon", "error");
+      return;
+    }
+    if (messageStatus) {
+      showModal("Duplicate name, choose another", "error");
+      return;
+    }
+
+    setGlobalLoading(true);
+
+    try {
+      const cachedWrap = (await readCache(CACHE_KEY)) || {};
+      const list = Array.isArray(cachedWrap.category) ? cachedWrap.category : [];
+      const old = list.find((c) => c.id.toString() === id.toString());
+
+      if (!old) {
+        showModal("Category not found", "error");
+        return;
+      }
+
+      const updated = {
+        ...old,
+        label: categoryName.trim(),
+        name: categoryName.trim(),
+        value: categoryName.trim().toLowerCase().replace(/\s/g, "-"),
+        icon: selectedIcon,
+        pending: !isConnected,
+      };
+
+      const updatedList = list.map((c) => (c.id === old.id ? updated : c));
+      cachedWrap.category = updatedList;
+      await storeCache(CACHE_KEY, cachedWrap);
+      setCategoryList(updatedList);
+
+      let isOffline = false;
+      if (isConnected) {
+        try {
+          await post("/category/update", {
+            id: old.serverId ?? id,
+            label: updated.label,
+            value: updated.value,
+            icon: updated.icon,
+          });
+          updated.pending = false;
+        } catch {
+          isOffline = true;
+        }
+      } else {
+        isOffline = true;
+      }
+
+      cachedWrap.category = cachedWrap.category.map((c) =>
+        c.id === updated.id ? updated : c
+      );
+      await storeCache(CACHE_KEY, cachedWrap);
+
+      showModal(
+        isOffline
+          ? "Category updated locally. Will sync when online."
+          : "Category updated successfully!",
+        "success",
+        false,
+        [
+          { label: "View", bgColor: "bg-green-600", onPress: () => hideModal() },
+          {
+            label: "View All",
+            bgColor: "bg-blue-600",
+            onPress: () => {
+              hideModal();
+              router.back();
+            },
+          },
+        ]
+      );
     } finally {
       setGlobalLoading(false);
     }
@@ -135,11 +248,11 @@ const CategoryPage = () => {
 
   return (
     <SafeAreacontext className="flex-1" bgColor="#eff6ff">
-      <PageHeader routes="Adding Category" />
+      <PageHeader routes={`${id ? "Edit" : "Adding"} Category`} />
       <View className="p-4 flex-1">
         <ThemedView className="p-4 rounded-lg mb-5" style={{ elevation: 2 }}>
           <ThemedText color="#374151" className="text-center text-lg font-medium mb-1">
-            Add Category
+            {id ? "Edit Category" : "Add Category"}
           </ThemedText>
         </ThemedView>
 
@@ -149,6 +262,7 @@ const CategoryPage = () => {
             placeholder="Enter category name"
             value={categoryName}
             onchange={setCategoryName}
+            onFocus={() => setIsFocused(true)}
           />
           {message ? (
             <ThemedText className="mt-1" color={messageStatus ? "#dc2626" : "#16a34a"}>
@@ -182,11 +296,13 @@ const CategoryPage = () => {
           </ThemedView>
         )}
 
-        <Button title="Save" onClickEvent={handleAddCategory} />
+        <Button
+          title={id ? "Update" : "Save"}
+          onClickEvent={id ? handleUpdateCategory : handleAddCategory}
+        />
 
         <ThemedText color="#374151" className="mt-4 text-lg">
-          Please choose an icon that best represents this category.
-          This helps identify categories quickly in the app.
+          Please choose an icon that best represents this category. This helps identify categories quickly in the app.
         </ThemedText>
       </View>
     </SafeAreacontext>

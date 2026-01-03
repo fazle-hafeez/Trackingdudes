@@ -565,9 +565,7 @@ const MyProjects = () => {
                     value={searchQuery}
                     onchange={setSearchQuery}
                     icon={true}
-                    border={false}
-                    elevation={1}
-
+                    borderColors={"#ddd"}
                 />
 
                 {selectionMode && filteredProjects.length > 0 && (
@@ -580,13 +578,13 @@ const MyProjects = () => {
                 )}
 
                 {loading ? (
-                    <LoadingSkeleton  height={99}/>
+                    <LoadingSkeleton  height={99} spacing={15}/>
                 ) : filteredProjects.length > 0 ? (
                     <FlatList
                         data={filteredProjects}
                         renderItem={renderProject}
                         keyExtractor={(item) => (item.id || item.tempId)?.toString()}
-                        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+                       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
                         ListFooterComponent={
                             isConnected && totalPages > 1 ? (
                                 <View className="items-center mb-2">

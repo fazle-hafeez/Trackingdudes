@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { FlatList, View, TouchableOpacity,Text } from "react-native";
+import { FlatList, View, TouchableOpacity, Text } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { ThemedView, ThemedText, SafeAreacontext } from "../../../src/components/ThemedColor";
 import PageHeader from "../../../src/components/PageHeader";
@@ -20,7 +20,9 @@ const Expense = () => {
     const { darkMode } = useTheme();
 
     const tabs = ["vendor", "payment-type", "reporting", "category"];
+    const projectStatus  = ["Enabled", "Disabled"]
     const [activeTab, setActiveTab] = useState("vendor");
+    const [activeStatus, setActiveStatus] = useState("Enabled");
 
     const [selectAll, setSelectAll] = useState(false);
     const [selectionMode, setSelectionMode] = useState(false);
@@ -35,12 +37,12 @@ const Expense = () => {
     // STATIC DATA
     const staticData = {
         vendor: [
-            { id: "1", label: "ABC Supplier", icon: "storefront-outline" },
-            { id: "2", label: "Khan Traders", icon: "business-outline" },
-            { id: "3", label: "OfficePro", icon: "cube-outline" },
+            { id: "1", label: "ABC Supplier", icon: "storefront-outline",status:"enabled" },
+            { id: "2", label: "Khan Traders", icon: "business-outline",status:"enabled" },
+            { id: "3", label: "OfficePro", icon: "cube-outline",status:"disabled" },
         ],
         "payment-type": [
-            { id: "1", label: "Cash", icon: "cash-outline" },
+            { id: "1", label: "Cash", icon: "cash-outline",status:"enabled" },
             { id: "2", label: "Bank Transfer", icon: "business-outline" },
             { id: "3", label: "Card Payment", icon: "card-outline" },
             { id: "4", label: "Online", icon: "globe-outline" },
@@ -190,16 +192,24 @@ const Expense = () => {
                     }
                 }}
                 onPress={() => {
-                    if (selectionMode) toggleSelect(item.id);
+                    if (selectionMode) {
+                        toggleSelect(item.id);
+                    } else {
+                        router.push({
+                            pathname: `/otherPages/expenses/${removeHyphens(activeTab)}`,
+                            params: { id: item.id }
+                        })
+                    }
+
                 }}
                 activeOpacity={0.8}
             >
                 <View
                     className={` p-4 mt-4 rounded-xl border shadow ${isSelected
-                            ? darkMode ? "border-blue-500  " : "border-blue-500 bg-white"
-                            : item.pending // <-- offline/pending items
-                                ? darkMode ?  "border-gray-700 " : "border-yellow-400 bg-yellow-50"
-                                : darkMode ? "border-gray-700 " : 'bg-white border-gray-100'
+                        ? darkMode ? "border-blue-500  " : "border-blue-500 bg-white"
+                        : item.pending // <-- offline/pending items
+                            ? darkMode ? "border-gray-700 " : "border-yellow-400 bg-yellow-50"
+                            : darkMode ? "border-gray-700 " : 'bg-white border-gray-100'
                         }`}
                 >
                     <View className="flex-row items-center">
@@ -267,12 +277,13 @@ const Expense = () => {
                     }
                 />
 
+                <Tabs tabs={projectStatus} activeTab={activeStatus} setActiveTab={setActiveStatus} className="mb-4" />
+
                 <Input
                     value={filterItem}
                     placeholder="Search items ..."
                     icon={true}
-                    border={false}
-                    elevation={1}
+                    borderColors={"#ddd"}
                     onchange={setFilterItem}
                     className={darkMode ? "bg-transparent" : "bg-white"}
                 />

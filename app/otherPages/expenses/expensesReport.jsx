@@ -1,8 +1,11 @@
 import React, { useState, useEffect, useContext, useMemo } from "react";
 import { View, FlatList, TouchableOpacity } from "react-native";
-import { FontAwesome6, Ionicons, FontAwesome } from "@expo/vector-icons";
+import { FontAwesome6, Ionicons, FontAwesome,Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
+import * as Print from "expo-print";
+import * as FileSystem from "expo-file-system/legacy";
+import { shareAsync } from "expo-sharing";
 
 // Contexts / Hooks
 import { useTheme } from "../../../src/context/ThemeProvider";
@@ -228,6 +231,46 @@ const Expenses = () => {
         });
     }, [expensesReports, searchQuery]);
 
+    const downloadPDF = async (item) => {
+        try {
+            const html = `
+      <html>
+        <body style="padding:20px;">
+          <h1>Expense Report</h1>
+          <p><b>Category:</b> ${item.category}</p>
+          <p><b>Date:</b> ${item.date}</p>
+          <p><b>Amount:</b> ${item.amount}</p>
+          <p><b>Payment:</b> ${item.paymentType}</p>
+          <p><b>Vendor:</b> ${item.vendor}</p>
+          <p><b>Project:</b> ${item.project}</p>
+          <p><b>Memo:</b> ${item.memo || "----"}</p>
+        </body>
+      </html>
+    `;
+
+            // 1️⃣ Generate PDF
+            const { uri } = await Print.printToFileAsync({ html });
+            console.log("PDF Generated:", uri);
+
+            // 2️⃣ Save final
+            const newUri = FileSystem.documentDirectory + `expense-${item.id}.pdf`;
+
+            await FileSystem.moveAsync({
+                from: uri,
+                to: newUri,
+            });
+
+            console.log("PDF Saved:", newUri);
+
+            // 3️⃣ Share PDF
+            await shareAsync(newUri);
+
+        } catch (error) {
+            console.log("PDF Error:", error);
+        }
+    };
+
+
 
     // EXPENSE ITEM UI
     const ExpenseItem = ({ item }) => {
@@ -254,7 +297,7 @@ const Expenses = () => {
                 <View
                     className={`
                         rounded-xl p-4 shadow-sm border flex-row
-                        ${isSelected ? "border-blue-500 bg-white" :
+                        ${isSelected ? darkMode ? "border-blue-500" : " border-blue-700 bg-white" :
                             item.pending ? "border-yellow-400 bg-yellow-50" :
                                 darkMode ? "border-gray-700" : "bg-white border-gray-100"}
                     `}
@@ -279,11 +322,17 @@ const Expenses = () => {
                                     <ThemedText>{item.date}</ThemedText>
                                 </View>
                             </View>
-
-                            <ThemedText>{item.amount}</ThemedText>
+                            <TouchableOpacity
+                                onPress={() => downloadPDF(item)}
+                                className="w-8 h-8 rounded-full bg-gray-400 justify-center items-center"
+                                activeOpacity={0.7}
+                            >
+                               <Feather name="download" size={20} color="#4b5563" />
+                            </TouchableOpacity>
                         </View>
 
                         <View className={`${darkMode ? "border-gray-500" : "border-yellow-400"} mb-5 border-b`} />
+                        <ThemedText className=" mb-4 px-2">Total Amount : {item.amount}</ThemedText>
 
                         <View className="flex-row justify-between mb-3">
                             <View className="flex-row items-center w-[48%]">
@@ -370,9 +419,8 @@ const Expenses = () => {
                     className={`${inputBgColor} mb-3 `}
                     placeholder="Search expenses..."
                     icon={true}
-                    border={false}
                     value={searchQuery}
-                    elevation={2}
+                    borderColors="#ddd"
                     onchange={setSearchQuery}
                 />
 
@@ -386,7 +434,7 @@ const Expenses = () => {
                 )}
 
                 {loading ? (
-                    <LoadingSkeleton count={4} height={89} />
+                    <LoadingSkeleton count={3} height={100} spacing={15} />
                 ) : (
                     <FlatList
                         data={filteredExpenses}
@@ -402,7 +450,6 @@ const Expenses = () => {
                 <View className="absolute bottom-0 left-0 right-0">
                     <BottomActionBar
                         actionType="editView"
-                        handleView={() => { }}
                         handleDelete={deleteExpense}
                         handleCancel={handleCancel}
                     />

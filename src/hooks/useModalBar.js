@@ -15,7 +15,7 @@ export const useModalBars = (visible = false, darkMode = false) => {
       try {
         StatusBar.setBarStyle("light-content", true);
         if (Platform.OS === "android") {
-          StatusBar.setBackgroundColor(darkMode ? "#000" : "#003", true);
+          StatusBar.setBackgroundColor(darkMode ? "#000" : "#002", true);
           await NavigationBar.setButtonStyleAsync(darkMode ? "light" : "dark");
           await NavigationBar.setVisibilityAsync("hidden");
         }

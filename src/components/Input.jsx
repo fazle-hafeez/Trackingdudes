@@ -9,7 +9,6 @@ const Input = ({
   icon = false,
   onchange,
   multiline = false,
-  elevation,
   className,
   style = {},
   inputError = "",
@@ -18,7 +17,7 @@ const Input = ({
   placeholder,
   keyboardType = 'default',
   autoCapitalize = 'words',
-  border = true,
+  borderColors,
   editable = true
 }) => {
 
@@ -32,10 +31,10 @@ const Input = ({
 
   const errorColor = darkMode ? '#ef4444' : '#dc3545'
   const focusColor = darkMode ? '#3b82f6' : '#0d6efd'
-  const defaultColor = darkMode ? '#4a5568' : '#ccc'
+  const defaultColor = darkMode ? '#4a5568' : borderColors ? borderColors : '#ccc'
 
   useEffect(() => {
-    if (!border  & !darkMode) return;
+
     let toValue = 0;
 
     if (showError) toValue = 2;
@@ -59,7 +58,7 @@ const Input = ({
       ]).start();
     }
 
-  }, [focus, showError,border]);
+  }, [focus, showError]);
 
 
 
@@ -69,25 +68,26 @@ const Input = ({
   })
 
   return (
-    <View className="shadow">
+    <View className="shadow-xl">
       {/* Shadow wrapper fixes Android/iOS border bug */}
-      <View style={{
+      <View
+       style={{
         shadowColor: focus ? focusColor : '#000',
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.1,
         shadowRadius: 3,
+        
       }}>
         <Animated.View
           style={{
-            borderWidth: border ? 1 :darkMode ? 1 : 0,
+            borderWidth:  1 ,
             borderRadius: 5,
             paddingHorizontal: 5,
             paddingVertical: 4,
             borderColor: borderColor,
             transform: [{ translateX: shakeAnim }],
-            elevation:elevation || 0
           }}
-          className={` ${className} flex-row items-center px-3`}
+          className={` ${className} flex-row items-center px-3 `}
         >
           {icon && (<Feather name="search" size={22} color="#9ca3af" />)}
           <TextInput

@@ -6,26 +6,23 @@ const { width, height } = Dimensions.get("window");
 
 export default function CustomConffeti({ trigger = false }) {
   const leftRef = useRef(null);
-  const rightRef = useRef(null);
 
   useEffect(() => {
     if (trigger) {
-      leftRef.current?.start();
-      setTimeout(() => leftRef.current?.start(), 100);
+      leftRef.current?.start();     // now ONLY 1 TIME
     }
   }, [trigger]);
 
   return (
     <>
-      {/* BOTTOM LEFT */}
       <ConfettiCannon
         ref={leftRef}
-        count={80}                 // MORE CONFETTI
-        explosionSpeed={600}      // SEND HIGH
-        fallSpeed={2000}           // LONG FALL (FULL SCREEN)
+        count={80}
         autoStart={false}
-        fadeOut={false}
-        origin={{ x: -30, y: height + 20 }}   // TRUE BOTTOM (OUTSIDE SCREEN)
+        radius={20}                        // 🔥BIG CONFETTI
+        explosionSpeed={800}               // MORE POWER
+        fallSpeed={2000}                   // MORE FALL
+        origin={{ x: -30, y: height + 20 }}
         colors={[
           "#ff0066",
           "#ffcc00",
@@ -34,7 +31,6 @@ export default function CustomConffeti({ trigger = false }) {
           "#ff3300",
         ]}
       />
-
     </>
   );
 }

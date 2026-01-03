@@ -39,7 +39,7 @@ const LoadingSkeleton = ({
             opacity: fadeAnim,
             backgroundColor: cardBg,
             borderRadius: 14,
-            marginVertical: spacing,
+            marginBottom: spacing,
             padding: 16,
             height,
             shadowColor: "#000",

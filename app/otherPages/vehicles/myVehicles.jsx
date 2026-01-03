@@ -219,9 +219,13 @@ const MyVehicles = () => {
   };
 
   const toggleVehicleSelect = (id) => {
-    setSelectedVehicles(prev =>
-      prev.includes(id) ? prev.filter(vid => vid !== id) : [...prev, id]
-    );
+    setSelectedVehicles((prev) => {
+      const updated = prev.includes(id) ? prev.filter(vid => vid !== id) : [...prev, id]
+      const allIds = vehicles.filter((item) => item.vehicle.toLowerCase().includes(searchQuery.toLowerCase()))
+      setSelectAll(updated.length === allIds.length)
+      return updated
+
+    })
   };
 
   const handleCancel = () => {
@@ -505,8 +509,7 @@ const MyVehicles = () => {
           className={`${inputBgColor} my-4 `}
           placeholder="Search  vehicles..."
           icon={true}
-          elevation={1}
-          border={false}
+          borderColors={"#ddd"}
           value={searchQuery}
           onchange={setSearchQuery}
         />
@@ -519,7 +522,7 @@ const MyVehicles = () => {
         )}
 
         {loading ? (
-          <LoadingSkeleton height={98}/>
+          <LoadingSkeleton height={98} spacing={15} />
         ) : filteredVehicles.length > 0 ? (
           <FlatList
             data={filteredVehicles}
@@ -544,7 +547,7 @@ const MyVehicles = () => {
 
         ) : (
           <ThemedView className=" rounded-md shadow-md p-4">
-            <Ionicons name="receipt-outline" size={58} color="#9ca3af"  className="mx-auto my-4"/>
+            <Ionicons name="receipt-outline" size={58} color="#9ca3af" className="mx-auto my-4" />
             <ThemedText color="#374151" className="text-lg ">
               You have not saved any vehicles yet. Saving a vehicle allows you to select it from the list of saved vehicles, enabling you to track trips as well as fuel consumption
             </ThemedText>

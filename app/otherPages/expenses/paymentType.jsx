@@ -10,19 +10,23 @@ import { readCache, storeCache } from "../../../src/offline/cache";
 import { OfflineContext } from "../../../src/offline/OfflineProvider";
 import { useApi } from "../../../src/hooks/useApi";
 import { useAuth } from "../../../src/context/UseAuth";
+import { useLocalSearchParams } from "expo-router";
+import { router } from "expo-router";
 
 const CACHE_KEY = "expense_cache_data"; // same cache key as Expense page
 
 const PaymentType = () => {
-  const { showModal, setGlobalLoading } = useAuth();
+  const { showModal, setGlobalLoading, hideModal } = useAuth();
   const { offlineQueue, isConnected } = useContext(OfflineContext);
-  const { post } = useApi();
+  const { id = null } = useLocalSearchParams()
+  const { post, put } = useApi();
 
   const [paymentName, setPaymentName] = useState("");
   const [selectedIcon, setSelectedIcon] = useState("");
   const [message, setMessage] = useState("");
   const [messageStatus, setMessageStatus] = useState(false);
   const [paymentList, setPaymentList] = useState([]);
+  const [isFocused, setIsFocused] = useState(false)
 
   const iconOptions = [
     { icon: "cash-outline", label: "Cash" },
@@ -37,25 +41,39 @@ const PaymentType = () => {
     { icon: "globe-outline", label: "Online" },
   ];
 
-  // Load cached payments on mount
   useEffect(() => {
     (async () => {
       const cachedWrap = (await readCache(CACHE_KEY)) || {};
       const cachedPayments = Array.isArray(cachedWrap["payment-type"]) ? cachedWrap["payment-type"] : [];
+
       setPaymentList(cachedPayments);
+
+      // If editing → load selected
+      if (id) {
+        const old = cachedPayments.find((p) => p.id.toString() === id.toString());
+        if (old) {
+          setPaymentName(old.label);
+          setSelectedIcon(old.icon);
+        }
+      }
     })();
   }, []);
 
-  // Check name availability
+  // check name availability
   useEffect(() => {
+    if (!isFocused) return;
+
     if (!paymentName?.trim()) {
       setMessage("");
       setMessageStatus(false);
       return;
     }
-    const duplicate = paymentList.some(
-      (p) => p?.label?.toLowerCase() === paymentName.trim().toLowerCase()
-    );
+
+    const duplicate = paymentList.some((i) => {
+      if (id && i.id.toString() === id.toString()) return false;
+      return i.label.toLowerCase() === paymentName.trim().toLowerCase();
+    });
+
     if (duplicate) {
       setMessage("This name is already used");
       setMessageStatus(true);
@@ -65,17 +83,19 @@ const PaymentType = () => {
     }
   }, [paymentName, paymentList]);
 
-  const handleAddPayment = async () => {
-    if (!paymentName?.trim() || !selectedIcon) {
-      showModal("Enter payment type and select icon", "error");
+  // ADD PAYMENT TYPE
+  const handleAdd = async () => {
+    if (!paymentName.trim() || !selectedIcon) {
+      showModal("Enter payment method & select icon", "error");
       return;
     }
     if (messageStatus) {
-      showModal("Name already used, choose another", "error");
+      showModal("Duplicate name, choose another", "error");
       return;
     }
 
     setGlobalLoading(true);
+
     try {
       const newPayment = {
         id: Date.now().toString(),
@@ -83,55 +103,164 @@ const PaymentType = () => {
         name: paymentName.trim(),
         value: paymentName.trim().toLowerCase().replace(/\s/g, "-"),
         icon: selectedIcon,
-        pending: true,
+        pending: !isConnected,
+        serverId: null,
         type: "payment-type",
       };
 
-      // Update UI immediately
+      // Update UI
       setPaymentList((prev) => [...prev, newPayment]);
       setPaymentName("");
       setSelectedIcon("");
-      setMessage("");
-      setMessageStatus(false);
 
       // Update cache
       const cachedWrap = (await readCache(CACHE_KEY)) || {};
-      const prevPayments = Array.isArray(cachedWrap["payment-type"]) ? cachedWrap["payment-type"] : [];
-      cachedWrap["payment-type"] = [...prevPayments, newPayment];
+      const prevList = Array.isArray(cachedWrap["payment-type"]) ? cachedWrap["payment-type"] : [];
+
+      cachedWrap["payment-type"] = [...prevList, newPayment];
       await storeCache(CACHE_KEY, cachedWrap);
 
-      // Attempt online save
       let isOffline = false;
+
+      // TRY ONLINE SAVE
       if (isConnected) {
         try {
-          await post("/payment-type/create", {
+          const res = await post("/payment-type/create", {
             label: newPayment.label,
             value: newPayment.value,
             icon: newPayment.icon,
           });
+
+          // SAVE SERVER ID
+          newPayment.serverId = res?.data?.id ?? null;
           newPayment.pending = false;
-        } catch (err) {
+        } catch (e) {
           isOffline = true;
         }
       } else {
         isOffline = true;
       }
 
-      // Update cache with online status
+      // UPDATE cache again
       cachedWrap["payment-type"] = cachedWrap["payment-type"].map((p) =>
         p.id === newPayment.id ? newPayment : p
       );
+
       await storeCache(CACHE_KEY, cachedWrap);
 
       showModal(
         isOffline
-          ? "Payment method saved locally. It will sync when online."
-          : "Payment method saved successfully online!",
-        isOffline ? "warning" : "success"
+          ? "Saved locally. Will sync when online."
+          : "Payment type saved successfully!",
+        isOffline ? "warning" : "success",
+        false,
+        [
+          {
+            label: "Add More",
+            bgColor: "bg-green-600",
+            onPress: () => {
+              hideModal();
+            }
+          },
+          {
+            label: "View All",
+            bgColor: "bg-blue-600",
+            onPress: () => {
+              hideModal();
+              router.back();
+            }
+          }
+        ]
       );
-    } catch (err) {
-      console.error(err);
-      showModal("Failed to save payment method", "error");
+    } finally {
+      setGlobalLoading(false);
+    }
+  };
+
+  // UPDATE PAYMENT TYPE (same as vendor update)
+  const handleUpdate = async () => {
+    if (!paymentName.trim() || !selectedIcon) {
+      showModal("Enter payment method & select icon", "error");
+      return;
+    }
+
+    if (messageStatus) {
+      showModal("Name already used", "error");
+      return;
+    }
+
+    setGlobalLoading(true);
+
+    try {
+      const cachedWrap = (await readCache(CACHE_KEY)) || {};
+      const list = Array.isArray(cachedWrap["payment-type"]) ? cachedWrap["payment-type"] : [];
+
+      const old = list.find((p) => p.id.toString() === id.toString());
+      if (!old) {
+        showModal("Payment type not found", "error");
+        return;
+      }
+
+      const updated = {
+        ...old,
+        label: paymentName.trim(),
+        name: paymentName.trim(),
+        value: paymentName.trim().toLowerCase().replace(/\s/g, "-"),
+        icon: selectedIcon,
+        pending: !isConnected ? true : false,
+      };
+
+      const updatedList = list.map((p) => (p.id === old.id ? updated : p));
+      cachedWrap["payment-type"] = updatedList;
+
+      await storeCache(CACHE_KEY, cachedWrap);
+      setPaymentList(updatedList);
+
+      let isOffline = false;
+
+      if (isConnected) {
+        try {
+          await post("/payment-type/update", {
+            id: old.serverId ?? id,
+            label: updated.label,
+            value: updated.value,
+            icon: updated.icon,
+          });
+          updated.pending = false;
+        } catch {
+          isOffline = true;
+        }
+      } else {
+        isOffline = true;
+      }
+
+      await storeCache(CACHE_KEY, cachedWrap);
+
+      showModal(
+        isOffline
+          ? "Updated locally. Will sync when online."
+          : "Updated successfully!",
+        "success",
+        false,
+        [
+          {
+            label: "View",
+            bgColor: "bg-green-600",
+            onPress: () => {
+              hideModal();
+            }
+          },
+          {
+            label: "View All",
+            bgColor: "bg-blue-600",
+            onPress: () => {
+              hideModal();
+              router.back();
+            }
+          }
+        ]
+
+      );
     } finally {
       setGlobalLoading(false);
     }
@@ -139,11 +268,11 @@ const PaymentType = () => {
 
   return (
     <SafeAreacontext className="flex-1" bgColor="#eff6ff">
-      <PageHeader routes="Adding Payment Method" />
+      <PageHeader routes={`${id ? "Edit" : "Adding"} Payment Method`} />
       <View className="p-4 flex-1">
         <ThemedView className="p-4 rounded-lg mb-5" style={{ elevation: 2 }}>
           <ThemedText color="#374151" className="text-center text-lg font-medium mb-1">
-            Add Payment Method
+            {`${id ? "Edit" : "Adding"} Payment Method`}
           </ThemedText>
         </ThemedView>
 
@@ -153,6 +282,7 @@ const PaymentType = () => {
             placeholder="Enter a label for the payment method"
             value={paymentName}
             onchange={setPaymentName}
+            onFocus={() => setIsFocused(true)}
           />
           {message ? (
             <ThemedText className="mt-1" color={messageStatus ? "#dc2626" : "#16a34a"}>
@@ -186,7 +316,8 @@ const PaymentType = () => {
           </ThemedView>
         )}
 
-        <Button title="Save" onClickEvent={handleAddPayment} />
+        <Button title={id ? "Update" : "Save"}
+          onClickEvent={id ? handleUpdate : handleAdd} />
 
         <ThemedText color="#374151" className="mt-4 text-lg">
           Please choose an icon that best represents this payment method. This helps identify payment methods quickly in the app.

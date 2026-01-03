@@ -11,12 +11,14 @@ import { OfflineContext } from "../../../src/offline/OfflineProvider";
 import { useApi } from "../../../src/hooks/useApi";
 import { useAuth } from "../../../src/context/UseAuth";
 import { router } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 
 const CACHE_KEY = "expense_cache_data"; // Same cache key as Expense page
 
 const Vendor = () => {
     const { showModal, setGlobalLoading, hideModal } = useAuth();
     const { offlineQueue, isConnected } = useContext(OfflineContext);
+    const { id = null } = useLocalSearchParams()
     const { post } = useApi();
 
     const [vendorName, setVendorName] = useState("");
@@ -24,6 +26,8 @@ const Vendor = () => {
     const [message, setMessage] = useState("");
     const [messageStatus, setMessageStatus] = useState(false);
     const [vendorList, setVendorList] = useState([]);
+    const [isFocused, setIsFocused] = useState(false);
+
 
     const iconOptions = [
         { icon: "storefront-outline", label: "Storefront" },
@@ -40,27 +44,42 @@ const Vendor = () => {
             const cachedWrap = (await readCache(CACHE_KEY)) || {};
             const cachedVendors = Array.isArray(cachedWrap.vendor) ? cachedWrap.vendor : [];
             setVendorList(cachedVendors);
+            const finalRecored = cachedVendors.find(item => item.id.toString() === id.toString())
+            setVendorName(finalRecored.label ? finalRecored.label : null);
+            setSelectedIcon(finalRecored.icon ? finalRecored.icon : null)
         })();
     }, []);
 
     // Check name availability on input
     useEffect(() => {
+        if (!isFocused) {
+            setMessage("");
+            setMessageStatus(false);
+            return;
+        }
         if (!vendorName?.trim()) {
             setMessage("");
             setMessageStatus(false);
             return;
         }
-        const duplicate = vendorList.some(
-            (v) => v?.label?.toLowerCase() === vendorName.trim().toLowerCase()
-        );
+
+        const duplicate = vendorList.some((v) => {
+            // If editing, ignore the current vendor
+            if (id && v.id.toString() === id.toString()) return false;
+
+            return v?.label?.toLowerCase() === vendorName.trim().toLowerCase();
+        });
+
         if (duplicate) {
             setMessage("This name is already used");
             setMessageStatus(true);
         } else {
+            // Only show message if user actually changed the name
             setMessage("Name is available");
             setMessageStatus(false);
         }
     }, [vendorName, vendorList]);
+
 
     // Handle save vendor (offline + online + live update)
     const handleAddVendor = async () => {
@@ -164,21 +183,129 @@ const Vendor = () => {
         }
     };
 
+    const handleUpdateVendor = async () => {
+        if (!vendorName?.trim() || !selectedIcon) {
+            showModal("Enter vendor name and select icon", "error");
+            return;
+        }
+
+        if (messageStatus) {
+            showModal("Name already used, choose another", "error");
+            return;
+        }
+
+        setGlobalLoading(true);
+
+        try {
+            const cachedWrap = (await readCache(CACHE_KEY)) || {};
+            const vendors = Array.isArray(cachedWrap.vendor) ? cachedWrap.vendor : [];
+
+            // Old vendor record
+            const oldVendor = vendors.find(v => v.id.toString() === id.toString());
+
+            if (!oldVendor) {
+                showModal("Vendor not found in cache", "error");
+                setGlobalLoading(false);
+                return;
+            }
+
+            // Prepare updated vendor
+            const updatedVendor = {
+                ...oldVendor,
+                label: vendorName.trim(),
+                name: vendorName.trim(),
+                value: vendorName.trim().toLowerCase().replace(/\s/g, "-"),
+                icon: selectedIcon,
+                pending: !isConnected ? true : false
+            };
+
+            // Update list locally
+            const updatedList = vendors.map(v =>
+                v.id.toString() === id.toString() ? updatedVendor : v
+            );
+
+            // Update UI
+            setVendorList(updatedList);
+
+            // Update cache
+            cachedWrap.vendor = updatedList;
+            await storeCache(CACHE_KEY, cachedWrap);
+
+            // Online update if connected
+            let isOffline = false;
+
+            if (isConnected) {
+                try {
+                    await post("/vendor/update", {
+                        id: oldVendor.serverId ?? id, // server ID if you have, otherwise same ID
+                        label: updatedVendor.label,
+                        value: updatedVendor.value,
+                        icon: updatedVendor.icon,
+                    });
+
+                    updatedVendor.pending = false;
+                } catch {
+                    isOffline = true;
+                }
+            } else {
+                isOffline = true;
+            }
+
+            // Save pending state in cache again
+            cachedWrap.vendor = cachedWrap.vendor.map(v =>
+                v.id === updatedVendor.id ? updatedVendor : v
+            );
+            await storeCache(CACHE_KEY, cachedWrap);
+
+            showModal(
+                isOffline
+                    ? "Vendor updated locally. Will sync when online."
+                    : "Vendor updated successfully!",
+                "success",
+                false,
+                [
+                    {
+                        label: "View",
+                        bgColor: "bg-green-600",
+                        onPress: () => {
+                            hideModal();
+                        }
+                    },
+                    {
+                        label: "View All",
+                        bgColor: "bg-blue-600",
+                        onPress: () => {
+                            hideModal();
+                            router.back();
+                        }
+                    }
+                ]
+            );
+
+        } catch (err) {
+            console.error(err);
+            showModal("Failed to update vendor", "error");
+        } finally {
+            setGlobalLoading(false);
+        }
+    };
+
+
     return (
         <SafeAreacontext bgColor="#eff6ff" className="flex-1">
-            <PageHeader routes="Adding Vendor" />
+            <PageHeader routes={` ${id ? "Edit Vendor" : "Adding Vendor"}`} />
             <View className="p-4 flex-1">
                 {/* Card Header */}
                 <ThemedView className="p-4 rounded-lg mb-5" style={{ elevation: 2 }}>
                     <ThemedText color="#374151" className="text-center text-lg font-medium mb-1">
-                        Add Vendor
+                        {id ? "Edit Vendor" : "Add Vendor"}
                     </ThemedText>
                 </ThemedView>
 
                 {/* Vendor Name Input */}
                 <ThemedView className="p-4 rounded-lg mb-5" style={{ elevation: 2 }}>
                     <ThemedText className="mb-1">Vendor:</ThemedText>
-                    <Input placeholder="Enter vendor name" value={vendorName} onchange={setVendorName} />
+                    <Input placeholder="Enter vendor name" value={vendorName} onchange={setVendorName} onFocus={() => setIsFocused(true)} />
                     {message ? (
                         <Text
                             className="mt-1"
@@ -213,7 +340,7 @@ const Vendor = () => {
                     </ThemedView>
                 )}
 
-                <Button title="Save" onClickEvent={handleAddVendor} />
+                <Button title={`${id ? "Update" : "Save"} `} onClickEvent={id ? handleUpdateVendor : handleAddVendor} />
 
                 <ThemedText color="#374151" className="mt-4 text-lg">
                     Please choose an icon that best represents this vendor. This helps identify vendors quickly in the app.

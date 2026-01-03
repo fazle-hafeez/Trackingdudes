@@ -20,13 +20,9 @@ const ModalComponent = ({
   const { darkMode } = useTheme();
   const [imageSource, setImageSource] = useState(null);
   const [autoHide, setAutoHide] = useState(false);
-  const [confettiKey, setConfettiKey] = useState(0);
+  const [confettiVisible, setConfettiVisible] = useState(false);
 
-  // Refs for both cannons
-  const confettiLeftRef = useRef(null);
-  const confettiRightRef = useRef(null);
-
-  const buttonColored = darkMode ? "border border-gray-500" : "bg-customBlue";
+  const buttonColored = darkMode ? "border border-blue-950 bg-blue-600" : "bg-customBlue";
 
   useModalBars(visible, darkMode);
 
@@ -45,13 +41,8 @@ const ModalComponent = ({
         img = require("../../assets/images/check-markup.png");
         hide = autoHideProp === undefined ? true : autoHideProp;
         playSound("success");
-
-        // Sync both cannons and fire from bottom
-        setConfettiKey(Date.now());
-        setTimeout(() => {
-          confettiLeftRef.current?.start();
-          confettiRightRef.current?.start();
-        }, 150);
+        setConfettiVisible(true);
+        setTimeout(() => setConfettiVisible(false), 3000);
         break;
       case "warning":
         img = null;
@@ -77,12 +68,16 @@ const ModalComponent = ({
     <Modal transparent visible={visible} animationType="fade">
       <View className="flex-1 justify-center items-center bg-black/85">
 
-        {visible && errorType === "success" && (
-          <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 999 }} pointerEvents="none">
-            {/* Bottom Left Burst */}
-            <CustomConffeti trigger={visible} />
+        {confettiVisible && (
+          <View style={{
+            position: 'absolute',
+            top: 0, left: 0, right: 0, bottom: 0,
+            zIndex: 999
+          }} pointerEvents="none">
+            <CustomConffeti trigger={confettiVisible} />
           </View>
         )}
+
 
         <ThemedView
           darkBgColor={"#1f2937"}
@@ -137,7 +132,7 @@ const ModalComponent = ({
                 onPress={onClose}
                 className={`mt-2 w-full ${buttonColored} p-3 rounded-md mb-1`}
               >
-                <ThemedText color={"white"} className="font-semibold text-center text-xl">
+                <ThemedText color={"white"} darkColor={"#ffff"} className="font-semibold text-center text-xl">
                   Close
                 </ThemedText>
               </TouchableOpacity>
