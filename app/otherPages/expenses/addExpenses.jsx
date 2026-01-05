@@ -15,6 +15,7 @@ import { useApi } from "../../../src/hooks/useApi";
 import { OfflineContext } from "../../../src/offline/OfflineProvider";
 import { readCache, storeCache } from "../../../src/offline/cache";
 import { useModalBars } from "../../../src/hooks/useModalBar";
+import { useAuth } from "../../../src/context/UseAuth";
 
 const CACHE_KEY = "expenses-cache";
 
@@ -23,6 +24,8 @@ const AddExpenses = () => {
     const { isConnected } = useContext(OfflineContext);
     const { get, post } = useApi();
     const { id = null } = useLocalSearchParams();
+    const { showModal, setGlobalLoading, hideModal } = useAuth();
+
 
     const [imageFullSize, setImageFullSize] = useState(false);
     const [receipt, setReceipt] = useState(null);
@@ -65,6 +68,98 @@ const AddExpenses = () => {
     const [selectedVendor, setSelectedVendor] = useState(null);
     const [selectedPayment, setSelectedPayment] = useState(null);
 
+    // ----------- OCR FUNCTION ---------------
+
+    const extractTextFromImage = async (imageUri) => {
+        const apiKey = "helloworld"; // free OCR key
+
+        let formData = new FormData();
+        formData.append("file", {
+            uri: imageUri,
+            type: "image/jpeg",
+            name: "receipt.jpg"
+        });
+        formData.append("language", "eng");
+        formData.append("isTable", "true");
+
+        try {
+            let response = await fetch("https://api.ocr.space/parse/image", {
+                method: "POST",
+                headers: {
+                    "apikey": apiKey,
+                },
+                body: formData,
+            });
+
+            let result = await response.json();
+
+            if (result?.ParsedResults?.[0]?.ParsedText) {
+                return result.ParsedResults[0].ParsedText;
+            }
+
+            return "";
+        } catch (err) {
+            console.log("OCR ERROR:", err);
+            return "";
+        }
+    };
+
+
+    const extractAmountSmart = (text) => {
+        if (!text) return "";
+
+        const lines = text.split("\n");
+
+        // Keywords jahan amount hota hai
+        const keywords = ["total", "amount", "grand", "net", "balance", "rs", "pkr"];
+
+        // 1) Keyword wali line dhoondo
+        const targetLine = lines.find(line =>
+            keywords.some(k => line.toLowerCase().includes(k))
+        );
+
+        if (targetLine) {
+            const nums = targetLine.match(/(\d+[\.,]?\d{0,2})/g);
+            if (nums?.length) {
+                return nums[nums.length - 1].replace(/,/g, "");
+            }
+        }
+
+        // Fallback: Pehla number milay tou
+        const fallback = text.match(/(\d+[\.,]?\d{0,2})/);
+        return fallback ? fallback[0].replace(/,/g, "") : "";
+    };
+
+
+    // ----------- AUTO FILL FUNCTION ---------------
+
+    const autoFillFields = (text) => {
+        if (!text) return;
+
+        // ⭐ SMART AMOUNT EXTRACTION
+        let detectedAmount = extractAmountSmart(text);
+
+        // Date detection
+        let dateMatch = text.match(/\b\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\b/);
+        let detectedDate = dateMatch ? dateMatch[0] : "";
+
+        // Vendor = First line
+        let vendorLine = text.split("\n")[0]?.trim();
+
+        setFormData(prev => ({
+            ...prev,
+            amount: detectedAmount || prev.amount,
+            vendor: vendorLine || prev.vendor,
+        }));
+
+        if (detectedDate) {
+            let formatted = detectedDate.replace(/-/g, "/");
+            setDate(new Date(formatted));
+        }
+    };
+
+
+
     // --- Pick Image ---
     const pickImage = async () => {
         const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -72,14 +167,35 @@ const AddExpenses = () => {
             alert("Permission is required to select images.");
             return;
         }
+
         const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ImagePicker.Images,
             quality: 0.7,
             allowsEditing: true
         });
-        if (!result.canceled) setReceipt(result.assets[0].uri);
-        StatusBar.setBackgroundColor(darkMode ? "#121212" : "#00f", true);
+
+        if (!result.canceled) {
+            const uri = result.assets[0].uri;
+            setReceipt(uri);
+
+            //  START LOADING WHEN IMAGE IS PICKED
+            setGlobalLoading(true);
+
+            try {
+                const ocrText = await extractTextFromImage(uri);
+                console.log("OCR TEXT:", ocrText);
+                autoFillFields(ocrText);
+            } catch (e) {
+                console.log("OCR READ FAILED:", e);
+            }
+
+            //  STOP LOADING WHEN OCR IS DONE
+            setGlobalLoading(false);
+
+            StatusBar.setBackgroundColor(darkMode ? "#121212" : "#00f", true);
+        }
     };
+
 
     // --- Date Handler ---
     const handleDateChange = (event, selectedDate) => {
@@ -96,21 +212,21 @@ const AddExpenses = () => {
             label: i => i.project || i.name,
             selectedValue: selectedProject
         },
-        inShift: {
+        "expense_categories": {
             items: categoryItems,
             setItems: setCategoryItems,
             setLoading: setCategoryLoading,
             label: i => i.name,
             selectedValue: selectedCategory
         },
-        inTrips: {
+        vendors: {
             items: vendorItems,
             setItems: setVendorItems,
             setLoading: setVendorLoading,
             label: i => i.name,
             selectedValue: selectedVendor
         },
-        inTims: {
+        "payment_options": {
             items: paymentItems,
             setItems: setPaymentItems,
             setLoading: setPaymentLoading,
@@ -122,8 +238,11 @@ const AddExpenses = () => {
     // --- Load Editing Record from cache ---
     useEffect(() => {
         const loadRecord = async () => {
+            if (id) setGlobalLoading(true);
+
             const cashed = (await readCache(CACHE_KEY)) || { data: [] };
             const cashedList = Array.isArray(cashed.data) ? cashed.data : [];
+
             if (id) {
                 const r = cashedList.find(item => item.id.toString() === id.toString());
                 if (r) {
@@ -144,9 +263,13 @@ const AddExpenses = () => {
                     setDate(r.date ? new Date(r.date) : new Date());
                 }
             }
+
+            if (id) setGlobalLoading(false);
         };
+
         loadRecord();
     }, [id]);
+
 
     const fetchItems = async (destination) => {
         const config = DESTINATION_MAP[destination];
@@ -156,9 +279,10 @@ const AddExpenses = () => {
 
         try {
             const response = await get(
-                `my-projects/show-in?destination=${destination}&_t=${isConnected ? Date.now() : 0}`,
+                `my-expenses/hints?destination=${destination}&_t=${isConnected ? Date.now() : 0}`,
                 { useBearerAuth: true }
             );
+            console.log(response)
 
             let items = [];
             if (response?.status === "success" && Array.isArray(response.data)) {
@@ -173,9 +297,9 @@ const AddExpenses = () => {
             if (editingRecord) {
                 switch (destination) {
                     case "expenses": currentValue = editingRecord.project; break;
-                    case "inShift": currentValue = editingRecord.category; break;
-                    case "inTrips": currentValue = editingRecord.vendor; break;
-                    case "inTims": currentValue = editingRecord.paymentType; break;
+                    case "expense_categories": currentValue = editingRecord.category; break;
+                    case "vendors": currentValue = editingRecord.vendor; break;
+                    case "payment_options": currentValue = editingRecord.paymentType; break;
                 }
                 if (currentValue && !items.find(i => i.value === currentValue)) {
                     items = [{ label: currentValue, value: currentValue }, ...items];
@@ -195,9 +319,9 @@ const AddExpenses = () => {
     useEffect(() => {
         const loadFund = async () => {
             await fetchItems("expenses");
-            await fetchItems("inShift");
-            await fetchItems("inTrips");
-            await fetchItems("inTims");
+            await fetchItems("vendors");
+            await fetchItems("payment_options");
+            await fetchItems("expense_categories");
 
         }
         loadFund()
@@ -334,23 +458,23 @@ const AddExpenses = () => {
                 </ThemedView>
 
                 {/* Select Fields */}
-                <SelectField label="Project" items={projectItems} value={selectedProject} onChange={setSelectedProject} loading={projectLoading} 
-                 message={"To select a project,just click on it . if the desired project is not in the list.it could be because you might have disabled the project"}
+                <SelectField label="Project" items={projectItems} value={selectedProject} onChange={setSelectedProject} loading={projectLoading}
+                    message={"To select a project,just click on it . if the desired project is not in the list.it could be because you might have disabled the project"}
                 />
-                <SelectField label="Category" items={categoryItems} value={selectedCategory} onChange={setSelectedCategory} loading={categoryLoading} 
-                 message={"To select a project,just click on it . if the desired project is not in the list.it could be because you might have disabled the project"}
+                <SelectField label="Category" items={categoryItems} value={selectedCategory} onChange={setSelectedCategory} loading={categoryLoading}
+                    message={"To select a project,just click on it . if the desired project is not in the list.it could be because you might have disabled the project"}
                 />
-                <SelectField label="Vendor" items={vendorItems} value={selectedVendor} onChange={setSelectedVendor} loading={vendorLoading} 
-                message={"To select a project,just click on it . if the desired project is not in the list.it could be because you might have disabled the project"}
+                <SelectField label="Vendor" items={vendorItems} value={selectedVendor} onChange={setSelectedVendor} loading={vendorLoading}
+                    message={"To select a project,just click on it . if the desired project is not in the list.it could be because you might have disabled the project"}
                 />
-                <SelectField 
-                label="Payment Type" 
-                items={paymentItems} 
-                value={selectedPayment} 
-                onChange={setSelectedPayment} 
-                loading={paymentLoading}
-                message={"To select a project,just click on it . if the desired project is not in the list.it could be because you might have disabled the project"}
-                 />
+                <SelectField
+                    label="Payment Type"
+                    items={paymentItems}
+                    value={selectedPayment}
+                    onChange={setSelectedPayment}
+                    loading={paymentLoading}
+                    message={"To select a project,just click on it . if the desired project is not in the list.it could be because you might have disabled the project"}
+                />
 
                 {/* Memo */}
                 <ThemedView className={`mb-2 p-4 rounded-lg ${bgColor} border border-gray-300`} style={{ elevation: 3 }}>
@@ -375,14 +499,14 @@ const AddExpenses = () => {
 };
 
 // --- Reusable SelectField component ---
-const SelectField = ({ label, items, value, onChange, loading,message }) => {
+const SelectField = ({ label, items, value, onChange, loading, message }) => {
     const { darkMode } = useTheme();
     const bgColor = darkMode ? "bg-gray-800" : "bg-white";
     return (
         <ThemedView className={`mb-4 p-4 rounded-lg ${bgColor} border border-gray-300`} style={{ elevation: 3 }}>
             <ThemedText className="mb-1 text-base">{label}:</ThemedText>
             <Select items={items} value={value} onChange={onChange} placeholder={`Choose ${label.toLowerCase()}`} loading={loading}
-            message={message} />
+                message={message} />
         </ThemedView>
     );
 };

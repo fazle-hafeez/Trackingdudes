@@ -299,7 +299,7 @@ const Expense = () => {
 
                 {loading ? (
                     <View className="mt-2">
-                        <LoadingSkeleton count={4} height={100} />
+                        <LoadingSkeleton count={3} height={105} spacing={20} />
                     </View>
                 ) : (
                     <FlatList

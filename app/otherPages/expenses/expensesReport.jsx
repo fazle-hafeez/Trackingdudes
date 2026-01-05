@@ -231,46 +231,7 @@ const Expenses = () => {
         });
     }, [expensesReports, searchQuery]);
 
-    const downloadPDF = async (item) => {
-        try {
-            const html = `
-      <html>
-        <body style="padding:20px;">
-          <h1>Expense Report</h1>
-          <p><b>Category:</b> ${item.category}</p>
-          <p><b>Date:</b> ${item.date}</p>
-          <p><b>Amount:</b> ${item.amount}</p>
-          <p><b>Payment:</b> ${item.paymentType}</p>
-          <p><b>Vendor:</b> ${item.vendor}</p>
-          <p><b>Project:</b> ${item.project}</p>
-          <p><b>Memo:</b> ${item.memo || "----"}</p>
-        </body>
-      </html>
-    `;
-
-            // 1️⃣ Generate PDF
-            const { uri } = await Print.printToFileAsync({ html });
-            console.log("PDF Generated:", uri);
-
-            // 2️⃣ Save final
-            const newUri = FileSystem.documentDirectory + `expense-${item.id}.pdf`;
-
-            await FileSystem.moveAsync({
-                from: uri,
-                to: newUri,
-            });
-
-            console.log("PDF Saved:", newUri);
-
-            // 3️⃣ Share PDF
-            await shareAsync(newUri);
-
-        } catch (error) {
-            console.log("PDF Error:", error);
-        }
-    };
-
-
+    
 
     // EXPENSE ITEM UI
     const ExpenseItem = ({ item }) => {
@@ -322,17 +283,10 @@ const Expenses = () => {
                                     <ThemedText>{item.date}</ThemedText>
                                 </View>
                             </View>
-                            <TouchableOpacity
-                                onPress={() => downloadPDF(item)}
-                                className="w-8 h-8 rounded-full bg-gray-400 justify-center items-center"
-                                activeOpacity={0.7}
-                            >
-                               <Feather name="download" size={20} color="#4b5563" />
-                            </TouchableOpacity>
+                         <ThemedText className=" mb-4">{item.amount}</ThemedText>             
                         </View>
 
                         <View className={`${darkMode ? "border-gray-500" : "border-yellow-400"} mb-5 border-b`} />
-                        <ThemedText className=" mb-4 px-2">Total Amount : {item.amount}</ThemedText>
 
                         <View className="flex-row justify-between mb-3">
                             <View className="flex-row items-center w-[48%]">

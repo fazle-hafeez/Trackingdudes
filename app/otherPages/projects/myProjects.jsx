@@ -270,7 +270,7 @@ const MyProjects = () => {
                 .map(item => item.id)
                 .filter(Boolean);
 
-            setSelectAll(updated.length === filteredIds.length);
+            setSelectAll(updated.length == filteredIds.length);
             return updated;
         });
     };
