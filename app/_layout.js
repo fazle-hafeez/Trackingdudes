@@ -95,8 +95,8 @@ const GlobalSystemBars = () => {
   const darkMode = themeDarkMode ?? colorScheme === "dark";
 
   useEffect(() => {
-    const statusBarBg = darkMode ? "#111" : "#00f"; // StatusBar bg
-    const navBarBg = darkMode ? "#111" : "#00f"; // NavigationBar bg
+    const statusBarBg = darkMode ? "#121212" : "#00f"; // StatusBar bg
+    const navBarBg = darkMode ? "#121212" : "#00f"; // NavigationBar bg
     const statusBarStyle = "light-content";
     const navButtonStyle = darkMode ? "light" : "dark";
 
