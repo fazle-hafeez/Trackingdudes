@@ -91,7 +91,7 @@ export default function DashboardPage() {
         </View>
 
         {/* Theme Toggle */}
-        <View className="flex-row items-center p-0.5 rounded-full bg-blue-700">
+        <View className=" flex-row items-center p-0.5 rounded-full bg-blue-700">
           <TouchableOpacity
             onPress={() => setTheme(false)}
             className={`p-2 rounded-full ${!darkMode ? "bg-white" : "bg-transparent"}`}
@@ -108,7 +108,7 @@ export default function DashboardPage() {
       </View>
 
       {/* Content */}
-      <ScrollView className="flex-1" contentContainerStyle={{ paddingTop: 80, paddingHorizontal: 12 }}>
+      <ScrollView className="flex-1 relative" contentContainerStyle={{ paddingTop: 80, paddingHorizontal: 12 }}>
         <View className={`rounded-xl px-4 pb-5 shadow-lg ${darkMode ? "border border-gray-700" : "bg-white"}`} >
           <View className="flex-row flex-wrap justify-between pt-6">
             {displayedFeatures.map((item, index) => (
@@ -118,7 +118,7 @@ export default function DashboardPage() {
                 onPress={() => router.push(item.route)}
               >
                 <RenderIcon item={item} />
-                <Text className={`mt-3 text-center text-xl ${darkMode ? "text-gray-400" : "text-black"}`}>
+                <Text className={`mt-3 text-center text-lg ${darkMode ? "text-gray-400" : "text-black"}`}>
                   {item.label}
                 </Text>
               </TouchableOpacity>
@@ -126,7 +126,7 @@ export default function DashboardPage() {
           </View>
         </View>
 
-        <ThemedText className="px-2 text-lg mt-4">
+        <ThemedText className="px-2 text-lg mt-4 ">
           You are using customized dashboard, manage items{" "}
           <Link href="/otherPages/customizeDashboard" style={{ color: "#007AFF" }}>here</Link>
         </ThemedText>

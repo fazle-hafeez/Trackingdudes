@@ -70,7 +70,6 @@ export default function CustomizeDashboard() {
     if (feature.type === "MaterialIcons") return <MaterialIcons name={feature.icon} size={feature.size} color={color} />;
     if (feature.type === "FontAwesome5") return <FontAwesome5 name={feature.icon} size={feature.size} color={color} />
     if (feature.type === "FontAwesome6") return <FontAwesome6 name={feature.icon} size={feature.size} color={color} />;
-    ;
     return null;
   };
 
@@ -80,10 +79,10 @@ export default function CustomizeDashboard() {
       <ScrollView className="p-4 flex-1">
         {/* Active Features */}
         <ThemedView className="p-4 rounded-lg">
-          <ThemedText className="text-xl font-bold mb-3">Active Features</ThemedText>
+          <ThemedText className="text-xl font-bold mb-3">You Selected</ThemedText>
           <View className="flex-row flex-wrap justify-between">
             {activeFeatures.length === 0 ? (
-              <ThemedText className="text-gray-500 ">No active features</ThemedText>
+              <ThemedText className="text-gray-500 ">No selected items, default items will be shown on the dashboard</ThemedText>
             ) : (
               activeFeatures.map(f => (
                 <TouchableOpacity
@@ -104,11 +103,11 @@ export default function CustomizeDashboard() {
 
         {/* All Features */}
         <ThemedView className="p-4 my-5 rounded-lg">
-          <ThemedText className="text-xl font-bold mb-3">All Features</ThemedText>
+          <ThemedText className="text-xl font-bold mb-3">Other Options</ThemedText>
           <View className="flex-row flex-wrap justify-between">
             {allFeatures.length === 0 ? (
-              <ThemedText className="text-gray-500 ">No features </ThemedText>
-            ) :(
+              <ThemedText className="text-gray-500 ">No more options, you have selected all the available options </ThemedText>
+             ) : (
             allFeatures.map(f => (
               <TouchableOpacity
                 key={f.id}
