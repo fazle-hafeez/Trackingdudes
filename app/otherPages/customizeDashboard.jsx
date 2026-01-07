@@ -84,6 +84,7 @@ export default function CustomizeDashboard() {
   const { darkMode } = useTheme();
   const [activeIds, setActiveIds] = useState([]);
   const darkModeBordered = darkMode ? "border-gray-700" : "border-gray-300";
+  const borderBottom = darkMode ? "border-gray-500 " : "border-orange-300";
 
   useEffect(() => {
     loadData();
@@ -127,8 +128,12 @@ export default function CustomizeDashboard() {
       <ScrollView className="p-4 flex-1">
 
         {/* ACTIVE */}
-        <ThemedView className="p-4 rounded-lg">
-          <ThemedText className="text-xl font-bold mb-3">You Selected</ThemedText>
+        <ThemedView className="p-4 rounded-lg shadow-lg">
+          <ThemedText className={`text-xl font-medium mb-4 border-b ${borderBottom} pb-2`}>You Selected</ThemedText>
+          {activeFeatures.length === 0 &&
+            (<ThemedText className="text-lg">
+              No selected items, default items will be shown on the dashboard
+            </ThemedText>)}
           <View className="flex-row flex-wrap justify-between">
             {activeFeatures.map(f => (
               <TouchableOpacity
@@ -147,8 +152,12 @@ export default function CustomizeDashboard() {
         </ThemedView>
 
         {/* OTHER */}
-        <ThemedView className="p-4 my-5 rounded-lg">
-          <ThemedText className="text-xl font-bold mb-3">Other Options</ThemedText>
+        <ThemedView className="p-4 mt-5 mb-9 rounded-lg shadow-lg ">
+          <ThemedText className={`text-xl font-medium mb-4 border-b ${borderBottom} pb-2`}>Other Options</ThemedText>
+          {allFeatures.length === 0 &&
+            (<ThemedText className="text-lg">
+              No more options, you have selected all the available options
+            </ThemedText>)}
           <View className="flex-row flex-wrap justify-between">
             {allFeatures.map(f => (
               <TouchableOpacity

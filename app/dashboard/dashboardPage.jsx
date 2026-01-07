@@ -8,7 +8,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "../../src/context/ThemeProvider";
 import { SafeAreacontext, ThemedText } from "../../src/components/ThemedColor";
 
-/* 🔥 OSS STYLE FEATURE MAP */
 const FEATURES_MAP = {
   shifts: {
     id: "shifts",
@@ -88,7 +87,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const { darkMode, setTheme } = useTheme();
 
-  // ✅ ONLY IDS
+  //  ONLY IDS
   const [activeIds, setActiveIds] = useState([]);
 
   const menuBorder = darkMode ? "border-b border-gray-700" : "";
@@ -112,7 +111,7 @@ export default function DashboardPage() {
     }, [])
   );
 
-  // ✅ FILTER USING ID + MAP
+  //  FILTER USING ID + MAP
   const displayedFeatures =
     activeIds.length > 0
       ? activeIds.map(id => FEATURES_MAP[id]).filter(Boolean)
@@ -194,7 +193,7 @@ export default function DashboardPage() {
           </View>
         </View>
 
-        <ThemedText className="px-2 text-lg mt-4">
+        <ThemedText className="px-2 text-lg mt-4 ">
           You are using customized dashboard, manage items{" "}
           <Link href="/otherPages/customizeDashboard" style={{ color: "#007AFF" }}>
             here
