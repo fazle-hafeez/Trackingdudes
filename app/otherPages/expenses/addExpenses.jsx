@@ -40,6 +40,7 @@ const AddExpenses = () => {
         paymentType: "",
         memo: "",
         project: "",
+        subCatogry: ""
     });
 
     const [formErrors, setFormErrors] = useState({
@@ -47,7 +48,9 @@ const AddExpenses = () => {
         category: "",
         vendor: "",
         paymentType: "",
-        project: ""
+        project: "",
+        receiptSize: "",
+        subCatogry: ""
     });
 
     // --- Select States ---
@@ -174,9 +177,19 @@ const AddExpenses = () => {
             allowsEditing: true
         });
 
+        const asset = result.assets?.[0];
+
+        if (asset?.fileSize && asset.fileSize > 1024 * 1024) {
+            setFormErrors(prev => ({
+                ...prev,
+                receiptSize: "Image too large. Please upload an image under 1MB."
+            }));
+            return;
+        }
         if (!result.canceled) {
             const uri = result.assets[0].uri;
             setReceipt(uri);
+            setFormErrors(prev => ({ ...prev, receiptSize: "" }));
 
             //  START LOADING WHEN IMAGE IS PICKED
             setGlobalLoading(true);
@@ -205,32 +218,35 @@ const AddExpenses = () => {
 
     // --- Fetch Select Items ---
     const DESTINATION_MAP = {
-        expenses: {
+        expenses: { // Projects
             items: projectItems,
             setItems: setProjectItems,
             setLoading: setProjectLoading,
-            label: i => i.project || i.name,
+            // Yahan keys check karein: project_name ya name
+            label: i => i.project_name || i.name || i.project || i.label,
             selectedValue: selectedProject
         },
         "expense_categories": {
             items: categoryItems,
             setItems: setCategoryItems,
             setLoading: setCategoryLoading,
-            label: i => i.name,
+            // Yahan category_name check karein
+            label: i => i.category_name || i.name || i.category || i.label,
             selectedValue: selectedCategory
         },
         vendors: {
             items: vendorItems,
             setItems: setVendorItems,
             setLoading: setVendorLoading,
-            label: i => i.name,
+            label: i => i.vendor_name || i.name || i.vendor || i.label,
             selectedValue: selectedVendor
         },
         "payment_options": {
             items: paymentItems,
             setItems: setPaymentItems,
             setLoading: setPaymentLoading,
-            label: i => i.name,
+            // Yahan option_name ya payment_option
+            label: i => i.option_name || i.name || i.payment_option || i.label,
             selectedValue: selectedPayment
         }
     };
@@ -238,37 +254,57 @@ const AddExpenses = () => {
     // --- Load Editing Record from cache ---
     useEffect(() => {
         const loadRecord = async () => {
-            if (id) setGlobalLoading(true);
+            if (!id) return;
 
-            const cashed = (await readCache(CACHE_KEY)) || { data: [] };
-            const cashedList = Array.isArray(cashed.data) ? cashed.data : [];
+            setGlobalLoading(true);
+            try {
+                // 1️⃣ Pehle Cache check karein (For Offline / Fast Load)
+                const cached = (await readCache(CACHE_KEY)) || { data: [] };
+                const cachedList = Array.isArray(cached.data) ? cached.data : [];
+                const localRecord = cachedList.find(item => item.id?.toString() === id.toString());
 
-            if (id) {
-                const r = cashedList.find(item => item.id.toString() === id.toString());
-                if (r) {
-                    setEditingRecord(r);
-                    setFormData({
-                        amount: r.amount,
-                        category: r.category,
-                        project: r.project,
-                        vendor: r.vendor,
-                        paymentType: r.paymentType,
-                        memo: r.memo
-                    });
-                    setReceipt(r?.image || null);
-                    setSelectedProject(r.project);
-                    setSelectedCategory(r.category);
-                    setSelectedVendor(r.vendor);
-                    setSelectedPayment(r.paymentType);
-                    setDate(r.date ? new Date(r.date) : new Date());
+                if (localRecord) {
+                    updateFormFields(localRecord); // Helper function niche hai
                 }
-            }
 
-            if (id) setGlobalLoading(false);
+                // 2️⃣ Agar online hai, toh Fresh Data API se lein (Latest version)
+                if (isConnected) {
+                    // Aapka naya endpoint use ho raha hai yahan
+                    // loadRecord ke andar jahan apiGet likha hai usay get kar dein
+                    const response = await get(`my-expenses/expense?id=${id}`, { useBearerAuth: true });;
+
+                    if (response?.status === "success" && response?.data) {
+                        updateFormFields(response.data);
+                    }
+                }
+            } catch (error) {
+                console.error("Error loading record:", error);
+            } finally {
+                setGlobalLoading(false);
+            }
         };
 
         loadRecord();
-    }, [id]);
+    }, [id, isConnected]);
+
+    // Logic ko clean rakhne ke liye helper function
+    const updateFormFields = (data) => {
+        setEditingRecord(data);
+        setFormData({
+            amount: data.amount?.toString() || "",
+            category: data.category || "",
+            project: data.project || "",
+            vendor: data.vendor || "",
+            paymentType: data.payment_option || data.paymentType || "", // Check both naming conventions
+            memo: data.memo || ""
+        });
+        setReceipt(data.receipt || data.image || null);
+        setSelectedProject(data.project);
+        setSelectedCategory(data.category);
+        setSelectedVendor(data.vendor);
+        setSelectedPayment(data.payment_option || data.paymentType);
+        setDate(data.date ? new Date(data.date) : new Date());
+    };
 
 
     const fetchItems = async (destination) => {
@@ -282,39 +318,68 @@ const AddExpenses = () => {
                 `my-expenses/hints?destination=${destination}&_t=${isConnected ? Date.now() : 0}`,
                 { useBearerAuth: true }
             );
-            console.log(response)
 
             let items = [];
-            if (response?.status === "success" && Array.isArray(response.data)) {
-                items = response.data.map(i => ({
-                    label: config.label(i),
-                    value: config.label(i)
-                }));
+
+            if (response?.status === "success" && response.data) {
+                let rawData = [];
+                if (Array.isArray(response.data)) {
+                    rawData = response.data;
+                } else if (destination === "expenses" && Array.isArray(response.data.projects)) {
+                    rawData = response.data.projects;
+                } else if (Array.isArray(response.data[destination])) {
+                    rawData = response.data[destination];
+                }
+
+                // Map with Index to ensure uniqueness
+                items = rawData.map((i, index) => {
+                    const labelText = config.label(i);
+
+                    if (labelText && labelText !== "Unknown Category") {
+                        return {
+                            label: String(labelText),
+                            value: String(labelText),
+                            // Unique key using index + label
+                            key: `${destination}-${index}-${labelText}`
+                        };
+                    }
+                    return null;
+                }).filter(item => item !== null);
             }
 
-            // --- Edit mode fallback ---
-            let currentValue;
+            // Edit mode fallback logic
             if (editingRecord) {
+                let currentValue;
                 switch (destination) {
                     case "expenses": currentValue = editingRecord.project; break;
                     case "expense_categories": currentValue = editingRecord.category; break;
                     case "vendors": currentValue = editingRecord.vendor; break;
-                    case "payment_options": currentValue = editingRecord.paymentType; break;
+                    case "payment_options": currentValue = editingRecord.payment_option || editingRecord.paymentType; break;
                 }
+
                 if (currentValue && !items.find(i => i.value === currentValue)) {
-                    items = [{ label: currentValue, value: currentValue }, ...items];
+                    items = [{
+                        label: String(currentValue),
+                        value: String(currentValue),
+                        key: `edit-fallback-${currentValue}`
+                    }, ...items];
                 }
             }
 
             config.setItems(items);
+
+            if (isConnected && items.length > 0) {
+                await storeCache(`cache_hints_${destination}`, { data: items, timestamp: Date.now() });
+            }
+
         } catch (e) {
-            console.log(destination, e);
-            config.setItems([]);
+            console.error(`Error fetching ${destination}:`, e);
+            const cached = await readCache(`cache_hints_${destination}`);
+            config.setItems(cached?.data || []);
         } finally {
             config.setLoading(false);
         }
     };
-
     // --- Load all select items once on mount ---
     useEffect(() => {
         const loadFund = async () => {
@@ -328,65 +393,252 @@ const AddExpenses = () => {
     }, [editingRecord]); //  keep editingRecord as dependency to fetch fallback
 
     const handleSubmit = async () => {
-        let errors = { amount: "", category: "", vendor: "", paymentType: "", project: "" };
+        let errors = {
+            amount: "",
+            category: "",
+            vendor: "",
+            paymentType: "",
+            project: "",
+        };
+
         let hasError = false;
 
-        if (!formData.amount) { errors.amount = "Amount is required"; hasError = true; }
+        if (!formData.amount) {
+            errors.amount = "Amount is required";
+            hasError = true;
+        }
 
         setFormErrors(errors);
         if (hasError) return;
 
+        // ✅ Expense object (for cache)
         const newExpense = {
             id: Date.now().toString(),
             amount: formData.amount,
             category: selectedCategory,
             vendor: selectedVendor,
-            paymentType: selectedPayment,
+            payment_option: selectedPayment,
             project: selectedProject,
-            memo: formData.memo,
+            memo: formData.memo || "",
+            sub_category: formData.subCatogry || "",
             date: date.toISOString(),
             receipt,
-            pending: true,
+            pending: !isConnected,
         };
 
         try {
+            // 1️⃣ Save locally first
             let cachedData = await readCache(CACHE_KEY);
-            if (!cachedData || typeof cachedData !== "object") cachedData = { data: [] };
-            const prevExpenses = Array.isArray(cachedData.data) ? cachedData.data : [];
-            cachedData.data = [...prevExpenses, newExpense];
+            if (!cachedData || typeof cachedData !== "object") {
+                cachedData = { data: [] };
+            }
+
+            cachedData.data = [...(cachedData.data || []), newExpense];
             await storeCache(CACHE_KEY, cachedData);
 
-            let offline = false;
+            let offline = !isConnected;
+
+            // 2️⃣ Try online submit
             if (isConnected) {
                 try {
-                    const response = await post("/expenses/create", newExpense);
-                    if (response?.status === "success") newExpense.pending = false;
-                    else offline = true;
-                } catch (err) { offline = true; }
-            } else offline = true;
+                    const fd = new FormData();
 
-            cachedData.data = cachedData.data.map(e => e.id === newExpense.id ? newExpense : e);
+                    fd.append("amount", newExpense.amount);
+                    fd.append("category", newExpense.category || "");
+                    fd.append("vendor", newExpense.vendor || "");
+                    fd.append("payment_option", newExpense.payment_option || "");
+                    fd.append("project", newExpense.project || "");
+                    fd.append("memo", newExpense.memo);
+                    fd.append("sub_category", newExpense.sub_category);
+                    fd.append("date", newExpense.date);
+
+                    if (receipt) {
+                        fd.append("receipt", {
+                            uri: receipt,
+                            name: "receipt.jpg",
+                            type: "image/jpeg",
+                        });
+                    }
+
+                    const response = await post(
+                        "my-expenses/create-expense",
+                        fd,
+                        { isFormData: true }
+                    );
+
+                    console.log("CREATE RESPONSE:", response);
+
+                    if (response?.status === "success") {
+                        newExpense.pending = false;
+                        showModal(response.message || "Expense added successfully", "success");
+                    } else {
+                        showModal(
+                            response?.error || response?.data || "Failed to save expense",
+                            "error"
+                        );
+                    }
+                } catch (err) {
+                    //  real network error
+                    offline = true;
+                    console.log("Network error:", err);
+                }
+            }
+
+            //  Update cache pending flag
+            cachedData.data = cachedData.data.map((e) =>
+                e.id === newExpense.id ? newExpense : e
+            );
             await storeCache(CACHE_KEY, cachedData);
 
-            alert(offline
-                ? "Expense saved locally. It will sync when you are online."
-                : "Expense submitted successfully!"
-            );
+            //  Reset form
+            resetFields()
 
-            setFormData({ amount: "", category: "", vendor: "", paymentType: "", project: "", memo: "" });
-            setReceipt(null);
-            setSelectedCategory(null);
-            setSelectedVendor(null);
-            setSelectedProject(null);
-            setSelectedPayment(null);
+            if (offline) {
+                showModal("Saved offline. It will sync when online.", "info");
+            }
         } catch (err) {
-            console.log("Expenses Error:", err);
-            alert("Failed to save expense locally");
+            console.log("Expense Submit Error:", err);
+            showModal("Failed to save expense locally", "error");
         }
     };
 
-    const updateExpense = () => {
-        console.log("Update expense called");
+
+    const updateExpense = async () => {
+        if (!editingRecord) return;
+
+        let errors = {
+            amount: "",
+            category: "",
+            vendor: "",
+            paymentType: "",
+            project: "",
+        };
+
+        let hasError = false;
+
+        if (!formData.amount) {
+            errors.amount = "Amount is required";
+            hasError = true;
+        }
+
+        setFormErrors(errors);
+        if (hasError) return;
+
+        //  Updated expense (cache purpose)
+        const updatedExpense = {
+            ...editingRecord,
+            amount: formData.amount,
+            category: selectedCategory,
+            vendor: selectedVendor,
+            payment_option: selectedPayment,
+            project: selectedProject,
+            memo: formData.memo || "",
+            sub_category: formData.subCatogry || "",
+            date: date.toISOString(),
+            receipt,
+            pending: !isConnected,
+            METHOD_OVERRIDE
+        };
+
+        try {
+            //  Update cache immediately
+            let cachedData = await readCache(CACHE_KEY);
+            if (!cachedData || typeof cachedData !== "object") {
+                cachedData = { data: [] };
+            }
+
+            cachedData.data = cachedData.data.map((e) =>
+                e.id === updatedExpense.id ? updatedExpense : e
+            );
+
+            await storeCache(CACHE_KEY, cachedData);
+
+            let offline = !isConnected;
+
+            // 2️⃣ Try online update
+            if (isConnected) {
+                try {
+                    const fd = new FormData();
+
+                    fd.append("amount", updatedExpense.amount);
+                    fd.append("category", updatedExpense.category || "");
+                    fd.append("vendor", updatedExpense.vendor || "");
+                    fd.append("payment_option", updatedExpense.payment_option || "");
+                    fd.append("project", updatedExpense.project || "");
+                    fd.append("memo", updatedExpense.memo);
+                    fd.append("sub_category", updatedExpense.sub_category);
+                    fd.append("date", updatedExpense.date);
+
+                    //  send image ONLY if changed
+                    if (receipt && receipt !== editingRecord.receipt) {
+                        fd.append("receipt", {
+                            uri: receipt,
+                            name: "receipt.jpg",
+                            type: "image/jpeg",
+                        });
+                    }
+
+                    const response = await post(
+                        `my-expenses/update-expense/${updatedExpense.id}`,
+                        fd,
+                        true,
+                        { isFormData: true }
+                    );
+
+                    console.log("UPDATE RESPONSE:", response);
+
+                    if (response?.status === "success") {
+                        updatedExpense.pending = false;
+                        showModal(response.message || "Expense updated successfully", "success");
+                    } else {
+                        showModal(
+                            response?.error || response?.message || "Failed to update expense",
+                            "error"
+                        );
+                    }
+                } catch (err) {
+                    offline = true;
+                    console.log("Update network error:", err);
+                }
+            }
+
+            //  Update cache pending flag
+            cachedData.data = cachedData.data.map((e) =>
+                e.id === updatedExpense.id ? updatedExpense : e
+            );
+
+            await storeCache(CACHE_KEY, cachedData);
+
+            //  Reset form
+            resetFields()
+
+            if (offline) {
+                showModal("Updated offline. It will sync when online.", "info");
+            }
+        } catch (err) {
+            console.log("Update Expense Error:", err);
+            showModal("Failed to update expense locally", "error");
+        }
+    };
+
+
+    const resetFields = () => {
+        setFormData({
+            amount: "",
+            category: "",
+            vendor: "",
+            paymentType: "",
+            project: "",
+            memo: "",
+            subCatogry: "",
+        });
+
+        setReceipt(null);
+        setSelectedCategory(null);
+        setSelectedVendor(null);
+        setSelectedProject(null);
+        setSelectedPayment(null);
+
     }
 
     const bgColor = darkMode ? "bg-gray-800" : "bg-white";
@@ -415,6 +667,9 @@ const AddExpenses = () => {
                         )}
                     </TouchableOpacity>
                 </ThemedView>
+                {formErrors.receiptSize && (
+                    <ThemedText className="my-1 text-red-500">{formErrors.receiptSize}</ThemedText>
+                )}
 
                 {/* Date */}
                 {!id && (
@@ -475,6 +730,16 @@ const AddExpenses = () => {
                     loading={paymentLoading}
                     message={"To select a project,just click on it . if the desired project is not in the list.it could be because you might have disabled the project"}
                 />
+                <ThemedView className={`mb-4 p-4 rounded-lg ${bgColor} border border-gray-300`} style={{ elevation: 3 }}>
+                    <ThemedText className="mb-1 text-base">Sub categories:</ThemedText>
+                    <Input
+                        value={formData.subCatogry}
+                        onchange={(val) => setFormData({ ...formData, subCatogry: val })}
+                        placeholder="Enter sub category"
+                        inputError={formErrors.subCatogry}
+                        setInputError={(err) => setFormErrors({ ...formErrors, subCatogry: err })}
+                    />
+                </ThemedView>
 
                 {/* Memo */}
                 <ThemedView className={`mb-2 p-4 rounded-lg ${bgColor} border border-gray-300`} style={{ elevation: 3 }}>

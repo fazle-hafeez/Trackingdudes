@@ -87,7 +87,6 @@ const Login = () => {
     if (!password.trim()) {
       setPassError("Field is required");
       hasError = true;
-      return
     }
 
     if (hasError) return;
@@ -95,36 +94,45 @@ const Login = () => {
     setGlobalLoading(true);
 
     try {
-      // const cleanUsername = username.trim().replace(/\s+/g, "");
-      const cleanUsername = username.trim()
+      const cleanUsername = username.trim();
       const payload = {
         username: cleanUsername,
         password: password,
-        keep_logged_in: keepLoggedIn,
+        keep_logged_in: true,
       };
 
-      const result = await post(
-        "tokens/new",
-        payload,
-        false,
-        false,
-        { useBasicAuth: true }
-      );
-      if (result?.status === "success") {
-        await AsyncStorage.setItem("tokens", JSON.stringify(result.tokens));
-        const userData = result?.user || { username: cleanUsername };
-        //  Call global login handler
-        await login(userData, result.tokens, {
-          remember,
-          keepLoggedIn
-        });
-       
-        // Manage remembered username
-        // Manage remembered credentials securely
+      // Post request
+      const result = await post("tokens/new", payload, false, false, {
+        useBasicAuth: true
+      });
+
+      console.log("Server response:", result);
+
+      if (!result) {
+        showModal("Server did not respond", "error");
+        return;
+      }
+
+      if (result.status === "success") {
+        const t = result.tokens;
+        const newTokens = {
+          access: t.access,
+          refresh: t.refresh,
+          accessExpires: t.accessExpires,
+          refreshExpires: t.refreshExpires,
+          issuedAt: t.issuedAt || Math.floor(Date.now() / 1000),
+        };
+
+        await AsyncStorage.setItem("tokens", JSON.stringify(newTokens));
+
+        const userData = result.user || { username: cleanUsername };
+
+        // Call global login handler
+        await login(userData, result.tokens, { remember, keepLoggedIn });
+
+        // Remember credentials
         if (keepLoggedIn) {
-          // Username → AsyncStorage (safe enough)
           await AsyncStorage.setItem("savedUsername", cleanUsername);
-          // Password → SecureStore (encrypted)
           await SecureStore.setItemAsync("savedPassword", password);
         } else {
           await AsyncStorage.removeItem("savedUsername");
@@ -137,31 +145,19 @@ const Login = () => {
           await AsyncStorage.removeItem("rememberedUserName");
         }
 
-        showModal(result.data || "you are  Login successful!", "success");
-        setTimeout(() => {
-          router.push("/dashboard/dashboardPage");
-        }, 3500);
+        showModal("Login successful!", "success");
+        setTimeout(() => router.push("/dashboard/dashboardPage"), 2000);
+      } else {
+        showModal(result.message || "Invalid username or password.", "error");
       }
-      else if (result?.status === "error") {
-        if (lastTriedUser === cleanUsername) {
-          showModal("Too many login attempts. Please try again later.", "error");
-          setTimeout(() => {
-            router.push("/auth/signup")
-          }, 2500);
-        } else {
-          showModal(result?.data || "Invalid username or password.", "error");
-          setLastTriedUser(cleanUsername);
-        }
-      }
-      else {
-        showModal(result.data || "Something went wrong. Please try again.", "error");
-      }
-    } catch (error) {
+    } catch (err) {
+      console.log("LOGIN ERROR 👉", err);
       showModal("A server error occurred. Please try again later.", "error");
     } finally {
       setGlobalLoading(false);
     }
   };
+
   return (
     <SafeAreacontext bgColor={"#fff"} className="flex-1">
       <HeaderSection />

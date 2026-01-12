@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useContext } from "react";
 import { View, Text } from "react-native";
-import Ionicons from "@expo/vector-icons/Ionicons";
+import { FontAwesome, FontAwesome5, MaterialIcons, Ionicons } from "@expo/vector-icons";
 import { ThemedView, ThemedText, SafeAreacontext } from "../../../src/components/ThemedColor";
 import PageHeader from "../../../src/components/PageHeader";
 import Button from "../../../src/components/Button";
@@ -30,12 +30,37 @@ const Vendor = () => {
 
 
     const iconOptions = [
-        { icon: "storefront-outline", label: "Storefront" },
-        { icon: "business-outline", label: "Business" },
-        { icon: "cube-outline", label: "Warehouse" },
-        { icon: "cart-outline", label: "E-commerce" },
-        { icon: "receipt-outline", label: "Receipt" },
-        { icon: "people-outline", label: "Supplier" },
+        // --- Shopping & Retail ---
+        { icon: "storefront", label: "Shop", type: "Ionicons" },
+        { icon: "shopping-cart", label: "Cart", type: "FontAwesome" },
+        { icon: "shopping-bag", label: "Brand", type: "FontAwesome" },
+        { icon: "tag", label: "Retail", type: "FontAwesome" },
+
+        // --- Food & Drinks ---
+        { icon: "fast-food", label: "Food", type: "Ionicons" },
+        { icon: "restaurant", label: "Dining", type: "Ionicons" },
+        { icon: "coffee", label: "Cafe", type: "FontAwesome" },
+        { icon: "pizza", label: "Pizza", type: "Ionicons" },
+
+        // --- Services & Transport ---
+        { icon: "car-sport", label: "Transport", type: "Ionicons" },
+        { icon: "tools", label: "Repair", type: "FontAwesome5" },
+        { icon: "local-gas-station", label: "Fuel", type: "MaterialIcons" },
+        { icon: "medical", label: "Health", type: "Ionicons" },
+        { icon: "build", label: "Services", type: "Ionicons" },
+
+        // --- Tech & Office ---
+        { icon: "laptop", label: "Tech", type: "FontAwesome" },
+        { icon: "print", label: "Print", type: "FontAwesome" },
+        { icon: "desktop-outline", label: "Software", type: "Ionicons" },
+        { icon: "wifi", label: "Internet", type: "Ionicons" },
+
+        // --- Others ---
+        { icon: "globe-outline", label: "Online", type: "Ionicons" },
+        { icon: "card", label: "Bank", type: "Ionicons" },
+        { icon: "gift", label: "Gifts", type: "FontAwesome" },
+        { icon: "fitness", label: "Gym", type: "Ionicons" },
+        { icon: "briefcase", label: "Work", type: "FontAwesome" },
     ];
 
     // Load cached vendors on mount
@@ -290,6 +315,18 @@ const Vendor = () => {
         }
     };
 
+    const RenderVendorIcon = ({ item, size = 26, color = "#000" }) => {
+        switch (item.type) {
+            case "FontAwesome":
+                return <FontAwesome name={item.icon} size={size} color={color} />;
+            case "FontAwesome5":
+                return <FontAwesome5 name={item.icon} size={size} color={color} />;
+            case "MaterialIcons":
+                return <MaterialIcons name={item.icon} size={size} color={color} />;
+            default:
+                return <Ionicons name={item.icon} size={size} color={color} />;
+        }
+    };
 
     return (
         <SafeAreacontext bgColor="#eff6ff" className="flex-1">
@@ -321,7 +358,7 @@ const Vendor = () => {
                 <ThemedView className="p-4 rounded-lg mb-5" style={{ elevation: 2 }}>
                     <ThemedText className="mb-2">Choose an icon:</ThemedText>
                     <Select
-                        items={iconOptions.map((i) => ({ label: i.label, value: i.icon, icon: i.icon }))}
+                        items={iconOptions.map((i) => ({ label: i.label, value: i.icon, icon: i.icon, type: i.type }))}
                         value={selectedIcon}
                         onChange={setSelectedIcon}
                         iconVisibility={true}
@@ -335,7 +372,11 @@ const Vendor = () => {
                         className="flex-row items-center p-4 rounded-xl mb-3"
                         style={{ elevation: 5, borderColor: "#2563eb", borderWidth: 1 }}
                     >
-                        <Ionicons name={selectedIcon} size={28} color="#2563eb" className="mr-3" />
+                        <RenderVendorIcon
+                            item={iconOptions.find(i => i.icon === selectedIcon) || { icon: selectedIcon, type: 'Ionicons' }}
+                            color="#2563eb"
+                            size={28}
+                        />
                         <ThemedText className="text-base font-semibold">{vendorName}</ThemedText>
                     </ThemedView>
                 )}
