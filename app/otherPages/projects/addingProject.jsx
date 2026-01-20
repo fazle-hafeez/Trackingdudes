@@ -25,7 +25,7 @@ import { useDebounce } from "../../../src/hooks/useDebounce";
 import { router, useLocalSearchParams } from "expo-router";
 import { ThemedView, ThemedText, SafeAreacontext } from "../../../src/components/ThemedColor";
 import Input from "../../../src/components/Input"
-// 🟢 OFFLINE IMPORTS
+//  OFFLINE IMPORTS
 import { readCache, storeCache } from "../../../src/offline/cache";
 import { OfflineContext } from "../../../src/offline/OfflineProvider";
 import { useTheme } from "../../../src/context/ThemeProvider";
@@ -36,8 +36,8 @@ const AddingProject = () => {
   const { get, post, put } = useApi();
   const { showModal, setGlobalLoading, hideModal } = useAuth();
   const { darkMode } = useTheme()
-  const { offlineQueue, isConnected } = useContext(OfflineContext); // 🟢 OFFLINE CONTEXT
-  const { id } = useLocalSearchParams();
+  const { offlineQueue, isConnected } = useContext(OfflineContext); //  OFFLINE CONTEXT
+  const { id, projectCount, activeTab, order } = useLocalSearchParams();
 
   // Single project object state
   const [project, setProject] = useState({
@@ -63,7 +63,7 @@ const AddingProject = () => {
     if (id) fetchProjectDetail();
   }, [id]);
 
-  // 🟢 OFFLINE FETCH LOGIC
+  //  OFFLINE FETCH LOGIC
   const fetchProjectDetail = async () => {
     setGlobalLoading(true);
     try {
@@ -140,7 +140,7 @@ const AddingProject = () => {
     }
   };
 
-  // 🟢 OFFLINE NAME AVAILABILITY CHECK
+  //  OFFLINE NAME AVAILABILITY CHECK
   useEffect(() => {
     if (!touchedName) return; // exit if user hasn't touched the name yet
     if (!debouncedName.trim()) {
@@ -240,7 +240,8 @@ const AddingProject = () => {
   };
 
 
-  // 🟢 OFFLINE CREATE PROJECT
+  //  OFFLINE CREATE PROJECT
+  
   const handleCreateProject = async () => {
     if (!validateForm() || messageStatus) return; // Don't allow if duplicate message is shown
 
@@ -277,29 +278,24 @@ const AddingProject = () => {
       // PREPARE NEW PROJECT ITEM
       const newProject = {
         ...payload,
-        id: isOffline ? payload.tempId : result?.data?.id || payload.tempId,
-        pending: isOffline,
+        id: payload.tempId,
+        tempId: payload.tempId,
+        pending: true, // mark as pending
         in_shifts: !!payload.in_shifts,
         in_trips: !!payload.in_trips,
         in_times: !!payload.in_times,
         in_expenses: !!payload.in_expenses,
       };
 
-      // MERGE CACHE USING MAP (duplicate-free)
-      const mergedMap = new Map();
-      oldData.forEach(p => mergedMap.set(p.id || p.tempId, p));
-      mergedMap.set(newProject.id || newProject.tempId, newProject);
-
-      const mergedList = Array.from(mergedMap.values());
-
-      // STORE CACHE
+      // MERGE CACHE (duplicate-free)
+      const mergedList = [...oldData, newProject]; // <-- yahan simple array push kar do
       await storeCache(CACHE_KEY, { data: mergedList });
-      await storeCache("newRecordAdded", true); // Flag for list refresh
+      await storeCache("newRecordAdded", true); // flag list refresh ke liye
 
       // SHOW MODAL
       showModal(
         isOffline
-          ? "Project saved locally. It will sync when online."
+          ? "Project was added successfully you are in offline mode please don't use the dublicate project name it may be crashed your request (offline)"
           : result?.message || "Project created successfully!",
         isOffline ? "warning" : "success",
         false,
@@ -330,95 +326,85 @@ const AddingProject = () => {
     }
   };
 
-  const handleSave = async () => {
+
+  //===================//
+  //== Update project =//
+  //==================// 
+
+  const handleUpdateProject = async () => {
     if (!validateForm() || messageStatus) return;
 
     setGlobalLoading(true);
     try {
-      const payload = {
-        project_no: id, // Original ID
-        project: project.name.trim(),
-        in_shifts: project.in_shifts,
-        in_trips: project.in_trips,
-        in_times: project.in_times,
-        in_expenses: project.in_expenses,
-        suggestions: project.suggestions,
-        status: "enabled",
-      };
+        const payload = {
+            project_no: id,
+            project: project.name.trim(),
+            in_shifts: project.in_shifts,
+            in_trips: project.in_trips,
+            in_times: project.in_times,
+            in_expenses: project.in_expenses,
+            suggestions: project.suggestions,
+            status: project.status || "enabled", // Use current status
+        };
 
-      let res = null;
-      let isOffline = false;
+        let res = null;
+        let isOffline = false;
 
-      try {
-        res = await put("my-projects/update-project", payload, { useBearerAuth: true });
-        if (!res || res.offline) isOffline = true;
-      } catch (err) {
-        console.log("Offline detected or network error", err);
-        isOffline = true;
-      }
+        try {
+            res = await put("my-projects/update-project", payload, { useBearerAuth: true });
+            if (!res || res.offline) isOffline = true;
+        } catch (err) {
+            console.log("Offline detected", err);
+            isOffline = true;
+        }
 
-      // READ OLD CACHE
-      const cachedWrapOld = (await readCache(CACHE_KEY)) || { data: [] };
-      const oldData = Array.isArray(cachedWrapOld.data) ? cachedWrapOld.data : [];
+        // --- CACHE UPDATE LOGIC ---
+        const cachedWrapOld = (await readCache(CACHE_KEY)) || { data: [] };
+        const oldData = Array.isArray(cachedWrapOld.data) ? [...cachedWrapOld.data] : [];
 
-      // Prepare updated project object
-      const updatedProject = {
-        ...payload,
-        id: payload.project_no,
-        tempId: payload.project_no,
-        pending: isOffline,
-        in_shifts: !!payload.in_shifts,
-        in_trips: !!payload.in_trips,
-        in_times: !!payload.in_times,
-        in_expenses: !!payload.in_expenses,
-      };
+        const updatedProject = {
+            ...payload,
+            id: id,
+            tempId: id,
+            pending: isOffline, // Agar offline hai toh true
+            // Flag normalization
+            in_shifts: !!payload.in_shifts,
+            in_trips: !!payload.in_trips,
+            in_times: !!payload.in_times,
+            in_expenses: !!payload.in_expenses,
+            status:project.status || "enabled",
+        };
 
-      // MERGE CACHE USING MAP (duplicate-free)
-      const mergedMap = new Map();
-      oldData.forEach(p => mergedMap.set(p.id || p.tempId, p));
-      mergedMap.set(updatedProject.id || updatedProject.tempId, updatedProject);
+        const idx = oldData.findIndex(i => String(i.id || i.project_no) === String(id));
+        if (idx > -1) {
+            oldData[idx] = { ...oldData[idx], ...updatedProject };
+        }
 
-      const mergedList = Array.from(mergedMap.values());
+        // Store in all relevant keys
+        const fetchStatus = activeTab.toLowerCase();
+        const paginationKey = `my-projects?status=${fetchStatus}&order=${order || 'asc'}&limit=${projectCount || 10}&page=1`;
+        
+        await storeCache(CACHE_KEY, { data: oldData });
+        await storeCache(paginationKey, { data: oldData });
+        await storeCache("recordUpdated", true);
 
-      // STORE CACHE
-      await storeCache(CACHE_KEY, { data: mergedList });
-      await storeCache("recordUpdated", true); // For list refresh
-
-      // SHOW MODAL
-      showModal(
-        isOffline
-          ? "Project updated locally. Changes will sync when online."
-          : res?.message || "Project updated successfully!",
-        isOffline ? "warning" : "success",
-        false,
-        [
-          {
-            label: "View changes",
-            bgColor: "bg-green-600",
-            onPress: async () => {
-              hideModal();
-              // Refresh from cache to reflect updated state
-              await fetchProjectDetail();
-            },
-          },
-          {
-            label: "View All",
-            bgColor: "bg-blue-600",
-            onPress: () => {
-              hideModal();
-              router.back();
-            },
-          },
-        ]
-      );
+        showModal(
+            isOffline ? "Project was updated successfully you are in offline mode please don't use the dublicate project name it may be crashed your request (offline)" : "Project was updated successfully!",
+            isOffline ? "warning" : "success",
+            false,
+            [
+                { label: "View changes", bgColor: "bg-green-600", onPress: async () => { hideModal(); await fetchProjectDetail(); } },
+                { label: "View All", bgColor: "bg-blue-600", onPress: () => { hideModal(); router.back(); } },
+            ]
+        );
 
     } catch (error) {
-      console.error(error);
-      showModal(error?.error || "A server error occurred.", "error");
+        console.error(error);
+        showModal(error?.error || "A server error occurred.", "error");
     } finally {
-      setGlobalLoading(false);
+        setGlobalLoading(false);
     }
-  };
+};
 
 
   return (
@@ -530,7 +516,7 @@ const AddingProject = () => {
           <View className="mt-2">
             <Button
               title={id ? "Update" : "Save"}
-              onClickEvent={id ? handleSave : handleCreateProject}
+              onClickEvent={id ? handleUpdateProject : handleCreateProject}
               disabled={messageStatus} // Disable button if name is a duplicate
             />
           </View>
@@ -562,39 +548,39 @@ const Section = ({ children }) => (
 
 // --- Checkbox Input ---
 const LabeledInput = ({ label, value, onChange }) => {
-  const {darkMode} = useTheme()
+  const { darkMode } = useTheme()
   const finalColor = darkMode ? '#9ca3af' : '#646060ff'
-  return(
-  <View className="flex-row items-center my-2 w-[49%] px-2">
-    <View className="absolute -left-1 z-10">
-      <Checkbox
-        value={value}
-        onValueChange={onChange}
-        color={value ? "#2563eb" : undefined}
-        style={{
-          borderWidth: 2,
-          borderColor: value ? "#2563eb" : "#9ca3af",
-          backgroundColor: value ? "#2563eb" : "white",
-          borderRadius: 5,
-          width: 21,
-          height: 21,
-        }}
+  return (
+    <View className="flex-row items-center my-2 w-[49%] px-2">
+      <View className="absolute -left-1 z-10">
+        <Checkbox
+          value={value}
+          onValueChange={onChange}
+          color={value ? "#2563eb" : undefined}
+          style={{
+            borderWidth: 2,
+            borderColor: value ? "#2563eb" : "#9ca3af",
+            backgroundColor: value ? "#2563eb" : "white",
+            borderRadius: 5,
+            width: 21,
+            height: 21,
+          }}
+        />
+      </View>
+      <TextInput
+        className="border border-gray-400 rounded-lg pl-5 pr-3 py-2 text-base flex-1"
+        value={label}
+        editable={false}
+        placeholderTextColor={finalColor}
+        style={{ color: finalColor }}
       />
     </View>
-    <TextInput
-      className="border border-gray-400 rounded-lg pl-5 pr-3 py-2 text-base flex-1"
-      value={label}
-      editable={false}
-      placeholderTextColor={finalColor}
-      style={{color:finalColor}}
-    />
-  </View>
   )
 }
 
 // --- Info Modal ---
 const InfoModal = ({ visible, onClose, message }) => {
-  const {darkMode} = useTheme()
+  const { darkMode } = useTheme()
   const opacity = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(0.8)).current;
   const modalBg = darkMode ? " bg-black/90" : " bg-black/80"
@@ -641,7 +627,7 @@ const InfoModal = ({ visible, onClose, message }) => {
               </ThemedText>
               <TouchableOpacity className="p-1" onPress={onClose}>
                 <ThemedText>
-                <AntDesign name="close" size={20} />
+                  <AntDesign name="close" size={20} />
                 </ThemedText>
               </TouchableOpacity>
             </View>

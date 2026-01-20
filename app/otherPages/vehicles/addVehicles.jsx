@@ -1,7 +1,6 @@
 
 import React, { useState, useEffect, useContext } from "react";
-import { View, Text, StatusBar, KeyboardAvoidingView, Platform, ScrollView } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { View, Text, ScrollView } from "react-native";
 import { FontAwesome5, FontAwesome6 } from "@expo/vector-icons";
 import { useLocalSearchParams } from "expo-router";
 import { router } from "expo-router";
@@ -14,7 +13,6 @@ import Button from "../../../src/components/Button";
 import Select from "../../../src/components/Select";
 
 //---------Hooks ---------------------
-import { useTheme } from "../../../src/context/ThemeProvider";
 import { useDebounce } from "../../../src/hooks/useDebounce";
 import { useApi } from "../../../src/hooks/useApi";
 import { useAuth } from "../../../src/context/UseAuth";
@@ -22,8 +20,11 @@ import { readCache, storeCache } from "../../../src/offline/cache";
 import { OfflineContext } from "../../../src/offline/OfflineProvider";
 
 // add vehicles ==-==-=
+
+const CACHE_KEY = "my-vehicles"
+
 const AddVehicles = () => {
-  const { id } = useLocalSearchParams();
+  const { id = null, activeTab, order, fetchProject } = useLocalSearchParams();
   const { get, post, put } = useApi();
   const { showModal, setGlobalLoading, hideModal } = useAuth();
   const { offlineQueue, isConnected } = useContext(OfflineContext);
@@ -168,99 +169,139 @@ const AddVehicles = () => {
   const resetForm = () => setForm({ vehicleName: "", fuelEcnomy: "", tankCapacity: "", fuelType: "gs", fuelSolid: "gal", distanceMeasurement: "mi" });
 
   // --- Save / Update ---
-  const handleSubmit = async () => {
+
+  const handleCreateVehicle = async () => {
     if (!validateForm()) return;
+
     setGlobalLoading(true);
     try {
-      const payload = {
-        vehicle: form.vehicleName.trim(),
-        fuel_type: form.fuelType,
-        fuel_unit: form.fuelSolid,
-        distance_unit: form.distanceMeasurement,
-        distance_per_unit_fuel: parseFloat(form.fuelEcnomy),
-        tank_capacity: parseFloat(form.tankCapacity),
-        status: "enabled"
-      };
+        const tempId = Date.now().toString();
+        const payload = {
+            vehicle: form.vehicleName.trim(),
+            fuel_type: form.fuelType,
+            fuel_unit: form.fuelSolid,
+            distance_unit: form.distanceMeasurement,
+            distance_per_unit_fuel: parseFloat(form.fuelEcnomy),
+            tank_capacity: parseFloat(form.tankCapacity),
+            status: "enabled",
+            tempId: tempId,
+        };
 
-      if (id) {
-        payload.vehicle_no = id;
-        const res = await put("my-vehicles/update-vehicle", payload, { useBearerAuth: true });
+        let result = null;
+        let isOffline = false;
 
-        if (res?.offline) {
-          const cachedWrap = (await readCache("my-vehicles")) || { data: [] };
-          const list = Array.isArray(cachedWrap.data) ? cachedWrap.data : [];
-          const idx = list.findIndex(i => String(i.id) === String(id) || String(i.tempId) === String(id));
-          if (idx > -1) {
-            list[idx] = { ...list[idx], ...payload, pending: true, status: list[idx].status || payload.status };
-            await storeCache("my-vehicles", { data: list });
-          }
-          showModal("The vehicle was updated successfully you are in offline mode please don't use the dublicate project name it may be crashed your request (offline)", "success",
-            false, [
-            { label: "View Changes", bgColor: "bg-green-600", onPress: async () => { hideModal(); await fetchVehicleDetails(); } },
-            { label: "View All", bgColor: "bg-blue-600", onPress: () => { hideModal(); router.back(); } },
-          ]);
-        } else if (res?.status === "success") {
-          showModal(res.message || "The vehicle was updated successfully", "success", false, [
-            { label: "View Changes", bgColor: "bg-green-600", onPress: async () => { hideModal(); await fetchVehicleDetails(); } },
-            { label: "View All", bgColor: "bg-blue-600", onPress: () => { hideModal(); router.back(); } },
-          ]);
-        } else {
-          showModal(res.message || "Update failed", "error");
-        }
-      } else {
-        payload.tempId = Date.now();
-        const res = await post("my-vehicles/create-vehicle", payload, { useBearerAuth: true });
-
-        const cachedWrap = (await readCache("my-vehicles")) || { data: [] };
-        const list = Array.isArray(cachedWrap.data) ? cachedWrap.data : [];
-
-        const existsIdx = list.findIndex(i => i.tempId === payload.tempId || (i.vehicle && i.vehicle.toLowerCase() === payload.vehicle.toLowerCase()));
-        if (existsIdx > -1) {
-          list[existsIdx] = { ...list[existsIdx], ...payload, id: payload.tempId, tempId: payload.tempId, pending: !!res?.offline };
-        } else {
-          list.push({ ...payload, id: payload.tempId, tempId: payload.tempId, pending: !!res?.offline });
+        try {
+            result = await post("my-vehicles/create-vehicle", payload, { useBearerAuth: true });
+            if (!result || result.offline) isOffline = true;
+        } catch (err) {
+            console.log("Offline detected", err);
+            isOffline = true;
         }
 
-        await storeCache("my-vehicles", { data: list });
-        // Notify list screen to refresh and pick up the new cached item
+        // --- CACHE SYNC ---
+        const cachedWrapOld = (await readCache(CACHE_KEY)) || { data: [] };
+        const oldData = Array.isArray(cachedWrapOld.data) ? [...cachedWrapOld.data] : [];
+
+        const newVehicle = {
+            ...payload,
+            id: tempId,
+            pending: true,
+        };
+
+        // Duplicate check and add
+        const exists = oldData.some(i => i.vehicle === payload.vehicle);
+        if (!exists) {
+            oldData.unshift(newVehicle); // Top par add karein
+        }
+
+
+        await storeCache(CACHE_KEY, { data: oldData });
         await storeCache("newRecordAdded", true);
 
-        const isOffline = !!res?.offline;
+        showModal(
+            isOffline ? "Vehicle was added successfully you are in offline mode please don't use the dublicate vehicle name it may be crashed your request (offline)" : "Vehicle added successfully!",
+            isOffline ? "warning" : "success",
+            false,
+            [
+                { label: "Add More", bgColor: "bg-green-600", onPress: () => { hideModal(); resetForm(); } },
+                { label: "View All", bgColor: "bg-blue-600", onPress: () => { hideModal(); router.back(); } },
+            ]
+        );
+    } catch (error) {
+        console.error(error);
+        showModal("Error creating vehicle.", "error");
+    } finally {
+        setGlobalLoading(false);
+    }
+};
+
+
+const handleUpdateVehicle = async () => {
+    if (!validateForm()) return;
+
+    setGlobalLoading(true);
+    try {
+        const payload = {
+            vehicle_no: id, // Original ID
+            vehicle: form.vehicleName.trim(),
+            fuel_type: form.fuelType,
+            fuel_unit: form.fuelSolid,
+            distance_unit: form.distanceMeasurement,
+            distance_per_unit_fuel: parseFloat(form.fuelEcnomy),
+            tank_capacity: parseFloat(form.tankCapacity),
+            status: form.status || "enabled",
+        };
+
+        let result = null;
+        let isOffline = false;
+
+        try {
+            result = await put("my-vehicles/update-vehicle", payload, { useBearerAuth: true });
+            if (!result || result.offline) isOffline = true;
+        } catch (err) {
+            console.log("Offline detected", err);
+            isOffline = true;
+        }
+
+        // --- CACHE UPDATE ---
+        const cachedWrapOld = (await readCache(CACHE_KEY)) || { data: [] };
+        const oldData = Array.isArray(cachedWrapOld.data) ? [...cachedWrapOld.data] : [];
+
+        const updatedVehicle = {
+            ...payload,
+            id: id,
+            tempId: id,
+            pending: isOffline,
+        };
+
+        const idx = oldData.findIndex(i => String(i.id || i.vehicle_no || i.tempId) === String(id));
+        if (idx > -1) {
+            oldData[idx] = { ...oldData[idx], ...updatedVehicle };
+        }
+
+        const fetchStatus = (typeof activeTab !== 'undefined' && activeTab) ? activeTab.toLowerCase() : "enabled";
+        const paginationKey = `my-vehicles?status=${fetchStatus}&order=${order || 'asc'}&limit=${fetchProject || 10}&page=1`;
+
+        await storeCache(CACHE_KEY, { data: oldData });
+        await storeCache(paginationKey, { data: oldData });
+        await storeCache("recordUpdated", true);
 
         showModal(
-          res.message || (isOffline
-            ? "The  vehicle  was added locally. You're offline, so we can't verify if this name already exists on the server. It may conflict when back online."
-            : "The vehicle was added successfully!"),
-          isOffline ? "warning" : "success",
-          false,
-          [
-            {
-              label: "Add More",
-              bgColor: "bg-green-600",
-              onPress: () => {
-                hideModal();
-                resetForm();
-              },
-            },
-            {
-              label: "View All",
-              bgColor: "bg-blue-600",
-              onPress: () => {
-                hideModal();
-                router.back();
-              },
-            },
-          ]
+            isOffline ? "Vehicle was updated successfully you are in offline mode please don't use the dublicate vehicle name it may be crashed your request (offline)" : "Vehicle updated successfully!",
+            isOffline ? "warning" : "success",
+            false,
+            [
+                { label: "Done", bgColor: "bg-green-600", onPress: () => { hideModal(); } },
+                { label: "View All", bgColor: "bg-blue-600", onPress: () => { hideModal(); router.back(); } },
+            ]
         );
-
-      }
-    } catch (err) {
-      console.error(err);
-      showModal(err?.error || "Something went wrong", "error");
+    } catch (error) {
+        console.error(error);
+        showModal("Error updating vehicle.", "error");
     } finally {
-      setGlobalLoading(false);
+        setGlobalLoading(false);
     }
-  };
+};
 
   const fuelUnitLabels = { gal: "gallons", ltr: "liters", unit: "other Unit" };
 
@@ -280,7 +321,6 @@ const AddVehicles = () => {
               }}
               inputError={errors.vehicleName}
               placeholder="Enter vehicle name"
-              onFocus={() => setHasEdited(true)}
             />}
           error={
             message !== "" && (
@@ -333,7 +373,7 @@ const AddVehicles = () => {
               keyboardType="numeric" />}
         />
         <View className="mt-2">
-          <Button title={id ? "Update" : "Save"} onClickEvent={handleSubmit} />
+          <Button title={id ? "Update" : "Save"} onClickEvent={id ? handleUpdateVehicle :  handleCreateVehicle} />
         </View>
         {/* </View> */}
       </ScrollView>

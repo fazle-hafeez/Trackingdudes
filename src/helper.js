@@ -103,3 +103,26 @@ export  const DATE_TABS = {
   THIS_MONTH: "this-month",
   OTHERS: "others"
 };
+
+
+//============== get type and icon name from string ex:fontAwosome6:car
+
+ export const parseIconString = (iconStr = "") => {
+    if (!iconStr || !iconStr.includes(":")) return null;
+
+    const [prefix, icon] = iconStr.split(":");
+
+    const map = {
+        font4: "FontAwesome",
+        font5: "FontAwesome5",
+        font6: "FontAwesome6",
+        ion: "Ionicons",
+        mater: "MaterialIcons",
+    };
+
+    return {
+        prefix,
+        icon,
+        type: map[prefix] || "Ionicons",
+    };
+};

@@ -20,7 +20,7 @@ const BottomActionBar = ({
       backgroundColor: darkMode ? "#121212" : 'white',
       flexDirection: 'row',
       justifyContent: 'space-around',
-      paddingVertical: 10,
+      paddingVertical: 25,
       borderTopWidth: 1,
       borderTopColor: darkMode ? "#4a5568" : '#d1d5db',
       shadowColor: "#000",

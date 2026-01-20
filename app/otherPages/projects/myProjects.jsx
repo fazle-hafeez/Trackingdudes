@@ -1,9 +1,8 @@
 import { View, Text, TouchableOpacity, FlatList, RefreshControl, StatusBar } from "react-native";
 import React, { useCallback, useState, useEffect, useContext } from "react";
 import { useFocusEffect } from "@react-navigation/native";
-import { FontAwesome6, Feather, Ionicons, FontAwesome5 } from "@expo/vector-icons";
+import { FontAwesome6,  Ionicons, FontAwesome5 } from "@expo/vector-icons";
 import { router } from "expo-router";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // -----Hooks----------
 import { useApi } from "../../../src/hooks/useApi";
@@ -100,7 +99,13 @@ const MyProjects = () => {
             const allCached = Array.isArray(allCachedWrap.data) ? allCachedWrap.data : [];
 
             // Offline queue
+
             const offlineQueue = (await readCache("offlineQueue")) || [];
+
+            const offlineUpdates = offlineQueue
+                .filter(i => i.endpoint?.includes("update-project") && i.method === "put")
+                .map(i => ({ ...i.body, id: i.body.project_no || i.body.id, pending: true }));
+
             const pendingAdds = offlineQueue
                 .filter(i => i.endpoint?.includes("create-project") && i.method === "post")
                 .map(i => ({
@@ -118,6 +123,16 @@ const MyProjects = () => {
                 const key = p.id || p.tempId;
                 mergedMap.set(key, { ...p, pending: false, status: normalizeStatus(p.status) || fetchStatus });
             });
+
+            offlineUpdates.forEach(upd => {
+                const key = String(upd.id);
+                if (mergedMap.has(key)) {
+                    mergedMap.set(key, { ...mergedMap.get(key), ...upd, pending: true });
+                } else if (!isConnected) {
+                    // Agar offline mode mein hain toh list mein dikhao
+                    mergedMap.set(key, { ...upd, pending: true, status: normalizeStatus(upd.status) || fetchStatus });
+                }
+            })
 
             // 2) Pending offline adds
             pendingAdds.forEach(p => {
@@ -185,7 +200,6 @@ const MyProjects = () => {
                     inTrips: parseFlag(p.inTrips) || parseFlag(p.in_trips),
                     inTimes: parseFlag(p.inTimes) || parseFlag(p.in_times),
                     inExpenses: parseFlag(p.inExpenses) || parseFlag(p.in_expenses),
-
                     pending: !!p.pending,
                     status: normalizeStatus(p.status) || fetchStatus,
                 }))
@@ -229,14 +243,15 @@ const MyProjects = () => {
             };
 
             checkActionsAndFetch();
-        }, [activeTab, order, fetchProject])
+        }, [activeTab, order, fetchProject, isConnected])
     );
 
 
     // ---------------- REFRESH (FROM MyVehicles) ----------------
     const onRefresh = async () => {
         setRefreshing(true);
-        await fetchProjects(1, "desc", true);
+        setOrder("desc")
+        await fetchProjects(1, order, true);
         setRefreshing(false);
     };
 
@@ -439,9 +454,8 @@ const MyProjects = () => {
                 await storeCache(CACHE_KEY, { data: updatedCache });
                 await storeCache("recordDeleted", true);
                 showModal(res.data || "Projects deleted successfully.", "success");
-                handleCancel();
             } else {
-                showModal(res?.data || "Couldn't delete projects.", "error");
+                showModal(res?.data || res.message || res.error || "Couldn't delete projects.", "error");
             }
 
         } catch (err) {
@@ -449,6 +463,7 @@ const MyProjects = () => {
             showModal("Something went wrong while deleting.", "error");
         } finally {
             setGlobalLoading(false);
+            handleCancel()
         }
     };
 
@@ -464,6 +479,7 @@ const MyProjects = () => {
     const renderProject = ({ item }) => {
         const key = item.id || item.tempId;
         const isPending = !!item.pending || (item.id && !!pendingUpdates[item.id]) || (!!pendingUpdates[item.tempId]);
+        const isSelected = selectedProjects.includes(item.id)
 
         return (
             <TouchableOpacity
@@ -481,15 +497,24 @@ const MyProjects = () => {
                 }}
                 onPress={() => {
                     // Pass both ID and tempId to the detail screen for offline viewing/editing
-                    router.push({ pathname: "/otherPages/projects/addingProject", params: { id: item.id, tempId: item.tempId } });
+                    router.push({
+                        pathname: "/otherPages/projects/addingProject", params: {
+                            id: item.id, tempId: item.tempId, projectCount, activeTab, order
+                        }
+                    });
                 }}
                 activeOpacity={0.8}
                 delayLongPress={500}
                 className="mb-3"
             >
-                <ThemedView className={` rounded-lg shadow-sm p-4 ${isPending ? "border-2 border-yellow-400 bg-yellow-50" : ""}`}
-                    style={{ elevation: 5 }}>
-                    <View className={` ${darkMode ? 'border-gray-700' : 'border-orange-300'} 
+                <View
+                    className={`
+            rounded-lg p-4 shadow-sm border
+            ${isSelected ? darkMode ? "border-blue-500" : " border-blue-700 bg-white" :
+                            item.pending ? darkMode ? 'border-yellow-300' : "border-yellow-400 bg-yellow-50" :
+                                darkMode ? "border-gray-700" : "bg-white border-gray-100"}
+          `}>
+                    <View className={` ${darkMode ?  item.pending ? 'border-yellow-300': 'border-gray-700' : 'border-orange-300'} 
                       flex-row items-center border-b  pb-2 mb-2`}>
                         <View className="flex-row items-center flex-1">
                             {selectionMode && (
@@ -534,15 +559,16 @@ const MyProjects = () => {
 
                     {item.suggestions && (
                         <ThemedText color={'#6b7280'} className="text-base  pl-6 pr-4">{item.suggestions}</ThemedText>
-                    )
-                    }
+                    )}
 
                     {isPending && (
                         <Text className="text-yellow-600 my-2 text-xs font-medium">
-                            {item.id ? "⏳ Status/Update pending sync..." : "⏳ New record pending sync..."}
+                            {item.id  ? "⏳ Status/Update pending sync..." : "⏳ New record pending sync..."}
                         </Text>
                     )}
-                </ThemedView>
+
+
+                </View>
             </TouchableOpacity>
         );
     };
@@ -550,11 +576,11 @@ const MyProjects = () => {
         <SafeAreacontext bgColor={'#eff6ff'} className="flex-1">
             <PageHeader routes="My Projects" />
 
-            <AddItemCard 
-              className="mx-3 my-4"
-              title="Add New Project"  
-              icon={<FontAwesome6 name="file-shield" size={20} color="#10b981" />}   
-              onchange={()=>router.push("otherPages/projects/addingProject")}       
+            <AddItemCard
+                className="mx-3 my-4"
+                title="Add New Project"
+                icon={<FontAwesome6 name="file-shield" size={20} color="#10b981" />}
+                onchange={() => router.push("otherPages/projects/addingProject")}
             />
 
             <View className="px-3 flex-1">
@@ -578,13 +604,13 @@ const MyProjects = () => {
                 )}
 
                 {loading ? (
-                    <LoadingSkeleton  height={99} spacing={15}/>
+                    <LoadingSkeleton height={99} spacing={15} />
                 ) : filteredProjects.length > 0 ? (
                     <FlatList
                         data={filteredProjects}
                         renderItem={renderProject}
                         keyExtractor={(item) => (item.id || item.tempId)?.toString()}
-                       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+                        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
                         ListFooterComponent={
                             isConnected && totalPages > 1 ? (
                                 <View className="items-center mb-2">
@@ -599,7 +625,7 @@ const MyProjects = () => {
                     />
                 ) : (
                     <ThemedView className=" rounded-lg shadow-md p-4" style={{ eveltion: 5 }}>
-                        <Ionicons name="receipt-outline" size={58} color="#9ca3af"  className="mx-auto my-4"/>
+                        <Ionicons name="receipt-outline" size={58} color="#9ca3af" className="mx-auto my-4" />
                         <ThemedText color={'#374151'} className="text-lg ">
                             You have not saved any projects under the selected status.
                             Saving a project allows you to select it from the list of saved projects.

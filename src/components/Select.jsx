@@ -12,7 +12,13 @@ import {
   Dimensions,
   ActivityIndicator,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import {
+  Ionicons,
+  FontAwesome,
+  FontAwesome5,
+  MaterialIcons,
+} from "@expo/vector-icons";
+
 import { useTheme } from "../context/ThemeProvider";
 import Input from "./Input";
 import { ThemedText } from "./ThemedColor";
@@ -20,11 +26,30 @@ import { useModalBars } from "../hooks/useModalBar";
 
 const { height } = Dimensions.get("window");
 
+const RenderIcon = ({ icon, type, size = 26, color }) => {
+  if (!icon) return null;
+
+  switch (type) {
+    case "FontAwesome":
+      return <FontAwesome name={icon} size={size} color={color} />;
+
+    case "FontAwesome5":
+      return <FontAwesome5 name={icon} size={size} color={color} />;
+
+    case "MaterialIcons":
+      return <MaterialIcons name={icon} size={size} color={color} />;
+
+    default:
+      return <Ionicons name={icon} size={size} color={color} />;
+  }
+};
+
+
 const Select = ({
   items = [],
   value = null,
-  onChange = () => {},
-  onOpen = () => {},
+  onChange = () => { },
+  onOpen = () => { },
   loading = false,
   placeholder = "Select item...",
   error = "",
@@ -39,7 +64,7 @@ const Select = ({
   const [searchQuery, setSearchQuery] = useState("");
   const [filteredItems, setFilteredItems] = useState(items);
 
-  useModalBars( open, darkMode)
+  useModalBars(open, darkMode)
 
   const slideAnim = useRef(new Animated.Value(height)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -49,7 +74,7 @@ const Select = ({
       item?.label?.toLowerCase().includes(searchQuery.toLowerCase())
     );
     setFilteredItems(filtered);
-}, [searchQuery, items]);
+  }, [searchQuery, items]);
 
   const isSelected = (item) => value === item.value;
 
@@ -59,11 +84,11 @@ const Select = ({
     closeModal();
   };
 
- const selectedLabel = () => {
+  const selectedLabel = () => {
     if (!value) return placeholder;
     const sel = items.find((i) => i.value === value);
     return sel ? sel.label : value || placeholder;
-};
+  };
 
   const openModal = () => {
     if (disabled) return;
@@ -100,10 +125,10 @@ const Select = ({
   const borderColor = error
     ? "border-red-500"
     : disabled
-    ? "border-gray-300 opacity-60"
-    : darkMode
-    ? "border-gray-700"
-    : "border-['#ccc']";
+      ? "border-gray-300 opacity-60"
+      : darkMode
+        ? "border-gray-700"
+        : "border-['#ccc']";
 
   const textColor =
     selectedLabel() === placeholder
@@ -111,8 +136,8 @@ const Select = ({
         ? "text-gray-400"
         : "text-['#646060ff']"
       : darkMode
-      ? "text-gray-400"
-      : "text-['#646060ff']";
+        ? "text-gray-400"
+        : "text-['#646060ff']";
 
   const modalBg = darkMode ? "#1f2937" : "white";
   const modalText = darkMode ? "text-gray-300" : "text-gray-900";
@@ -169,7 +194,7 @@ const Select = ({
             </View>
 
             {/* Search Input */}
-            {items.length > 0  && (
+            {items.length > 0 && (
               <Input
                 className={"my-2"}
                 placeholder="Search..."
@@ -205,18 +230,16 @@ const Select = ({
                     return (
                       <TouchableOpacity
                         onPress={() => toggleItem(item)}
-                        className={`flex-row justify-between items-center py-3 px-3 border-b ${
-                          darkMode ? "border-gray-700" : "border-gray-100"
-                        } ${selected ? "bg-indigo-200" : ""}`}
+                        className={`flex-row justify-between items-center py-3 px-3 border-b ${darkMode ? "border-gray-700" : "border-gray-100"
+                          } ${selected ? "bg-indigo-200" : ""}`}
                       >
                         <Text
-                          className={`text-base ${
-                            selected
-                              ? "font-semibold text-indigo-600"
-                              : darkMode
+                          className={`text-base ${selected
+                            ? "font-semibold text-indigo-600"
+                            : darkMode
                               ? "text-gray-300"
                               : "text-gray-900"
-                          }`}
+                            }`}
                         >
                           {item.label}
                         </Text>
@@ -241,19 +264,20 @@ const Select = ({
                               ? "#374151"
                               : "#E0E7FF"
                             : darkMode
-                            ? "#111827"
-                            : "#F3F4F6",
+                              ? "#111827"
+                              : "#F3F4F6",
                           borderWidth: selected ? 1.5 : 1,
                           borderColor: selected
                             ? "#3B82F6"
                             : darkMode
-                            ? "#374151"
-                            : "#E5E7EB",
+                              ? "#374151"
+                              : "#E5E7EB",
                         }}
                       >
                         {item.icon && (
-                          <Ionicons
-                            name={item.icon}
+                          <RenderIcon
+                            icon={item.icon}
+                            type={item.type}
                             size={26}
                             color={darkMode ? "#D1D5DB" : "#111827"}
                           />

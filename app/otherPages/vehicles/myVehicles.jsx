@@ -1,5 +1,5 @@
 
-import React, { useState, useCallback, useContext, useEffect } from "react";
+import React, { useState, useCallback, useContext, useEffect, act } from "react";
 import { View, Text, TouchableOpacity, FlatList, RefreshControl } from "react-native";
 import { FontAwesome5, FontAwesome6 } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
@@ -67,145 +67,178 @@ const MyVehicles = () => {
   const fetchVehicles = async (pageNumber = 1, currentOrder = order, shouldUpdateCache = false) => {
     const fetchStatus = activeTab.toLowerCase();
     try {
-      setLoading(true);
+        setLoading(true);
 
-      const result = await get(
-        `my-vehicles?status=${fetchStatus}&order=${currentOrder}&limit=${projectCount}&page=${pageNumber}&_t=${isConnected ? Date.now() : 0}`,
-        { useBearerAuth: true }
-      );
+        const result = await get(
+            `my-vehicles?status=${fetchStatus}&order=${currentOrder}&limit=${projectCount}&page=${pageNumber}&_t=${isConnected ? Date.now() : 0}`,
+            { useBearerAuth: true }
+        );
 
-      // Vehicles array
-      let vehiclesData = Array.isArray(result?.data) ? result.data : [];
+        let vehiclesData = Array.isArray(result?.data) ? result.data : [];
+        console.log( 'apis:',result);
+        
 
-      // Set pagination
-      if (isConnected) {
-        setPage(result?.pagination?.current_page || pageNumber);
-        setTotalPages(result?.pagination?.total_pages || 1);
-      } else {
-        setPage(1);
-        setTotalPages(1);
-      }
+        if (isConnected && result?.pagination) {
+            setPage(result?.pagination?.current_page || pageNumber);
+            setTotalPages(result?.pagination?.total_pages || 1);
+        } else {
+            setPage(1);
+            setTotalPages(1);
+        }
 
-      // Load caches
-      const cachedPendingRaw = await readCache("pendingUpdates") || {};
-      const cachedPending = mergePendingAndNormalize(cachedPendingRaw);
-      const allCachedWrap = await readCache(CACHE_KEY) || { data: [] };
-      const allCached = Array.isArray(allCachedWrap.data) ? allCachedWrap.data : [];
+        // --- LOAD CACHES ---
+        const cachedPendingRaw = await readCache("pendingUpdates") || {};
+        const cachedPending = mergePendingAndNormalize(cachedPendingRaw);
+        const allCachedWrap = await readCache(CACHE_KEY) || { data: [] };
+        const allCached = Array.isArray(allCachedWrap.data) ? allCachedWrap.data : [];
+        const offlineQueue = (await readCache("offlineQueue")) || [];
 
-      // 1) Merge pending offline posts (new records added offline)
-      const offlineQueue = (await readCache("offlineQueue")) || [];
-      const pendingItems = offlineQueue
-        .filter(i => i.endpoint?.includes("create-vehicle") && i.method === "post")
-        .map(i => ({
-          ...i.body,
-          tempId: i.body.tempId || i.body.id || Date.now(),
-          pending: true,
-          status: normalizeStatus(i.body.status) || "enabled",
-        }));
+        // --- OFFLINE DATA FILTERS ---
+        
+        // 1) New Vehicles added offline
+        const pendingAdds = offlineQueue
+            .filter(i => i.endpoint?.includes("create-vehicle") && i.method === "post")
+            .map(i => ({
+                ...i.body,
+                tempId: i.body.tempId || i.body.id || `local_v_${Date.now()}`,
+                pending: true,
+                status: normalizeStatus(i.body.status) || "enabled",
+            }));
 
-      pendingItems.forEach(p => {
-        const exists = vehiclesData.find(v => (v.id && p.id && v.id === p.id) || (v.tempId && p.tempId && v.tempId === p.tempId));
-        if (!exists && p.status === fetchStatus) vehiclesData.push(p);
-      });
+        // 2) Vehicle Edits/Updates made offline
+        const offlineUpdates = offlineQueue
+            .filter(i => i.endpoint?.includes("update-vehicle") && i.method === "put")
+            .map(i => ({
+                ...i.body,
+                id: i.body.vehicle_no || i.body.id, // Vehicle ID field ensure karein
+                pending: true
+            }));
 
-      // 2) Add items moved to this tab due to pending status change
-      const movedPendingItems = allCached
-        .filter(item => {
-          const id = item.id;
-          const pendingStatus = cachedPending[id] || cachedPending[item.tempId];
-          return (id || item.tempId) && pendingStatus && pendingStatus === fetchStatus;
-        })
-        .map(item => ({ ...item, status: cachedPending[item.id] || cachedPending[item.tempId], pending: true }));
+        // --- MERGING LOGIC (Using Map) ---
+        const mergedMap = new Map();
 
-      movedPendingItems.forEach(pItem => {
-        const exists = vehiclesData.find(v => (v.id && pItem.id && v.id === pItem.id) || (v.tempId && pItem.tempId && v.tempId === pItem.tempId));
-        if (!exists) vehiclesData.push(pItem);
-      });
-
-      // 3) Apply pending status to all records in the current list
-      vehiclesData = vehiclesData.map(v => {
-        const id = v.id || v.tempId;
-        const pendingStatus = cachedPending[id] || cachedPending[v.id] || cachedPending[v.tempId];
-        if (pendingStatus) return { ...v, status: pendingStatus, pending: true };
-        return { ...v, status: (v.status ? String(v.status).toLowerCase() : fetchStatus) };
-      });
-
-      // 4) Final filter to ensure displayed items match current tab
-      vehiclesData = vehiclesData.filter(v => String(v.status || "").toLowerCase() === fetchStatus);
-
-      setVehicles(vehiclesData);
-
-      // Update cache
-      if (vehiclesData.length > 0 && (isConnected || shouldUpdateCache)) {
-        await storeCache(CACHE_KEY, { data: vehiclesData, timestamp: Date.now() });
-      }
-
-    } catch (err) {
-      console.log("API error:", err);
-
-      // Fallback: show cache (with pending applied)
-      const cachedWrap = await readCache(CACHE_KEY) || { data: [] };
-      const cached = Array.isArray(cachedWrap.data) ? cachedWrap.data : [];
-      const cachedPendingRaw = await readCache("pendingUpdates") || {};
-      const cachedPending = mergePendingAndNormalize(cachedPendingRaw);
-
-      if (cached.length > 0) {
-        let safeCachedData = cached.map(item => {
-          const id = item.id || item.tempId;
-          const pendingStatus = cachedPending[id];
-          return {
-            ...item,
-            status: (pendingStatus || item.status || activeTab).toString().toLowerCase(),
-            pending: !!pendingStatus,
-          };
+        // Step 1: Online Data
+        vehiclesData.forEach(v => {
+            const key = String(v.id || v.tempId);
+            mergedMap.set(key, { ...v, pending: false, status: normalizeStatus(v.status) || fetchStatus });
         });
 
-        safeCachedData = safeCachedData.filter(item => String(item.status || "").toLowerCase() === fetchStatus);
-        setVehicles(safeCachedData);
-      } else {
-        setVehicles([]);
-      }
+        // Step 2: Merge Offline Updates (Edits)
+        offlineUpdates.forEach(upd => {
+            const key = String(upd.id);
+            if (mergedMap.has(key)) {
+                mergedMap.set(key, { ...mergedMap.get(key), ...upd, pending: true });
+            } else if (!isConnected) {
+                mergedMap.set(key, { ...upd, pending: true, status: normalizeStatus(upd.status) || fetchStatus });
+            }
+        });
 
-      setPage(1);
-      setTotalPages(1); // offline fallback
+        // Step 3: Merge New Offline Additions
+        pendingAdds.forEach(p => {
+            const key = String(p.tempId);
+            if (!mergedMap.has(key)) {
+                mergedMap.set(key, { ...p, pending: true, status: normalizeStatus(p.status) || fetchStatus });
+            }
+        });
+
+        // Step 4: Pending Status Updates (Tab Movements)
+        allCached.forEach(item => {
+            const id = String(item.id || item.tempId);
+            const pendingStatus = cachedPending[id];
+            if (id && pendingStatus) {
+                mergedMap.set(id, { ...item, status: pendingStatus, pending: true });
+            }
+        });
+
+        // --- FINAL LISTING & FILTERING ---
+        const finalList = Array.from(mergedMap.values())
+            .map(v => ({
+                ...v,
+                // Vehicle specific flags agar hain (example: isActive, isService)
+                pending: !!v.pending,
+                status: normalizeStatus(v.status) || fetchStatus,
+            }))
+            .filter(v => normalizeStatus(v.status) === fetchStatus);
+
+        setVehicles(finalList);
+
+        if (isConnected || shouldUpdateCache) {
+            await storeCache(CACHE_KEY, { data: finalList, timestamp: Date.now() });
+        }
+
+    } catch (err) {
+        console.log("Error fetching vehicles, falling back to cache:", err);
+
+        // --- OFFLINE FALLBACK ---
+        const cachedWrap = await readCache(CACHE_KEY) || { data: [] };
+        const cached = Array.isArray(cachedWrap.data) ? cachedWrap.data : [];
+        const offlineQueue = (await readCache("offlineQueue")) || [];
+
+        const pendingAdds = offlineQueue
+            .filter(i => i.endpoint?.includes("create-vehicle") && i.method === "post")
+            .map(i => ({
+                ...i.body,
+                tempId: i.body.tempId || i.body.id || `local_v_${Date.now()}`,
+                pending: true,
+            }));
+
+        const mergedMap = new Map();
+        cached.forEach(v => mergedMap.set(String(v.id || v.tempId), v));
+        pendingAdds.forEach(p => mergedMap.set(String(p.tempId), p));
+
+        const finalList = Array.from(mergedMap.values())
+            .map(v => ({
+                ...v,
+                pending: !!v.pending,
+                status: normalizeStatus(v.status) || fetchStatus,
+            }))
+            .filter(v => normalizeStatus(v.status) === fetchStatus);
+
+        setVehicles(finalList);
+        setPage(1);
+        setTotalPages(1);
     } finally {
-      setLoading(false);
+        setLoading(false);
     }
-  };
-
+};
+  
 
   useFocusEffect(
     useCallback(() => {
       if (!fetchProject) return;
 
-      const restorePending = async () => {
-        const cachedPending = await readCache("pendingUpdates");
-        if (cachedPending) setPendingUpdates(mergePendingAndNormalize(cachedPending));
-      };
-
       const checkActionsAndFetch = async () => {
-        const newRecord = await readCache("newRecordAdded");
-        const recordDeleted = await readCache("recordDeleted");
+        try {
+          // Read action flags
+          const newRecord = await readCache("newRecordAdded");
+          const recordDeleted = await readCache("recordDeleted");
+          const recordUpdated = await readCache("recordUpdated");
 
-        if (newRecord || recordDeleted) {
-          await fetchVehicles(1, order, true);
-          if (newRecord) await storeCache("newRecordAdded", false);
-          if (recordDeleted) await storeCache("recordDeleted", false);
-        } else {
-          await fetchVehicles(1);
+          // If any action happened, force cache update
+          if (newRecord || recordDeleted || recordUpdated) {
+            await fetchVehicles(1, order, true); // Force cache refresh
+
+            // Reset flags after fetch
+            if (newRecord) await storeCache("newRecordAdded", false);
+            if (recordDeleted) await storeCache("recordDeleted", false);
+            if (recordUpdated) await storeCache("recordUpdated", false);
+          } else {
+            await fetchVehicles(1); // normal fetch
+          }
+        } catch (err) {
+          console.error("Focus fetch error:", err);
         }
       };
 
-      restorePending();
       checkActionsAndFetch();
-    }, [activeTab, order, fetchProject])
+    }, [activeTab, order, fetchProject, isConnected])
   );
-
 
   // ---------------- REFRESH ----------------
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchVehicles(1, "desc", true);
+    setOrder("desc")
+    await fetchVehicles(1, order, true);
     setRefreshing(false);
   };
 
@@ -419,6 +452,7 @@ const MyVehicles = () => {
   const renderVehicle = ({ item }) => {
     const key = item.id || item.tempId;
     const isPending = !!item.pending || (item.id && !!pendingUpdates[item.id]) || (!!pendingUpdates[item.tempId]);
+    const isSelected = selectedVehicles.includes(item.id)
 
     return (
       <TouchableOpacity
@@ -433,15 +467,19 @@ const MyVehicles = () => {
           }
         }}
         onPress={() => {
-          router.push({ pathname: "/otherPages/vehicles/addVehicles", params: { id: item.id, tempId: item.tempId } });
+          router.push({
+            pathname: "/otherPages/vehicles/addVehicles", params: {
+              id: item.id, tempId: item.tempId, activeTab, order, fetchProject
+            }
+          });
         }}
         activeOpacity={0.8}
         delayLongPress={500}
         className="mb-3"
       >
-        <ThemedView className={` rounded-md shadow-sm p-4 ${isPending ? "border border-yellow-400 bg-yellow-50" : ""}`}
-          style={{ elevation: 2 }}>
-          <View className={`${darkMode ? 'border-gray-700' : 'border-yellow-300'} 
+        <View
+          className={`p-4  rounded-lg mb-3 border shadow ${isSelected ? darkMode ? 'border-blue-500 ' : "border-blue-500 bg-blue-50" : item.pending ? "border-yellow-300 " : darkMode ? "border-gray-700" : "bg-white border-gray-100"}`}>
+          <View className={`${darkMode ? item.pending ? 'border-yellow-200' : 'border-gray-700' : item.pending ? 'border-yellow-200' : 'border-yellow-300'} 
              flex-row items-center border-b  pb-2 mb-2`}>
             <View className="flex-row items-center">
               {selectionMode && (
@@ -483,9 +521,11 @@ const MyVehicles = () => {
           </View>
 
           {isPending && (
-            <Text className="text-yellow-600 my-2 text-xs font-medium">⏳ Pending sync...</Text>
+            <Text className="text-yellow-600 my-2 text-xs font-medium">
+              {item.id ? "⏳ Status/Update pending sync..." : "⏳ New record pending sync..."}
+            </Text>
           )}
-        </ThemedView>
+        </View>
       </TouchableOpacity>
     );
   };
@@ -580,4 +620,3 @@ const MyVehicles = () => {
 };
 
 export default MyVehicles;
-

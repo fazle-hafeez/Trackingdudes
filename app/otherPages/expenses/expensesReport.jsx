@@ -11,7 +11,7 @@ import { OfflineContext } from "../../../src/offline/OfflineProvider";
 import usePersistentValue from "../../../src/hooks/usePersistentValue";
 import { readCache, storeCache } from "../../../src/offline/cache";
 import { useApi } from "../../../src/hooks/useApi";
-import { mergePendingAndNormalize, formatCurrency, DATE_TABS, getDateRange } from "../../../src/helper";
+import { mergePendingAndNormalize, formatCurrency, DATE_TABS, getDateRange, parseIconString  } from "../../../src/helper";
 
 // Components
 import Tabs from "../../../src/components/Tabs";
@@ -61,32 +61,7 @@ const Expenses = () => {
 
   const { modalVisible, storedValue: fetchExpense, saveValue: setFetchExpense, setModalVisible } = usePersistentValue("@expense-tracking");
 
-  const parseIconString = (iconString) => {
-    if (!iconString || typeof iconString !== "string") {
-      return {
-        type: "Ionicons",
-        name: "pricetag-outline",
-      };
-    }
-
-    const [rawType, iconName] = iconString.split(":");
-
-    const typeMap = {
-      fontawesome: "FontAwesome",
-      fontawesome5: "FontAwesome",
-      fontawesome6: "FontAwesome6",
-      ionicons: "Ionicons",
-      material: "Material",
-      materialicons: "Material",
-    };
-
-    return {
-      type: typeMap[rawType?.toLowerCase()] || "Ionicons",
-      name: iconName || "pricetag-outline",
-    };
-  };
-
-  //===========
+  // ===== for cleaning the code used this function ===========
   const normalizeExpenseIcons = (expense) => {
     const vendorIcon = parseIconString(expense.vendor_icon);
     const categoryIcon = parseIconString(expense.category_icon);

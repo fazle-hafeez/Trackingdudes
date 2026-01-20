@@ -222,7 +222,6 @@ const AddExpenses = () => {
             items: projectItems,
             setItems: setProjectItems,
             setLoading: setProjectLoading,
-            // Yahan keys check karein: project_name ya name
             label: i => i.project_name || i.name || i.project || i.label,
             selectedValue: selectedProject
         },
@@ -230,7 +229,6 @@ const AddExpenses = () => {
             items: categoryItems,
             setItems: setCategoryItems,
             setLoading: setCategoryLoading,
-            // Yahan category_name check karein
             label: i => i.category_name || i.name || i.category || i.label,
             selectedValue: selectedCategory
         },
@@ -245,7 +243,6 @@ const AddExpenses = () => {
             items: paymentItems,
             setItems: setPaymentItems,
             setLoading: setPaymentLoading,
-            // Yahan option_name ya payment_option
             label: i => i.option_name || i.name || i.payment_option || i.label,
             selectedValue: selectedPayment
         }
@@ -258,21 +255,18 @@ const AddExpenses = () => {
 
             setGlobalLoading(true);
             try {
-                // 1️⃣ Pehle Cache check karein (For Offline / Fast Load)
+                // first check offlinee recored 
                 const cached = (await readCache(CACHE_KEY)) || { data: [] };
                 const cachedList = Array.isArray(cached.data) ? cached.data : [];
                 const localRecord = cachedList.find(item => item.id?.toString() === id.toString());
 
                 if (localRecord) {
-                    updateFormFields(localRecord); // Helper function niche hai
+                    updateFormFields(localRecord); // Helper function 
                 }
 
-                // 2️⃣ Agar online hai, toh Fresh Data API se lein (Latest version)
+                // if online is available  then get fresh data from api latest versn
                 if (isConnected) {
-                    // Aapka naya endpoint use ho raha hai yahan
-                    // loadRecord ke andar jahan apiGet likha hai usay get kar dein
                     const response = await get(`my-expenses/expense?id=${id}`, { useBearerAuth: true });;
-
                     if (response?.status === "success" && response?.data) {
                         updateFormFields(response.data);
                     }
@@ -287,7 +281,7 @@ const AddExpenses = () => {
         loadRecord();
     }, [id, isConnected]);
 
-    // Logic ko clean rakhne ke liye helper function
+    //cleaning the code this fun is call above
     const updateFormFields = (data) => {
         setEditingRecord(data);
         setFormData({
