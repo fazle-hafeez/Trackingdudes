@@ -333,7 +333,7 @@ const MyVehicles = () => {
         let cachedList = Array.isArray(cachedWrap.data) ? cachedWrap.data : [];
         cachedList = cachedList.map(item => selectedIds.includes(item.id) ? { ...item, status: newStatusLower, pending: true } : item);
         await storeCache(CACHE_KEY, { data: cachedList, timestamp: Date.now() });
-        await storeCache("recordDeleted", true);
+        await storeCache("recordUpdated", true);
 
         showModal(`Vehicles status updated to ${status} (offline). They will sync when online.`, "success");
         handleCancel();
@@ -478,7 +478,7 @@ const MyVehicles = () => {
         className="mb-3"
       >
         <View
-          className={`p-4  rounded-lg mb-3 border shadow ${isSelected ? darkMode ? 'border-blue-500 ' : "border-blue-500 bg-blue-50" : item.pending ? "border-yellow-300 " : darkMode ? "border-gray-700" : "bg-white border-gray-100"}`}>
+          className={`p-4  rounded-lg mb-2 border shadow ${isSelected ? darkMode ? 'border-blue-500 ' : "border-blue-500 bg-blue-50" : item.pending ? "border-yellow-300 " : darkMode ? "border-gray-700" : "bg-white border-gray-100"}`}>
           <View className={`${darkMode ? item.pending ? 'border-yellow-200' : 'border-gray-700' : item.pending ? 'border-yellow-200' : 'border-yellow-300'} 
              flex-row items-center border-b  pb-2 mb-2`}>
             <View className="flex-row items-center">

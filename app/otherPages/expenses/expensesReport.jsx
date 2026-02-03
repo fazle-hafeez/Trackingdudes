@@ -367,10 +367,10 @@ const Expenses = () => {
   };
 
   const EmptyList = () => (
-    <ThemedView className="rounded-lg mt-2 items-center justify-center py-10">
-      <Ionicons name="receipt-outline" size={48} color="#9ca3af" />
-      <ThemedText className="mt-4 text-base text-gray-400">No expenses listed yet</ThemedText>
-      <ThemedText className="text-sm text-gray-400 mt-1">Start by adding your first expense</ThemedText>
+    <ThemedView className="rounded-lg mt-2 items-center justify-center py-10 shadow-md">
+      <Ionicons name="receipt-outline" size={60} color="#9ca3af" />
+      <ThemedText className="mt-4  text-xl font-medium text-gray-400">No expenses listed yet</ThemedText>
+      <ThemedText className="text-lg text-gray-400 mt-1">Start by adding your first expenses report</ThemedText>
     </ThemedView>
   );
 

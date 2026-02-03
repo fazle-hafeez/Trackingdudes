@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from "react";
+import React, { useState, useEffect, useContext, act } from "react";
 import { View, Text } from "react-native";
 import { FontAwesome, FontAwesome5, MaterialIcons, Ionicons } from "@expo/vector-icons";
 import { ThemedView, ThemedText, SafeAreacontext } from "../../../src/components/ThemedColor";
@@ -18,15 +18,17 @@ import { parseIconString } from "../../../src/helper";
 
 const CACHE_KEY = "expense_cache_data";
 
-// {prefix, icon} -> "font6:car"
+// =============={prefix, icon} -> "font6:car"====================
 const buildIconString = (iconObj) =>
     `${iconObj.prefix}:${iconObj.icon}`;
 
 
 const Vendor = () => {
     const { showModal, setGlobalLoading, hideModal } = useAuth();
-    const { offlineQueue, isConnected } = useContext(OfflineContext);
-    const { id = null, order, tabPath, activeTab, projectCount } = useLocalSearchParams()
+    const { isConnected } = useContext(OfflineContext);
+    const { id = null, activeStatus } = useLocalSearchParams()
+    console.log("status:", activeStatus);
+    
     const { post, put, get } = useApi();
 
     const [vendorName, setVendorName] = useState("");
@@ -72,26 +74,69 @@ const Vendor = () => {
 
     ];
 
-    // Load cached vendors on mount
+    // ===============Load cached vendors on mount======================
     useEffect(() => {
-        (async () => {
+        const initializeVendorData = async () => {
+            // 1. Initial Cache Load
             const cachedWrap = (await readCache(CACHE_KEY)) || {};
-            const cachedVendors = Array.isArray(cachedWrap.vendor) ? cachedWrap.vendor : [];
+            const vendorsTab = cachedWrap["vendor"] || {};
+            const cachedVendors = [
+                ...(vendorsTab.enabled || []),
+                ...(vendorsTab.disabled || [])
+            ];
+
+            console.log("offline res is :", cachedVendors);
+
             setVendorList(cachedVendors);
-            const finalRecored = cachedVendors.find(
-                item =>
-                    item?.id != null &&
-                    id != null &&
-                    item.id.toString() === id.toString()
-            );
 
-            if (finalRecored) {
-                setVendorName(finalRecored.label || finalRecored.vendor || "");
-                setSelectedIcon(parseIconString(finalRecored.icon ?? ""));
+            if (id) {
+                // 2. Local Cache Check (Immediate UI update)
+                const finalRecord = cachedVendors.find(
+                    item => item?.id != null && String(item.id) === String(id)
+                );
+
+
+                if (finalRecord) {
+                    setVendorName(finalRecord.vendor || finalRecord.label || "");
+
+                    const parsed = parseIconString(finalRecord.icon ?? "");
+                    const matchedIcon = iconOptions.find(
+                        i => i.icon === parsed.icon && i.prefix === parsed.prefix
+                    );
+                    setSelectedIcon(matchedIcon || null);
+
+                }
+
+
+                // 3. Fresh Fetch from API (If online)
+                if (isConnected) {
+                    setGlobalLoading(true);
+                    try {
+                        const res = await get(`my-expenses/vendors/vendor?id= ${Number(id)}`, { useBearerAuth: true });
+                        console.log("online:", res);
+
+                        if (res?.status === "success" && res.data) {
+                            setVendorName(res.data.vendor || "");
+
+                            const parsed = parseIconString(res.data.icon ?? "");
+                            const matchedIcon = iconOptions.find(
+                                i => i.icon === parsed.icon && i.prefix === parsed.prefix
+                            );
+                            setSelectedIcon(matchedIcon || null);
+                        }
+
+
+                    } catch (err) {
+                        console.log("Fetch Vendor Record Error:", err.message);
+                    } finally {
+                        setGlobalLoading(false);
+                    }
+                }
             }
+        };
 
-        })();
-    }, []);
+        initializeVendorData();
+    }, [id, isConnected]); // Dependency array updated for re-fetching
 
     // Check name availability on input
     useEffect(() => {
@@ -113,31 +158,28 @@ const Vendor = () => {
                         { useBearerAuth: true }
                     );
 
-                    // Agar server response de raha hai
-                    console.log( 'name availbilty api:',res);
-                    
+
                     if (res) {
                         if (res.status === "error") {
-                            setMessage(res.message ||res.data|| "This name already exists.");
+                            setMessage(res.message || res.data || "This name already exists.");
                             setMessageStatus(true);
                         } else {
                             setMessage(res.message || res.data || "The name is available");
                             setMessageStatus(false);
                         }
-                        return; // Online check successful, yahin stop kar dein
+                        return;
                     }
                 } catch (err) {
-                    // Agar 404 ya unauthorized error aye toh yahan log hoga
                     console.log("API Error Details:", err?.response?.data || err.message);
                 }
             }
 
             // --- 2. OFFLINE FALLBACK ---
-            // Ye tab chalega jab net na ho ya API crash kar jaye
+            //if net doesnt avalble are api crash
             console.log("Running offline duplicate check...");
 
             const duplicate = vendorList.some((v) => {
-                // Edit mode: current item ko ignore karein
+                // Edit mode: ignore current item 
                 if (id && String(v.id) === String(id)) return false;
 
                 const existingName = (v.vendor || v.label || "").toLowerCase().trim();
@@ -148,7 +190,7 @@ const Vendor = () => {
                 setMessage("This name is already used (Local Cache)");
                 setMessageStatus(true);
             } else {
-                // Agar net nahi hai aur local mein bhi nahi mila
+                // if network are anabled or not in casge
                 const offlineWarning = isConnected
                     ? "Server error, could not verify name."
                     : "Offline: Name verified in local cache only.";
@@ -220,57 +262,110 @@ const Vendor = () => {
 
         setGlobalLoading(true);
 
-        // Normalize Status: Taake loadExpenseData ke filter se match kare
-        let currentTabStatus = "enabled";
-        if (activeTab.toLowerCase().includes("dis") || activeTab.toLowerCase().includes("dis")) {
-            currentTabStatus = "disabled";
+        // ----------------------------
+        // 1️⃣ STATUS NORMALIZATION
+        // ----------------------------
+        let currentStatus = "enabled";
+        if (
+            activeStatus &&
+            (activeStatus.toLowerCase().includes("dis") ||
+                activeStatus.toLowerCase().includes("disable"))
+        ) {
+            currentStatus = "disabled";
         }
 
         const payload = {
             id,
             vendor: vendorName.trim(),
             icon: buildIconString(selectedIcon),
-            status: currentTabStatus
+            status: currentStatus,
         };
-        console.log("SENDING PAYLOAD:", payload);
-        let isOffline = false;
 
+        let isOffline = !isConnected;
+
+
+        // ----------------------------
+        // 2️⃣ API CALL (TRY ONLINE)
+        // ----------------------------
         try {
-            const res = await put("my-expenses/vendors/update", payload, { useBearerAuth: true });
-            if (!res || res.offline) isOffline = true;
-        } catch {
+            const res = await put(
+                "my-expenses/vendors/update",
+                payload,
+                { useBearerAuth: true }
+            );
+
+            if (!res || res.offline) {
+                isOffline = true;
+            }
+        } catch (e) {
             isOffline = true;
         }
 
-        // --- 1. CACHE UPDATE (Immediate UI Update) ---
-        const cachedWrap = (await readCache(CACHE_KEY)) || {};
-        // Dynamic key support: vendors ya vendor jo bhi loadExpenseData use kar raha hai
-        const currentTabKey = activeTab;
-        const list = Array.isArray(cachedWrap[currentTabKey]) ? [...cachedWrap[currentTabKey]] : [];
+        // ----------------------------
+        // 3️⃣ CACHE UPDATE (CORRECT WAY)
+        // ----------------------------
+        try {
+            const cachedWrap = (await readCache(CACHE_KEY)) || {};
 
-        const updatedItem = {
-            ...payload,
-            pending: isOffline,
-        };
+            const TAB_KEY = "vendor";
+            const vendorsTab = cachedWrap[TAB_KEY] || {};
 
-        const idx = list.findIndex(v => String(v.id || v.vendor_no) === String(id));
-        if (idx !== -1) {
-            list[idx] = { ...list[idx], ...updatedItem };
+            const enabledList = Array.isArray(vendorsTab.enabled)
+                ? [...vendorsTab.enabled]
+                : [];
+
+            const disabledList = Array.isArray(vendorsTab.disabled)
+                ? [...vendorsTab.disabled]
+                : [];
+
+            const updatedVendor = {
+                ...payload,
+                pending: isOffline,
+            };
+
+            console.log("UPDATED ITEM:", updatedVendor);
+
+            // Remove vendor from both lists (avoid duplicates)
+            const cleanEnabled = enabledList.filter(
+                v => String(v.id) !== String(id)
+            );
+
+            const cleanDisabled = disabledList.filter(
+                v => String(v.id) !== String(id)
+            );
+
+            // Insert into correct status list
+            const status = activeStatus.toLowerCase() || "enabled"
+            if (status === "enabled" || payload.status === " enabled") {
+                cleanEnabled.push(updatedVendor);
+            } else {
+                cleanDisabled.push(updatedVendor);
+            }
+
+            cachedWrap[TAB_KEY] = {
+                enabled: cleanEnabled,
+                disabled: cleanDisabled,
+            };
+
+            await storeCache(CACHE_KEY, cachedWrap);
+        } catch (cacheErr) {
+            console.log("Vendor cache update failed:", cacheErr);
         }
 
-        cachedWrap[currentTabKey] = list;
-        await storeCache(CACHE_KEY, cachedWrap);
-
-        // --- 2. OFFLINE QUEUE UPDATE ---
+        // ----------------------------
+        // 4️⃣ OFFLINE QUEUE (IF NEEDED)
+        // ----------------------------
         if (isOffline) {
             const queue = (await readCache("offlineQueue")) || [];
 
-            // Purani entry remove karein agar exists karti hai (Avoid duplicates)
             const filteredQueue = queue.filter(q => {
                 try {
-                    const body = typeof q.body === "string" ? JSON.parse(q.body) : q.body;
+                    const body =
+                        typeof q.body === "string"
+                            ? JSON.parse(q.body)
+                            : q.body;
                     return String(body.id) !== String(id);
-                } catch (e) {
+                } catch {
                     return true;
                 }
             });
@@ -281,19 +376,34 @@ const Vendor = () => {
                 body: JSON.stringify(payload),
             });
 
-            // Save inside the IF block or use the correct variable
             await storeCache("offlineQueue", filteredQueue);
         }
 
-        // --- 3. FINAL STEPS ---
+        // ----------------------------
+        // 5️⃣ FINAL FLAGS + UI
+        // ----------------------------
         await storeCache("recordUpdated", true);
 
-        const modalMessage = isOffline ? "Vendor was updated successfully you are in offline mode please don't use the dublicate vendor name it may be crashed your request (offline)" : "Updated successfully!";
-        const modalType = isOffline ? "warning" : "success";
+        const msg = isOffline
+            ? "Vendor was updated successfully you are in offline mode please don't use the dublicate vendor name it may be crashed your request (offline)"
+            : "Vendor updated successfully!";
 
-        showModal(modalMessage, modalType, false, [
-            { label: "View", bgColor: "bg-green-600", onPress: () => { hideModal(); } },
-            { label: "View All", bgColor: "bg-blue-600", onPress: () => { hideModal(); router.back(); } },
+        const type = isOffline ? "warning" : "success";
+
+        showModal(msg, type, false, [
+            {
+                label: "View",
+                bgColor: "bg-green-600",
+                onPress: () => hideModal(),
+            },
+            {
+                label: "View All",
+                bgColor: "bg-blue-600",
+                onPress: () => {
+                    hideModal();
+                    router.back();
+                },
+            },
         ]);
 
         setGlobalLoading(false);
@@ -327,9 +437,15 @@ const Vendor = () => {
                 {/* Vendor Name Input */}
                 <ThemedView className="p-4 rounded-lg mb-5" style={{ elevation: 2 }}>
                     <ThemedText className="mb-1">Vendor:</ThemedText>
-                    <Input placeholder="Enter vendor name" value={vendorName} onchange={setVendorName} onFocus={() => setIsFocused(true)} />
+                    <Input placeholder="Enter vendor name" value={vendorName}
+                        onchange={(val) => {
+                            setVendorName(val);
+                            setIsFocused(true)
+                        }
+                        } />
                     {message ? (
                         <Text
+                           preventWrap={true}
                             className="mt-1"
                             style={{ color: messageStatus ? "#dc2626" : "#16a34a" }}
                         >
@@ -340,7 +456,7 @@ const Vendor = () => {
                 </ThemedView>
 
                 {/* Icon Select */}
-                <ThemedView className="p-4 rounded-lg mb-5" style={{ elevation: 2 }}>
+                <ThemedView className="p-4 rounded-lg" style={{ elevation: 2 }}>
                     <ThemedText className="mb-2">Choose an icon:</ThemedText>
                     <Select
                         items={iconOptions.map((i) => ({ label: i.label, value: i.icon, icon: i.icon, type: i.type, prefix: i.prefix }))}
@@ -358,7 +474,7 @@ const Vendor = () => {
                 {/* Live Preview */}
                 {vendorName && selectedIcon && (
                     <ThemedView
-                        className="flex-row items-center p-4 rounded-xl mb-3"
+                        className="flex-row items-center p-4 rounded-xl my-4"
                         style={{ elevation: 5, borderColor: "#2563eb", borderWidth: 1 }}
                     >
                         <RenderVendorIcon

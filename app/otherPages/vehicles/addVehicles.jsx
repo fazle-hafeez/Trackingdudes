@@ -372,7 +372,7 @@ const handleUpdateVehicle = async () => {
               placeholder="Enter tank capacity"
               keyboardType="numeric" />}
         />
-        <View className="mt-2">
+        <View className="mt-2 mb-4">
           <Button title={id ? "Update" : "Save"} onClickEvent={id ? handleUpdateVehicle :  handleCreateVehicle} />
         </View>
         {/* </View> */}

@@ -88,7 +88,7 @@ const ModalComponent = ({
           <View className="mb-2">
             {errorType === "warning" ? (
               <View style={styles.warningIcon} className="justify-center items-center mt-2 mb-4">
-                <Text style={{ fontSize: 48, color: "orange", fontWeight: "bold" }}>!</Text>
+                <Text preventWrap={true} style={{ fontSize: 48, color: "orange", fontWeight: "bold" }}>!</Text>
               </View>
             ) : (
               imageSource && (
@@ -120,7 +120,9 @@ const ModalComponent = ({
                   onPress={btn.onPress}
                   className={`flex-1 p-3 rounded-md ${btn.bgColor || "bg-customBlue"} ${index > 0 ? "ml-3" : ""}`}
                 >
-                  <Text className="font-semibold text-white text-center text-xl">
+                  <Text
+                    preventWrap={true}
+                    className="font-semibold text-white text-center text-xl">
                     {btn.label}
                   </Text>
                 </TouchableOpacity>
@@ -132,9 +134,11 @@ const ModalComponent = ({
                 onPress={onClose}
                 className={`mt-2 w-full ${buttonColored} p-3 rounded-md mb-1`}
               >
-                <ThemedText color={"white"} darkColor={"#ffff"} className="font-semibold text-center text-xl">
+                <Text
+                  preventWrap={true}
+                  className="font-semibold text-center text-white text-xl">
                   Close
-                </ThemedText>
+                </Text>
               </TouchableOpacity>
             )
           )}

@@ -149,7 +149,9 @@ export default function DashboardPage() {
             color={darkMode ? "#9ca3af" : "#fff"}
             onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
           />
-          <Text className={`text-xl ml-3 ${darkMode ? "text-gray-400" : "text-white"}`}>
+          <Text
+            preventWrap={true}
+            className={`text-xl ml-3 ${darkMode ? "text-gray-400" : "text-white"}`}>
             Menu
           </Text>
         </View>
@@ -179,9 +181,8 @@ export default function DashboardPage() {
             {displayedFeatures.map(item => (
               <TouchableOpacity
                 key={item.id}
-                className={`w-[48%] rounded-lg p-4 items-center mb-3 border ${
-                  darkMode ? "border-gray-700" : "border-gray-300 bg-white"
-                }`}
+                className={`w-[48%] rounded-lg p-4 items-center mb-3 border ${darkMode ? "border-gray-700" : "border-gray-300 bg-white"
+                  }`}
                 onPress={() => item.route && router.push(item.route)}
               >
                 <RenderIcon item={item} />
@@ -195,7 +196,7 @@ export default function DashboardPage() {
 
         <ThemedText className="px-2 text-lg mt-4 ">
           You are using customized dashboard, manage items{" "}
-          <Link href="/otherPages/customizeDashboard" style={{ color: "#007AFF" }}>
+          <Link preventWrap={true} href="/otherPages/customizeDashboard" className="underline" style={{ color: "#007AFF" }}>
             here
           </Link>
         </ThemedText>
