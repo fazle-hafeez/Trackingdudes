@@ -5,9 +5,6 @@ import {
   TouchableOpacity,
   Modal,
   Animated,
-  KeyboardAvoidingView,
-  Platform,
-  StatusBar,
 } from "react-native";
 import React, { useState, useRef, useEffect, useContext } from "react";
 import Checkbox from "expo-checkbox";
@@ -36,7 +33,7 @@ const AddingProject = () => {
   const { get, post, put } = useApi();
   const { showModal, setGlobalLoading, hideModal } = useAuth();
   const { darkMode } = useTheme()
-  const { offlineQueue, isConnected } = useContext(OfflineContext); //  OFFLINE CONTEXT
+  const { offlineQueue, isConnected, queueAction } = useContext(OfflineContext); //  OFFLINE CONTEXT
   const { id, projectCount, activeTab, order } = useLocalSearchParams();
 
   // Single project object state
@@ -241,12 +238,97 @@ const AddingProject = () => {
 
 
   //  OFFLINE CREATE PROJECT
-  
+
+  // const handleCreateProject = async () => {
+  //   if (!validateForm() || messageStatus) return; // Don't allow if duplicate message is shown
+
+  //   setGlobalLoading(true);
+  //   try {
+  //     const payload = {
+  //       project: project.name.trim(),
+  //       in_trips: project.in_trips,
+  //       in_shifts: project.in_shifts,
+  //       in_times: project.in_times,
+  //       in_expenses: project.in_expenses,
+  //       suggestions: project.suggestions,
+  //       status: "enabled",
+  //       tempId: Date.now(), // Temporary ID for offline
+  //     };
+
+  //     // Attempt online post
+  //     let result = null;
+  //     let isOffline = false;
+  //     try {
+  //       result = await post("/my-projects/create-project", payload, {
+  //         useBearerAuth: true,
+  //       });
+  //       if (!result || result.offline) isOffline = true;
+  //     } catch (err) {
+  //       console.log("Offline detected or network error", err);
+  //       isOffline = true;
+  //     }
+
+  //     // READ OLD CACHE
+  //     const cachedWrapOld = (await readCache(CACHE_KEY)) || { data: [] };
+  //     const oldData = Array.isArray(cachedWrapOld.data) ? cachedWrapOld.data : [];
+
+  //     // PREPARE NEW PROJECT ITEM
+  //     const newProject = {
+  //       ...payload,
+  //       id: payload.tempId,
+  //       tempId: payload.tempId,
+  //       pending: true, // mark as pending
+  //       in_shifts: !!payload.in_shifts,
+  //       in_trips: !!payload.in_trips,
+  //       in_times: !!payload.in_times,
+  //       in_expenses: !!payload.in_expenses,
+  //     };
+
+  //     // MERGE CACHE (duplicate-free)
+  //     const mergedList = [...oldData, newProject]; // <-- yahan simple array push kar do
+  //     await storeCache(CACHE_KEY, { data: mergedList });
+  //     await storeCache("newRecordAdded", true); // flag list refresh ke liye
+
+  //     // SHOW MODAL
+  //     showModal(
+  //       isOffline
+  //         ? "Project was added successfully you are in offline mode please don't use the dublicate project name it may be crashed your request (offline)"
+  //         : result?.message || "Project created successfully!",
+  //       isOffline ? "warning" : "success",
+  //       false,
+  //       [
+  //         {
+  //           label: "Add More",
+  //           bgColor: "bg-green-600",
+  //           onPress: () => {
+  //             hideModal();
+  //             resetForm();
+  //           },
+  //         },
+  //         {
+  //           label: "View All",
+  //           bgColor: "bg-blue-600",
+  //           onPress: () => {
+  //             hideModal();
+  //             router.back();
+  //           },
+  //         },
+  //       ]
+  //     );
+  //   } catch (error) {
+  //     console.error(error);
+  //     showModal(error?.error || "A server error occurred.", "error");
+  //   } finally {
+  //     setGlobalLoading(false);
+  //   }
+  // };
+
   const handleCreateProject = async () => {
-    if (!validateForm() || messageStatus) return; // Don't allow if duplicate message is shown
+    if (!validateForm() || messageStatus) return;
 
     setGlobalLoading(true);
     try {
+      const tempId = `local_${Date.now()}`;
       const payload = {
         project: project.name.trim(),
         in_trips: project.in_trips,
@@ -255,77 +337,67 @@ const AddingProject = () => {
         in_expenses: project.in_expenses,
         suggestions: project.suggestions,
         status: "enabled",
-        tempId: Date.now(), // Temporary ID for offline
+        tempId: tempId,
       };
 
-      // Attempt online post
-      let result = null;
       let isOffline = false;
-      try {
-        result = await post("/my-projects/create-project", payload, {
-          useBearerAuth: true,
-        });
-        if (!result || result.offline) isOffline = true;
-      } catch (err) {
-        console.log("Offline detected or network error", err);
+      let result = null;
+
+      if (isConnected) {
+        try {
+          result = await post("/my-projects/create-project", payload, { useBearerAuth: true });
+          if (!result || result.offline) isOffline = true;
+        } catch (err) {
+          isOffline = true;
+        }
+      } else {
         isOffline = true;
       }
 
-      // READ OLD CACHE
-      const cachedWrapOld = (await readCache(CACHE_KEY)) || { data: [] };
-      const oldData = Array.isArray(cachedWrapOld.data) ? cachedWrapOld.data : [];
+      /* 🚨 OFFLINE QUEUE (Using Context) */
+      if (isOffline) {
+        await queueAction({
+          method: "post",
+          endpoint: "/my-projects/create-project",
+          body: payload,
+          isFormData: false, // Kyunki projects mein image nahi hai
+          useToken: true,
+        });
+      }
 
-      // PREPARE NEW PROJECT ITEM
+      // --- LOCAL CACHE UPDATE (Taake UI par foran dikhe) ---
+      const cachedWrapOld = (await readCache(CACHE_KEY)) || { data: [] };
+      const oldData = Array.isArray(cachedWrapOld.data) ? [...cachedWrapOld.data] : [];
+
       const newProject = {
         ...payload,
-        id: payload.tempId,
-        tempId: payload.tempId,
-        pending: true, // mark as pending
+        id: tempId,
+        pending: isOffline,
         in_shifts: !!payload.in_shifts,
         in_trips: !!payload.in_trips,
         in_times: !!payload.in_times,
         in_expenses: !!payload.in_expenses,
       };
 
-      // MERGE CACHE (duplicate-free)
-      const mergedList = [...oldData, newProject]; // <-- yahan simple array push kar do
-      await storeCache(CACHE_KEY, { data: mergedList });
-      await storeCache("newRecordAdded", true); // flag list refresh ke liye
+      oldData.unshift(newProject);
+      await storeCache(CACHE_KEY, { data: oldData });
+      await storeCache("newRecordAdded", true);
 
-      // SHOW MODAL
       showModal(
-        isOffline
-          ? "Project was added successfully you are in offline mode please don't use the dublicate project name it may be crashed your request (offline)"
-          : result?.message || "Project created successfully!",
+        isOffline ? "Project saved offline. It will sync when online." : "Project created successfully!",
         isOffline ? "warning" : "success",
         false,
         [
-          {
-            label: "Add More",
-            bgColor: "bg-green-600",
-            onPress: () => {
-              hideModal();
-              resetForm();
-            },
-          },
-          {
-            label: "View All",
-            bgColor: "bg-blue-600",
-            onPress: () => {
-              hideModal();
-              router.back();
-            },
-          },
+          { label: "Add More", bgColor: "bg-green-600", onPress: () => { hideModal(); resetForm(); } },
+          { label: "View All", bgColor: "bg-blue-600", onPress: () => { hideModal(); router.back(); } },
         ]
       );
     } catch (error) {
-      console.error(error);
-      showModal(error?.error || "A server error occurred.", "error");
+      showModal("A server error occurred.", "error");
     } finally {
       setGlobalLoading(false);
     }
   };
-
 
   //===================//
   //== Update project =//
@@ -336,75 +408,86 @@ const AddingProject = () => {
 
     setGlobalLoading(true);
     try {
-        const payload = {
-            project_no: id,
-            project: project.name.trim(),
-            in_shifts: project.in_shifts,
-            in_trips: project.in_trips,
-            in_times: project.in_times,
-            in_expenses: project.in_expenses,
-            suggestions: project.suggestions,
-            status: project.status || "enabled", // Use current status
-        };
+      const payload = {
+        project_no: id,
+        project: project.name.trim(),
+        in_shifts: project.in_shifts,
+        in_trips: project.in_trips,
+        in_times: project.in_times,
+        in_expenses: project.in_expenses,
+        suggestions: project.suggestions,
+        status: project.status || "enabled", // Use current status
+      };
 
-        let res = null;
-        let isOffline = false;
+      let res = null;
+      let isOffline = false;
 
-        try {
-            res = await put("my-projects/update-project", payload, { useBearerAuth: true });
-            if (!res || res.offline) isOffline = true;
-        } catch (err) {
-            console.log("Offline detected", err);
-            isOffline = true;
-        }
+      try {
+        res = await put("my-projects/update-project", payload, { useBearerAuth: true });
+        if (!res || res.offline) isOffline = true;
+      } catch (err) {
+        console.log("Offline detected", err);
+        isOffline = true;
+      }
 
-        // --- CACHE UPDATE LOGIC ---
-        const cachedWrapOld = (await readCache(CACHE_KEY)) || { data: [] };
-        const oldData = Array.isArray(cachedWrapOld.data) ? [...cachedWrapOld.data] : [];
+      // --- CACHE UPDATE LOGIC ---
+      const cachedWrapOld = (await readCache(CACHE_KEY)) || { data: [] };
+      const oldData = Array.isArray(cachedWrapOld.data) ? [...cachedWrapOld.data] : [];
 
-        const updatedProject = {
-            ...payload,
-            id: id,
-            tempId: id,
-            pending: isOffline, // Agar offline hai toh true
-            // Flag normalization
-            in_shifts: !!payload.in_shifts,
-            in_trips: !!payload.in_trips,
-            in_times: !!payload.in_times,
-            in_expenses: !!payload.in_expenses,
-            status:project.status || "enabled",
-        };
+      const updatedProject = {
+        ...payload,
+        id: id,
+        tempId: id,
+        pending: isOffline, // Agar offline hai toh true
+        // Flag normalization
+        in_shifts: !!payload.in_shifts,
+        in_trips: !!payload.in_trips,
+        in_times: !!payload.in_times,
+        in_expenses: !!payload.in_expenses,
+        status: project.status || "enabled",
+      };
 
-        const idx = oldData.findIndex(i => String(i.id || i.project_no) === String(id));
-        if (idx > -1) {
-            oldData[idx] = { ...oldData[idx], ...updatedProject };
-        }
+      const idx = oldData.findIndex(i => String(i.id || i.project_no) === String(id));
+      if (idx > -1) {
+        oldData[idx] = { ...oldData[idx], ...updatedProject };
+      }
 
-        // Store in all relevant keys
-        const fetchStatus = activeTab.toLowerCase();
-        const paginationKey = `my-projects?status=${fetchStatus}&order=${order || 'asc'}&limit=${projectCount || 10}&page=1`;
-        
-        await storeCache(CACHE_KEY, { data: oldData });
-        await storeCache(paginationKey, { data: oldData });
-        await storeCache("recordUpdated", true);
+      if (isOffline) {
+        await queueAction({
+          method: "put",
+          endpoint: "my-projects/update-project",
+          body: payload,
+          isFormData: false,
+          useToken: true,
+          affectedIds: [id]
+        });
+      }
+      // Store in all relevant keys
+      const fetchStatus = activeTab.toLowerCase();
+      const paginationKey = `my-projects?status=${fetchStatus}&order=${order || 'asc'}&limit=${projectCount || 10}&page=1`;
 
-        showModal(
-            isOffline ? "Project was updated successfully you are in offline mode please don't use the dublicate project name it may be crashed your request (offline)" : "Project was updated successfully!",
-            isOffline ? "warning" : "success",
-            false,
-            [
-                { label: "View changes", bgColor: "bg-green-600", onPress: async () => { hideModal(); await fetchProjectDetail(); } },
-                { label: "View All", bgColor: "bg-blue-600", onPress: () => { hideModal(); router.back(); } },
-            ]
-        );
+      // await storeCache(CACHE_KEY, { data: oldData });
+      await storeCache(paginationKey, { data: oldData });
+      await storeCache("recordUpdated", true);
+
+      showModal(
+        isOffline ? "Project was updated successfully you are in offline mode please don't use the dublicate project name it may be crashed your request (offline)" : "Project was updated successfully!",
+        isOffline ? "warning" : "success",
+        false,
+        [
+          { label: "View changes", bgColor: "bg-green-600", onPress: async () => { hideModal(); await fetchProjectDetail(); } },
+          { label: "View All", bgColor: "bg-blue-600", onPress: () => { hideModal(); router.back(); } },
+        ]
+      );
 
     } catch (error) {
-        console.error(error);
-        showModal(error?.error || "A server error occurred.", "error");
+      console.error(error);
+      showModal(error?.error || "A server error occurred.", "error");
     } finally {
-        setGlobalLoading(false);
+      setGlobalLoading(false);
     }
-};
+  };
+
 
 
   return (

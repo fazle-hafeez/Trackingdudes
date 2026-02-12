@@ -1,6 +1,8 @@
 
 import React, { useState, useEffect, useContext } from "react";
-import { View, Text, ScrollView } from "react-native";
+import {
+  View, Text, ScrollView, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard
+} from "react-native";
 import { FontAwesome5, FontAwesome6 } from "@expo/vector-icons";
 import { useLocalSearchParams } from "expo-router";
 import { router } from "expo-router";
@@ -24,10 +26,10 @@ import { OfflineContext } from "../../../src/offline/OfflineProvider";
 const CACHE_KEY = "my-vehicles"
 
 const AddVehicles = () => {
-  const { id = null, activeTab, order, fetchProject } = useLocalSearchParams();
+  const { id = null } = useLocalSearchParams();
   const { get, post, put } = useApi();
   const { showModal, setGlobalLoading, hideModal } = useAuth();
-  const { offlineQueue, isConnected } = useContext(OfflineContext);
+  const { offlineQueue, isConnected, queueAction } = useContext(OfflineContext);
 
   const [form, setForm] = useState({ vehicleName: "", fuelEcnomy: "", tankCapacity: "", fuelType: "gs", fuelSolid: "gal", distanceMeasurement: "mi" });
   const [message, setMessage] = useState("");
@@ -168,140 +170,147 @@ const AddVehicles = () => {
 
   const resetForm = () => setForm({ vehicleName: "", fuelEcnomy: "", tankCapacity: "", fuelType: "gs", fuelSolid: "gal", distanceMeasurement: "mi" });
 
-  // --- Save / Update ---
+  // --- Save / Update --
+
 
   const handleCreateVehicle = async () => {
     if (!validateForm()) return;
 
     setGlobalLoading(true);
     try {
-        const tempId = Date.now().toString();
-        const payload = {
-            vehicle: form.vehicleName.trim(),
-            fuel_type: form.fuelType,
-            fuel_unit: form.fuelSolid,
-            distance_unit: form.distanceMeasurement,
-            distance_per_unit_fuel: parseFloat(form.fuelEcnomy),
-            tank_capacity: parseFloat(form.tankCapacity),
-            status: "enabled",
-            tempId: tempId,
-        };
+      const tempId = `local_${Date.now()}`;
+      const payload = {
+        vehicle: form.vehicleName.trim(),
+        fuel_type: form.fuelType,
+        fuel_unit: form.fuelSolid,
+        distance_unit: form.distanceMeasurement,
+        distance_per_unit_fuel: parseFloat(form.fuelEcnomy),
+        tank_capacity: parseFloat(form.tankCapacity),
+        status: "enabled",
+        tempId: tempId,
+      };
 
-        let result = null;
-        let isOffline = false;
-
+      let isOffline = false;
+      if (isConnected) {
         try {
-            result = await post("my-vehicles/create-vehicle", payload, { useBearerAuth: true });
-            if (!result || result.offline) isOffline = true;
-        } catch (err) {
-            console.log("Offline detected", err);
-            isOffline = true;
-        }
+          const result = await post("my-vehicles/create-vehicle", payload, { useBearerAuth: true });
+          if (!result || result.offline) isOffline = true;
+        } catch (err) { isOffline = true; }
+      } else {
+        isOffline = true;
+      }
 
-        // --- CACHE SYNC ---
-        const cachedWrapOld = (await readCache(CACHE_KEY)) || { data: [] };
-        const oldData = Array.isArray(cachedWrapOld.data) ? [...cachedWrapOld.data] : [];
+      if (isOffline) {
+        await queueAction({
+          method: "post",
+          endpoint: "my-vehicles/create-vehicle",
+          body: payload,
+          isFormData: false,
+          useToken: true
+        });
+      }
 
-        const newVehicle = {
-            ...payload,
-            id: tempId,
-            pending: true,
-        };
+      // --- LOCAL CACHE UPDATE (For UI) ---
+      const cachedWrap = (await readCache(CACHE_KEY)) || { data: [] };
+      const oldData = Array.isArray(cachedWrap.data) ? [...cachedWrap.data] : [];
 
-        // Duplicate check and add
-        const exists = oldData.some(i => i.vehicle === payload.vehicle);
-        if (!exists) {
-            oldData.unshift(newVehicle); // Top par add karein
-        }
+      const newVehicle = { ...payload, id: tempId, pending: isOffline };
+      if (!oldData.some(i => i.vehicle === payload.vehicle)) {
+        oldData.unshift(newVehicle);
+      }
 
+      await storeCache(CACHE_KEY, { data: oldData });
+      await storeCache("newRecordAdded", true);
 
-        await storeCache(CACHE_KEY, { data: oldData });
-        await storeCache("newRecordAdded", true);
-
-        showModal(
-            isOffline ? "Vehicle was added successfully you are in offline mode please don't use the dublicate vehicle name it may be crashed your request (offline)" : "Vehicle added successfully!",
-            isOffline ? "warning" : "success",
-            false,
-            [
-                { label: "Add More", bgColor: "bg-green-600", onPress: () => { hideModal(); resetForm(); } },
-                { label: "View All", bgColor: "bg-blue-600", onPress: () => { hideModal(); router.back(); } },
-            ]
-        );
+      showModal(
+        isOffline ? "Vehicle was added successfully you are in offline mode please don't use the dublicate vehicle name it may be crashed your request (offline)" : "Vehicle added successfully!",
+        isOffline ? "warning" : "success",
+        false,
+        [
+          { label: "Add More", bgColor: "bg-green-600", onPress: () => { hideModal(); resetForm(); } },
+          { label: "View All", bgColor: "bg-blue-600", onPress: () => { hideModal(); router.back(); } },
+        ]
+      );
     } catch (error) {
-        console.error(error);
-        showModal("Error creating vehicle.", "error");
+      showModal("Error creating vehicle.", "error");
     } finally {
-        setGlobalLoading(false);
+      setGlobalLoading(false);
     }
-};
+  };
+
+  //=================================================
+
+  //Handle update vehicle
 
 
-const handleUpdateVehicle = async () => {
+  const handleUpdateVehicle = async () => {
     if (!validateForm()) return;
 
     setGlobalLoading(true);
     try {
-        const payload = {
-            vehicle_no: id, // Original ID
-            vehicle: form.vehicleName.trim(),
-            fuel_type: form.fuelType,
-            fuel_unit: form.fuelSolid,
-            distance_unit: form.distanceMeasurement,
-            distance_per_unit_fuel: parseFloat(form.fuelEcnomy),
-            tank_capacity: parseFloat(form.tankCapacity),
-            status: form.status || "enabled",
-        };
+      const payload = {
+        vehicle_no: id,
+        vehicle: form.vehicleName.trim(),
+        fuel_type: form.fuelType,
+        fuel_unit: form.fuelSolid,
+        distance_unit: form.distanceMeasurement,
+        distance_per_unit_fuel: parseFloat(form.fuelEcnomy),
+        tank_capacity: parseFloat(form.tankCapacity),
+        status: form.status || "enabled",
+      };
 
-        let result = null;
-        let isOffline = false;
-
+      let isOffline = false;
+      if (isConnected) {
         try {
-            result = await put("my-vehicles/update-vehicle", payload, { useBearerAuth: true });
-            if (!result || result.offline) isOffline = true;
-        } catch (err) {
-            console.log("Offline detected", err);
-            isOffline = true;
-        }
+          const result = await put("my-vehicles/update-vehicle", payload, { useBearerAuth: true });
+          if (!result || result.offline) isOffline = true;
+        } catch (err) { isOffline = true; }
+      } else {
+        isOffline = true;
+      }
 
-        // --- CACHE UPDATE ---
-        const cachedWrapOld = (await readCache(CACHE_KEY)) || { data: [] };
-        const oldData = Array.isArray(cachedWrapOld.data) ? [...cachedWrapOld.data] : [];
+      if (isOffline) {
+        // 🚨 CORRECT WAY: Use queueAction
+        await queueAction({
+          method: "put",
+          endpoint: "my-vehicles/update-vehicle",
+          body: payload,
+          isFormData: false,
+          useToken: true,
+          affectedIds: [id]
+        });
+      }
 
-        const updatedVehicle = {
-            ...payload,
-            id: id,
-            tempId: id,
-            pending: isOffline,
-        };
+      // --- LOCAL CACHE UPDATE ---
+      const cachedWrap = (await readCache(CACHE_KEY)) || { data: [] };
+      const oldData = Array.isArray(cachedWrap.data) ? [...cachedWrap.data] : [];
 
-        const idx = oldData.findIndex(i => String(i.id || i.vehicle_no || i.tempId) === String(id));
-        if (idx > -1) {
-            oldData[idx] = { ...oldData[idx], ...updatedVehicle };
-        }
+      const idx = oldData.findIndex(i => String(i.id || i.vehicle_no) === String(id));
+      if (idx > -1) {
+        oldData[idx] = { ...oldData[idx], ...payload, pending: isOffline };
+      }
 
-        const fetchStatus = (typeof activeTab !== 'undefined' && activeTab) ? activeTab.toLowerCase() : "enabled";
-        const paginationKey = `my-vehicles?status=${fetchStatus}&order=${order || 'asc'}&limit=${fetchProject || 10}&page=1`;
+      await storeCache(CACHE_KEY, { data: oldData });
+      await storeCache("recordUpdated", true);
 
-        await storeCache(CACHE_KEY, { data: oldData });
-        await storeCache(paginationKey, { data: oldData });
-        await storeCache("recordUpdated", true);
-
-        showModal(
-            isOffline ? "Vehicle was updated successfully you are in offline mode please don't use the dublicate vehicle name it may be crashed your request (offline)" : "Vehicle updated successfully!",
-            isOffline ? "warning" : "success",
-            false,
-            [
-                { label: "Done", bgColor: "bg-green-600", onPress: () => { hideModal(); } },
-                { label: "View All", bgColor: "bg-blue-600", onPress: () => { hideModal(); router.back(); } },
-            ]
-        );
+         showModal(
+        isOffline
+          ? "Vehicle updated successfully in offline mode. Avoid duplicate names to prevent conflicts."
+          : "Vehicle updated successfully!",
+        isOffline ? "warning" : "success",
+        false,
+        [
+          { label: "View", bgColor: "bg-green-600", onPress: () => hideModal() },
+          { label: "View All", bgColor: "bg-blue-600", onPress: () => { hideModal(); router.back(); } },
+        ]
+      );
     } catch (error) {
-        console.error(error);
-        showModal("Error updating vehicle.", "error");
+      showModal("Error updating vehicle.", "error");
     } finally {
-        setGlobalLoading(false);
+      setGlobalLoading(false);
     }
-};
+  };
+
 
   const fuelUnitLabels = { gal: "gallons", ltr: "liters", unit: "other Unit" };
 
@@ -309,74 +318,79 @@ const handleUpdateVehicle = async () => {
     <SafeAreacontext bgColor={'#eff6ff'} className="flex-1">
       <PageHeader routes={id ? "Edit Vehicle" : "Add Vehicle"} />
       {/* <View className="p-4 bg-white rounded-xl mx-4 mt-2"> */}
-      <ScrollView className="px-3">
-        <Section
-          label="Vehicle"
-          icon={<FontAwesome5 name="car" size={22} />}
-          input={
-            <Input value={form.vehicleName}
-              onchange={val => {
-                setForm({ ...form, vehicleName: val });
-                setHasEdited(true);
-              }}
-              inputError={errors.vehicleName}
-              placeholder="Enter vehicle name"
-            />}
-          error={
-            message !== "" && (
-              <Text className={`${isError ? "text-red-500" : "text-green-500"} mt-2`}>
-                {message}
-              </Text>
-            )
-          }
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
 
-        />
-        <Section label="Fuel Type" icon={<FontAwesome6 name="gas-pump" size={22} />} input={<Select items={fuelTypes} value={form.fuelType} onChange={val => setForm({ ...form, fuelType: val })} />} />
-        <Section
-          label="Fuel Unit"
-          icon={<FontAwesome5 name="oil-can" size={22} />}
-          input={
-            <Select
-              items={fuelUnits}
-              value={form.fuelSolid}
-              onChange={val => setForm({ ...form, fuelSolid: val })} />}
-        />
-        <Section
-          label="Distance Unit"
-          icon={<FontAwesome6 name="code-compare" size={22} />}
-          input={
-            <Select
-              items={distanceUnits}
-              value={form.distanceMeasurement}
-              onChange={val => setForm({ ...form, distanceMeasurement: val })} />}
-        />
-        <Section
-          label={`Ave. fuel economy (${form.distanceMeasurement}/${form.fuelSolid})`}
-          icon={<FontAwesome5 name="leaf" size={22} />}
-          input={
-            <Input
-              value={form.fuelEcnomy}
-              onchange={val => setForm({ ...form, fuelEcnomy: val })}
-              inputError={errors.fuelEcnomy}
-              placeholder="Enter fuel rate"
-              keyboardType="numeric" />}
-        />
-        <Section
-          label={`Tank capacity in (${fuelUnitLabels[form.fuelSolid]})`}
-          icon={<FontAwesome6 name="ankh" size={22} />}
-          input={
-            <Input
-              value={form.tankCapacity}
-              onchange={val => setForm({ ...form, tankCapacity: val })}
-              inputError={errors.tankCapacity}
-              placeholder="Enter tank capacity"
-              keyboardType="numeric" />}
-        />
-        <View className="mt-2 mb-4">
-          <Button title={id ? "Update" : "Save"} onClickEvent={id ? handleUpdateVehicle :  handleCreateVehicle} />
-        </View>
-        {/* </View> */}
-      </ScrollView>
+        <ScrollView className="px-3" contentContainerStyle={{ flexGrow: 1 }}>
+          <Section
+            label="Vehicle"
+            icon={<FontAwesome5 name="car" size={22} />}
+            input={
+              <Input value={form.vehicleName}
+                onchange={val => {
+                  setForm({ ...form, vehicleName: val });
+                  setHasEdited(true);
+                }}
+                inputError={errors.vehicleName}
+                placeholder="Enter vehicle name"
+              />}
+            error={
+              message !== "" && (
+                <Text className={`${isError ? "text-red-500" : "text-green-500"} mt-2`}>
+                  {message}
+                </Text>
+              )
+            }
+
+          />
+          <Section label="Fuel Type" icon={<FontAwesome6 name="gas-pump" size={22} />} input={<Select items={fuelTypes} value={form.fuelType} onChange={val => setForm({ ...form, fuelType: val })} />} />
+          <Section
+            label="Fuel Unit"
+            icon={<FontAwesome5 name="oil-can" size={22} />}
+            input={
+              <Select
+                items={fuelUnits}
+                value={form.fuelSolid}
+                onChange={val => setForm({ ...form, fuelSolid: val })} />}
+          />
+          <Section
+            label="Distance Unit"
+            icon={<FontAwesome6 name="code-compare" size={22} />}
+            input={
+              <Select
+                items={distanceUnits}
+                value={form.distanceMeasurement}
+                onChange={val => setForm({ ...form, distanceMeasurement: val })} />}
+          />
+          <Section
+            label={`Ave. fuel economy (${form.distanceMeasurement}/${form.fuelSolid})`}
+            icon={<FontAwesome5 name="leaf" size={22} />}
+            input={
+              <Input
+                value={form.fuelEcnomy}
+                onchange={val => setForm({ ...form, fuelEcnomy: val })}
+                inputError={errors.fuelEcnomy}
+                placeholder="Enter fuel rate"
+                keyboardType="numeric" />}
+          />
+          <Section
+            label={`Tank capacity in (${fuelUnitLabels[form.fuelSolid]})`}
+            icon={<FontAwesome6 name="ankh" size={22} />}
+            input={
+              <Input
+                value={form.tankCapacity}
+                onchange={val => setForm({ ...form, tankCapacity: val })}
+                inputError={errors.tankCapacity}
+                placeholder="Enter tank capacity"
+                keyboardType="numeric" />}
+          />
+          <View className="mt-2 mb-4">
+            <Button title={id ? "Update" : "Save"} onClickEvent={id ? handleUpdateVehicle : handleCreateVehicle} />
+          </View>
+          {/* </View> */}
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreacontext>
   );
 };

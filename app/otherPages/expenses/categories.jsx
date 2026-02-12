@@ -205,7 +205,7 @@ const CategoryPage = () => {
       setMessage(
         duplicate
           ? "You have already used this category name before (Offline)"
-          : "The category is available (Offline)"
+          : "The category is available local(Offline)"
       );
       setMessageStatus(duplicate);
     };
@@ -221,12 +221,21 @@ const CategoryPage = () => {
     const payload = { category: categoryName.trim(), icon: iconString, status: "enabled" };
 
     try {
-      let isOffline = false;
+      let isOffline = !isConnected;
       try {
         const res = await post("my-expenses/categories/create", payload, { useBearerAuth: true });
         if (!res || res.offline) isOffline = true;
       } catch { isOffline = true; }
 
+      if (isOffline) {
+        const existingQueue = (await readCache("offlineQueue")) || [];
+        const newEntry = {
+          method: "POST",
+          endpoint: "my-expenses/categories/create",
+          body: payload
+        };
+        await storeCache("offlineQueue", [...existingQueue, newEntry]);
+      }
       await storeCache("newRecordAdded", true);
       showModal(isOffline ? "Category created successfully in offline mode. Avoid duplicate names to prevent conflicts." : "Category created successfully!", isOffline ? "warning" : "success", false, [
         { label: "Add More", bgColor: "bg-green-600", onPress: () => hideModal() },
@@ -275,7 +284,13 @@ const CategoryPage = () => {
           return String(body.id) !== String(id);
         } catch { return true; }
       });
-      filtered.push({ method: "put", endpoint: "my-expenses/categories/update", body: JSON.stringify(payload) });
+      filtered.push(
+        {
+          method: "put",
+          endpoint: "my-expenses/categories/update",
+          body: JSON.stringify(payload)
+        }
+      );
       await storeCache("offlineQueue", filtered);
     }
 

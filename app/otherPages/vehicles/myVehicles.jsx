@@ -64,144 +64,144 @@ const MyVehicles = () => {
     if (projectCount) setFetchProject(true);
   }, [projectCount]);
   // ---------------- FETCH VEHICLES ----------------
-  const fetchVehicles = async (pageNumber = 1, currentOrder = order, shouldUpdateCache = false) => {
-    const fetchStatus = activeTab.toLowerCase();
-    try {
-        setLoading(true);
+    const fetchVehicles = async (pageNumber = 1, currentOrder = order, shouldUpdateCache = false) => {
+      const fetchStatus = activeTab.toLowerCase();
+      try {
+          setLoading(true);
 
-        const result = await get(
-            `my-vehicles?status=${fetchStatus}&order=${currentOrder}&limit=${projectCount}&page=${pageNumber}&_t=${isConnected ? Date.now() : 0}`,
-            { useBearerAuth: true }
-        );
+          const result = await get(
+              `my-vehicles?status=${fetchStatus}&order=${currentOrder}&limit=${projectCount}&page=${pageNumber}&_t=${isConnected ? Date.now() : 0}`,
+              { useBearerAuth: true }
+          );
 
-        let vehiclesData = Array.isArray(result?.data) ? result.data : [];
-        console.log( 'apis:',result);
-        
+          let vehiclesData = Array.isArray(result?.data) ? result.data : [];
+          console.log( 'apis:',result);
 
-        if (isConnected && result?.pagination) {
-            setPage(result?.pagination?.current_page || pageNumber);
-            setTotalPages(result?.pagination?.total_pages || 1);
-        } else {
-            setPage(1);
-            setTotalPages(1);
-        }
 
-        // --- LOAD CACHES ---
-        const cachedPendingRaw = await readCache("pendingUpdates") || {};
-        const cachedPending = mergePendingAndNormalize(cachedPendingRaw);
-        const allCachedWrap = await readCache(CACHE_KEY) || { data: [] };
-        const allCached = Array.isArray(allCachedWrap.data) ? allCachedWrap.data : [];
-        const offlineQueue = (await readCache("offlineQueue")) || [];
+          if (isConnected && result?.pagination) {
+              setPage(result?.pagination?.current_page || pageNumber);
+              setTotalPages(result?.pagination?.total_pages || 1);
+          } else {
+              setPage(1);
+              setTotalPages(1);
+          }
 
-        // --- OFFLINE DATA FILTERS ---
-        
-        // 1) New Vehicles added offline
-        const pendingAdds = offlineQueue
-            .filter(i => i.endpoint?.includes("create-vehicle") && i.method === "post")
-            .map(i => ({
-                ...i.body,
-                tempId: i.body.tempId || i.body.id || `local_v_${Date.now()}`,
-                pending: true,
-                status: normalizeStatus(i.body.status) || "enabled",
-            }));
+          // --- LOAD CACHES ---
+          const cachedPendingRaw = await readCache("pendingUpdates") || {};
+          const cachedPending = mergePendingAndNormalize(cachedPendingRaw);
+          const allCachedWrap = await readCache(CACHE_KEY) || { data: [] };
+          const allCached = Array.isArray(allCachedWrap.data) ? allCachedWrap.data : [];
+          const offlineQueue = (await readCache("offlineQueue")) || [];
 
-        // 2) Vehicle Edits/Updates made offline
-        const offlineUpdates = offlineQueue
-            .filter(i => i.endpoint?.includes("update-vehicle") && i.method === "put")
-            .map(i => ({
-                ...i.body,
-                id: i.body.vehicle_no || i.body.id, // Vehicle ID field ensure karein
-                pending: true
-            }));
+          // --- OFFLINE DATA FILTERS ---
 
-        // --- MERGING LOGIC (Using Map) ---
-        const mergedMap = new Map();
+          // 1) New Vehicles added offline
+          const pendingAdds = offlineQueue
+              .filter(i => i.endpoint?.includes("create-vehicle") && i.method === "post")
+              .map(i => ({
+                  ...i.body,
+                  tempId: i.body.tempId || i.body.id || `local_v_${Date.now()}`,
+                  pending: true,
+                  status: normalizeStatus(i.body.status) || "enabled",
+              }));
 
-        // Step 1: Online Data
-        vehiclesData.forEach(v => {
-            const key = String(v.id || v.tempId);
-            mergedMap.set(key, { ...v, pending: false, status: normalizeStatus(v.status) || fetchStatus });
-        });
+          // 2) Vehicle Edits/Updates made offline
+          const offlineUpdates = offlineQueue
+              .filter(i => i.endpoint?.includes("update-vehicle") && i.method === "put")
+              .map(i => ({
+                  ...i.body,
+                  id: i.body.vehicle_no || i.body.id, // Vehicle ID field ensure karein
+                  pending: true
+              }));
 
-        // Step 2: Merge Offline Updates (Edits)
-        offlineUpdates.forEach(upd => {
-            const key = String(upd.id);
-            if (mergedMap.has(key)) {
-                mergedMap.set(key, { ...mergedMap.get(key), ...upd, pending: true });
-            } else if (!isConnected) {
-                mergedMap.set(key, { ...upd, pending: true, status: normalizeStatus(upd.status) || fetchStatus });
-            }
-        });
+          // --- MERGING LOGIC (Using Map) ---
+          const mergedMap = new Map();
 
-        // Step 3: Merge New Offline Additions
-        pendingAdds.forEach(p => {
-            const key = String(p.tempId);
-            if (!mergedMap.has(key)) {
-                mergedMap.set(key, { ...p, pending: true, status: normalizeStatus(p.status) || fetchStatus });
-            }
-        });
+          // Step 1: Online Data
+          vehiclesData.forEach(v => {
+              const key = String(v.id || v.tempId);
+              mergedMap.set(key, { ...v, pending: false, status: normalizeStatus(v.status) || fetchStatus });
+          });
 
-        // Step 4: Pending Status Updates (Tab Movements)
-        allCached.forEach(item => {
-            const id = String(item.id || item.tempId);
-            const pendingStatus = cachedPending[id];
-            if (id && pendingStatus) {
-                mergedMap.set(id, { ...item, status: pendingStatus, pending: true });
-            }
-        });
+          // Step 2: Merge Offline Updates (Edits)
+          offlineUpdates.forEach(upd => {
+              const key = String(upd.id);
+              if (mergedMap.has(key)) {
+                  mergedMap.set(key, { ...mergedMap.get(key), ...upd, pending: true });
+              } else if (!isConnected) {
+                  mergedMap.set(key, { ...upd, pending: true, status: normalizeStatus(upd.status) || fetchStatus });
+              }
+          });
 
-        // --- FINAL LISTING & FILTERING ---
-        const finalList = Array.from(mergedMap.values())
-            .map(v => ({
-                ...v,
-                // Vehicle specific flags agar hain (example: isActive, isService)
-                pending: !!v.pending,
-                status: normalizeStatus(v.status) || fetchStatus,
-            }))
-            .filter(v => normalizeStatus(v.status) === fetchStatus);
+          // Step 3: Merge New Offline Additions
+          pendingAdds.forEach(p => {
+              const key = String(p.tempId);
+              if (!mergedMap.has(key)) {
+                  mergedMap.set(key, { ...p, pending: true, status: normalizeStatus(p.status) || fetchStatus });
+              }
+          });
 
-        setVehicles(finalList);
+          // Step 4: Pending Status Updates (Tab Movements)
+          allCached.forEach(item => {
+              const id = String(item.id || item.tempId);
+              const pendingStatus = cachedPending[id];
+              if (id && pendingStatus) {
+                  mergedMap.set(id, { ...item, status: pendingStatus, pending: true });
+              }
+          });
 
-        if (isConnected || shouldUpdateCache) {
-            await storeCache(CACHE_KEY, { data: finalList, timestamp: Date.now() });
-        }
+          // --- FINAL LISTING & FILTERING ---
+          const finalList = Array.from(mergedMap.values())
+              .map(v => ({
+                  ...v,
+                  // Vehicle specific flags agar hain (example: isActive, isService)
+                  pending: !!v.pending,
+                  status: normalizeStatus(v.status) || fetchStatus,
+              }))
+              .filter(v => normalizeStatus(v.status) === fetchStatus);
 
-    } catch (err) {
-        console.log("Error fetching vehicles, falling back to cache:", err);
+          setVehicles(finalList);
 
-        // --- OFFLINE FALLBACK ---
-        const cachedWrap = await readCache(CACHE_KEY) || { data: [] };
-        const cached = Array.isArray(cachedWrap.data) ? cachedWrap.data : [];
-        const offlineQueue = (await readCache("offlineQueue")) || [];
+          if (isConnected || shouldUpdateCache) {
+              await storeCache(CACHE_KEY, { data: finalList, timestamp: Date.now() });
+          }
 
-        const pendingAdds = offlineQueue
-            .filter(i => i.endpoint?.includes("create-vehicle") && i.method === "post")
-            .map(i => ({
-                ...i.body,
-                tempId: i.body.tempId || i.body.id || `local_v_${Date.now()}`,
-                pending: true,
-            }));
+      } catch (err) {
+          console.log("Error fetching vehicles, falling back to cache:", err);
 
-        const mergedMap = new Map();
-        cached.forEach(v => mergedMap.set(String(v.id || v.tempId), v));
-        pendingAdds.forEach(p => mergedMap.set(String(p.tempId), p));
+          // --- OFFLINE FALLBACK ---
+          const cachedWrap = await readCache(CACHE_KEY) || { data: [] };
+          const cached = Array.isArray(cachedWrap.data) ? cachedWrap.data : [];
+          const offlineQueue = (await readCache("offlineQueue")) || [];
 
-        const finalList = Array.from(mergedMap.values())
-            .map(v => ({
-                ...v,
-                pending: !!v.pending,
-                status: normalizeStatus(v.status) || fetchStatus,
-            }))
-            .filter(v => normalizeStatus(v.status) === fetchStatus);
+          const pendingAdds = offlineQueue
+              .filter(i => i.endpoint?.includes("create-vehicle") && i.method === "post")
+              .map(i => ({
+                  ...i.body,
+                  tempId: i.body.tempId || i.body.id || `local_v_${Date.now()}`,
+                  pending: true,
+              }));
 
-        setVehicles(finalList);
-        setPage(1);
-        setTotalPages(1);
-    } finally {
-        setLoading(false);
-    }
-};
-  
+          const mergedMap = new Map();
+          cached.forEach(v => mergedMap.set(String(v.id || v.tempId), v));
+          pendingAdds.forEach(p => mergedMap.set(String(p.tempId), p));
+
+          const finalList = Array.from(mergedMap.values())
+              .map(v => ({
+                  ...v,
+                  pending: !!v.pending,
+                  status: normalizeStatus(v.status) || fetchStatus,
+              }))
+              .filter(v => normalizeStatus(v.status) === fetchStatus);
+
+          setVehicles(finalList);
+          setPage(1);
+          setTotalPages(1);
+      } finally {
+          setLoading(false);
+      }
+  };
+
 
   useFocusEffect(
     useCallback(() => {
@@ -367,6 +367,7 @@ const MyVehicles = () => {
     }
   };
 
+
   // ---------------- DELETE VEHICLES ----------------
   const deleteVehicles = async () => {
     if (selectedVehicles.length === 0) {
@@ -520,9 +521,9 @@ const MyVehicles = () => {
             </View>
           </View>
 
-          {isPending && (
+          {item.pending && (
             <Text className="text-yellow-600 my-2 text-xs font-medium">
-              {item.id ? "⏳ Status/Update pending sync..." : "⏳ New record pending sync..."}
+              ⏳ Sync pending...
             </Text>
           )}
         </View>
@@ -570,7 +571,7 @@ const MyVehicles = () => {
             keyExtractor={(item) => (item.id || item.tempId)?.toString()}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
             contentContainerStyle={{
-              paddingBottom: selectionMode ? 60 : 10
+              paddingBottom: selectionMode ? 90 : 10
             }}
             ListFooterComponent={
               isConnected && totalPages > 1 ? (
@@ -587,7 +588,7 @@ const MyVehicles = () => {
 
         ) : (
           <ThemedView className=" rounded-md shadow-md p-4">
-            <Ionicons name="receipt-outline" size={58} color="#9ca3af" className="mx-auto my-4" />
+            <Ionicons name="receipt-outline" size={60} color="#9ca3af" className="mx-auto my-4" />
             <ThemedText color="#374151" className="text-lg ">
               You have not saved any vehicles yet. Saving a vehicle allows you to select it from the list of saved vehicles, enabling you to track trips as well as fuel consumption
             </ThemedText>

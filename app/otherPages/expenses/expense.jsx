@@ -2,7 +2,7 @@
 
 import React, { useState, useCallback, useContext, useEffect } from "react";
 import { FlatList, View, TouchableOpacity, Text, RefreshControl } from "react-native";
-import { FontAwesome, FontAwesome5, MaterialIcons, Ionicons } from "@expo/vector-icons";
+import { FontAwesome, FontAwesome5, FontAwesome6, MaterialIcons, Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { router } from "expo-router";
 
@@ -26,6 +26,7 @@ import { OfflineContext } from "../../../src/offline/OfflineProvider";
 import { readCache, storeCache } from "../../../src/offline/cache";
 import { parseIconString } from "../../../src/helper";
 import usePersistentValue from "../../../src/hooks/usePersistentValue";
+import { getVendorIcon } from "../../../src/utils/getVendorIcon";
 
 
 const CACHE_KEY = "expense_cache_data";
@@ -113,8 +114,6 @@ const Expense = () => {
                         { useBearerAuth: true }
                     );
 
-                    console.log("fresh api response:", res);
-
 
                     if (res?.status === "success" && Array.isArray(res.data)) {
                         apiData = res.data;
@@ -132,9 +131,7 @@ const Expense = () => {
             ======================== */
             const cachedWrap = (await readCache(CACHE_KEY)) || {};
             const cachedTab = cachedWrap[CACHE_TAB_KEY] || {};
-            const cachedList = Array.isArray(cachedTab[statusKey])
-                ? cachedTab[statusKey]
-                : [];
+            const cachedList = Array.isArray(cachedTab[statusKey]) ? cachedTab[statusKey] : [];
 
             const offlineQueue = (await readCache("offlineQueue")) || [];
 
@@ -158,12 +155,8 @@ const Expense = () => {
                4️⃣ OFFLINE PUT (STATUS TOGGLE)
             ======================== */
             offlineQueue.forEach(q => {
-                if (
-                    q.method?.toLowerCase() === "put" &&
-                    q.endpoint?.includes(tabPath)
-                ) {
-                    const body =
-                        typeof q.body === "string" ? JSON.parse(q.body) : q.body;
+                if (q.method?.toLowerCase() === "put" && q.endpoint?.includes(tabPath)) {
+                    const body = typeof q.body === "string" ? JSON.parse(q.body) : q.body;
 
                     body?.ids?.forEach(id => {
                         const key = String(id);
@@ -178,25 +171,33 @@ const Expense = () => {
                 }
             });
 
-            /* =======================
-               5️⃣ OFFLINE POST (NEW)
-            ======================== */
+            /* ========================================================
+             5️⃣ OFFLINE POST (NEW RECORDS)
+             Logic: Prevent duplicates by checking if an item with the 
+             same name already exists in the list from API/Cache.
+            =========================================================== */
             offlineQueue.forEach(q => {
-                if (
-                    q.method?.toLowerCase() === "post" &&
-                    q.endpoint?.includes(tabPath)
-                ) {
-                    const body =
-                        typeof q.body === "string" ? JSON.parse(q.body) : q.body;
+                // Check if the request is a POST method and belongs to the current tab
+                if (q.method?.toLowerCase() === "post" && q.endpoint?.includes(tabPath)) {
+                    const body = typeof q.body === "string" ? JSON.parse(q.body) : q.body;
 
-                    const id = getSafeId(body) || `local_${Date.now()}`;
+                    // Extract a "display name" based on the tab type (Category, Vendor, or Payment Option)
+                    const newItemName = (body.category || body.vendor || body.payment_option || body.title || "").toLowerCase().trim();
 
-                    if (!mergedMap.has(id)) {
+                    // Check if any item already in the Map matches this name
+                    const isDuplicate = Array.from(mergedMap.values()).some(existingItem => {
+                        const existingName = (existingItem.category || existingItem.name || existingItem.vendor || existingItem.payment_option || "").toLowerCase().trim();
+                        return existingName === newItemName && newItemName !== "";
+                    });
+
+                    // Only add to the list if it's not already there (prevents double entries)
+                    if (!isDuplicate) {
+                        const id = getSafeId(body) || `local_${Date.now()}`;
                         mergedMap.set(id, {
                             ...body,
                             id,
                             tempId: id,
-                            pending: true,
+                            pending: true, // Mark as pending so UI can show a loader/icon
                             status: normalizeStatus(body.status),
                         });
                     }
@@ -211,8 +212,8 @@ const Expense = () => {
             setData(finalList);
 
             /* =======================
-    6️⃣ UPDATE CACHE (STATUS WISE)
- ======================== */
+               6️⃣ UPDATE CACHE (STATUS WISE)
+            ======================== */
             if (isConnected && apiSuccess) {
                 // API se jo data aaya hai, usey clean karein
                 const apiFreshData = apiData.map(i => ({ ...i, pending: false }));
@@ -599,27 +600,37 @@ const Expense = () => {
     }, [selectedItems, filteredExpensesItems]);
 
     // --- RENDER HELPERS ---
-    const RenderVendorIcon = ({ item, size = 26, color = "#2563eb" }) => {
-        // 1. Agar item ya item.icon hi maujood nahi hai
-        if (!item || !item.icon) {
-            return <FontAwesome5 name="store" size={size} color={color} />;
-        }
+
+    const RenderIcons = ({ item, size = 26, color = "#2563eb" }) => {
+        if (!item.icon) return null;
 
         const iconData = parseIconString(item.icon);
 
-        // 2. Agar parseIconString ne null return kiya (Crash yahan se ho raha tha)
-        if (!iconData) {
-            return <FontAwesome5 name="store" size={size} color={color} />;
-        }
-
         const { type, icon } = iconData;
 
-        // 3. Render icons based on type
-        if (type === "FontAwesome") return <FontAwesome name={icon} size={size} color={color} />;
-        if (type === "FontAwesome5") return <FontAwesome5 name={icon} size={size} color={color} />;
-        if (type === "MaterialIcons") return <MaterialIcons name={icon} size={size} color={color} />;
+        switch (type) {
+            case "SvgIcon":
+                const SvgComponent = getVendorIcon(icon);
+                // SvgComponent will now be a functional component, not a number
+                return <SvgComponent width={30} height={30} fill={color} />;
+            case "FontAwesome":
+                return <FontAwesome name={icon} size={size} color={color} />;
 
-        return <Ionicons name={icon} size={size} color={color} />;
+            case "FontAwesome5":
+                return <FontAwesome5 name={icon} size={size} color={color} />;
+
+            case "FontAwesome5":
+                return <FontAwesome5 name={icon} size={size} color={color} />;
+
+            case "FontAwesome6":
+                return <FontAwesome6 name={icon} size={size} color={color} />;
+
+            case "MaterialIcons":
+                return <MaterialIcons name={icon} size={size} color={color} />;
+
+            default:
+                return <Ionicons name={icon} size={size} color={color} />;
+        }
     };
 
     const renderItem = ({ item }) => {
@@ -659,7 +670,7 @@ const Expense = () => {
                                 <CheckBox value={item.id ? selectedItems.includes(item.id) : false} onClick={() => item.id && toggleExpensesSelect(item.id)} />
                             </View>}
                         <View className={`w-12 h-12 p-2 rounded-xl border items-center justify-center mr-5 ${darkMode ? "border-gray-700" : "border-gray-400"}`}>
-                            <RenderVendorIcon item={item} size={28} />
+                            <RenderIcons item={item} size={28} />
                         </View>
                         <ThemedText color={"#646060ff"} className="text-lg font-medium">{getItemText(item)}</ThemedText>
                     </View>

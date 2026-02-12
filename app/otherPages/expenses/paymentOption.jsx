@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useContext } from "react";
 import { View, Text } from "react-native";
-import { FontAwesome, FontAwesome5, MaterialIcons, Ionicons } from "@expo/vector-icons";
+import { FontAwesome, FontAwesome5, FontAwesome6, MaterialIcons, Ionicons } from "@expo/vector-icons";
 import { ThemedView, ThemedText, SafeAreacontext } from "../../../src/components/ThemedColor";
 import PageHeader from "../../../src/components/PageHeader";
 import Button from "../../../src/components/Button";
@@ -39,19 +39,30 @@ const PaymentOption = () => {
     { icon: "account-balance-wallet", label: "Wallet", type: "MaterialIcons", prefix: "mater" },
     { icon: "paypal", label: "PayPal", type: "FontAwesome", prefix: "font" },
     { icon: "apple-pay", label: "Apple Pay", type: "FontAwesome5", prefix: "font5" },
-    { icon: "google-pay", label: "Google Pay", type: "FontAwesome5", prefix: "font5" },
+    { icon: "google-pay", label: "Google Pay", type: "FontAwesome6", prefix: "font6" }, // Ensure type is FontAwesome5
     { icon: "bitcoin", label: "Crypto", type: "FontAwesome5", prefix: "font5" },
     { icon: "bank", label: "Bank Transfer", type: "FontAwesome", prefix: "font" },
     { icon: "globe-outline", label: "Online", type: "Ionicons", prefix: "Ion" },
     { icon: "money-bill-alt", label: "Bill/Check", type: "FontAwesome5", prefix: "font5" },
+
   ];
 
+
   // Map stored icon string (prefix:name) back to full object for the UI
+  // Improved helper to find icon even if prefix is missing
   const getFullIconObject = (iconStr) => {
     if (!iconStr) return null;
+
+    // Case 1: If string contains ":" (e.g., "Ion:cash")
     const parsed = parseIconString(iconStr);
-    return iconOptions.find(opt => opt.prefix === parsed.prefix && opt.icon === parsed.icon) ||
-      { icon: parsed.icon, type: "Ionicons", prefix: parsed.prefix };
+
+    // Case 2: Try to find by icon name directly if prefix search fails
+    const found = iconOptions.find(opt =>
+      (opt.prefix === parsed.prefix && opt.icon === parsed.icon) ||
+      (opt.icon === iconStr) // fallback for simple names
+    );
+
+    return found || { icon: parsed.icon || iconStr, type: "Ionicons", prefix: "Ion" };
   };
 
   // 1. Initial Data Loading (Cache + API)
@@ -113,7 +124,7 @@ const PaymentOption = () => {
             setMessage(res.message || res.data || "This name already exists.");
             setMessageStatus(true);
           } else {
-            setMessage( res.data ||"The name is available");
+            setMessage(res.data || "The name is available");
             setMessageStatus(false);
           }
           return; // Stop here if online check is done
@@ -138,7 +149,7 @@ const PaymentOption = () => {
         setMessageStatus(true);
       } else {
         // FIX: Update message if NO duplicate is found offline
-        setMessage(isConnected ? "Server error, verified locally." : "The name is available (Offline)");
+        setMessage(isConnected ? "Server error, verified locally." : "The payment-option is available in local cache(Offline)");
         setMessageStatus(false);
       }
     };
@@ -162,11 +173,21 @@ const PaymentOption = () => {
     };
 
     try {
-      let isOffline = false;
+      let isOffline = !isConnected;
       try {
         const res = await post("my-expenses/payment-options/create", payload, { useBearerAuth: true });
         if (!res || res.offline) isOffline = true;
       } catch { isOffline = true; }
+
+      if (isOffline) {
+        const existingQueue = (await readCache("offlineQueue")) || [];
+        const newEntry = {
+          method: "POST",
+          endpoint: "my-expenses/payment-options/create",
+          body: payload
+        };
+        await storeCache("offlineQueue", [...existingQueue, newEntry]);
+      }
 
       await storeCache("newRecordAdded", true);
       showModal(isOffline ? "Payment option was created successfully you are in offline mode please don't use the dublicate payment option it may be crashed your request (offline)" : "Payment option was created successfully!", isOffline ? "warning" : "success", false, [
@@ -293,10 +314,13 @@ const PaymentOption = () => {
     switch (item.type) {
       case "FontAwesome": return <FontAwesome name={item.icon} size={size} color={color} />;
       case "FontAwesome5": return <FontAwesome5 name={item.icon} size={size} color={color} />;
+      case "FontAwesome6": return <FontAwesome6 name={item.icon} size={size} color={color} />;
       case "MaterialIcons": return <MaterialIcons name={item.icon} size={size} color={color} />;
       default: return <Ionicons name={item.icon} size={size} color={color} />;
     }
   };
+
+
 
   return (
     <SafeAreacontext bgColor="#eff6ff" className="flex-1">

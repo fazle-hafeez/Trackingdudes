@@ -1,9 +1,10 @@
 import React, { useState, useContext, useEffect } from "react";
-import { View, TouchableOpacity, Image, ScrollView, Platform, Text, Modal, StatusBar } from "react-native";
+import { View, TouchableOpacity, Image, ScrollView, Platform, Text, Modal, StatusBar, KeyboardAvoidingView } from "react-native";
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useLocalSearchParams } from "expo-router";
+import { router } from "expo-router";
 
 import PageHeader from "../../../src/components/PageHeader";
 import { ThemedView, SafeAreacontext, ThemedText } from "../../../src/components/ThemedColor";
@@ -17,21 +18,23 @@ import { readCache, storeCache } from "../../../src/offline/cache";
 import { useModalBars } from "../../../src/hooks/useModalBar";
 import { useAuth } from "../../../src/context/UseAuth";
 
-const CACHE_KEY = "expenses-cache";
 
 const AddExpenses = () => {
     const { darkMode } = useTheme();
-    const { isConnected } = useContext(OfflineContext);
-    const { get, post } = useApi();
-    const { id = null } = useLocalSearchParams();
+    const { isConnected, queueAction } = useContext(OfflineContext);
+    const { get, post, put } = useApi();
+    const { id = null, activeTab, from, to } = useLocalSearchParams();
     const { showModal, setGlobalLoading, hideModal } = useAuth();
-
+    const IMAGE_BASE_URL = "https://trackingdudes.com/uploads/"
 
     const [imageFullSize, setImageFullSize] = useState(false);
     const [receipt, setReceipt] = useState(null);
     const [date, setDate] = useState(new Date());
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [editingRecord, setEditingRecord] = useState(null);
+
+     const CACHE_KEY = `expenses_${activeTab}_${from}_${to}`
+
 
     const [formData, setFormData] = useState({
         amount: "",
@@ -257,7 +260,7 @@ const AddExpenses = () => {
             try {
                 // first check offlinee recored 
                 const cached = (await readCache(CACHE_KEY)) || { data: [] };
-                const cachedList = Array.isArray(cached.data) ? cached.data : [];
+                const cachedList = Array.isArray(cached) ? cached : [];
                 const localRecord = cachedList.find(item => item.id?.toString() === id.toString());
 
                 if (localRecord) {
@@ -266,7 +269,9 @@ const AddExpenses = () => {
 
                 // if online is available  then get fresh data from api latest versn
                 if (isConnected) {
-                    const response = await get(`my-expenses/expense?id=${id}`, { useBearerAuth: true });;
+                    const response = await get(`my-expenses/expense?id=${id}&_t=${Date.now()}`, { useBearerAuth: true });
+                    console.log("server side response:", response);
+
                     if (response?.status === "success" && response?.data) {
                         updateFormFields(response.data);
                     }
@@ -301,22 +306,34 @@ const AddExpenses = () => {
     };
 
 
+
     const fetchItems = async (destination) => {
         const config = DESTINATION_MAP[destination];
         if (!config) return;
 
         config.setLoading(true);
+        const CACHE_KEY_HINTS = `cache_hints_${destination}`;
 
         try {
+            // 1. Pehle Local Cache read karein taake UI khali na dikhe
+            const cached = await readCache(CACHE_KEY_HINTS);
+            if (cached?.data) {
+                config.setItems(cached.data);
+            }
+
+            // 2. Agar internet nahi hai, toh aage API call karne ki zaroorat hi nahi
+            if (!isConnected) return;
+
+            // 3. API Call to get fresh data
             const response = await get(
-                `my-expenses/hints?destination=${destination}&_t=${isConnected ? Date.now() : 0}`,
+                `my-expenses/hints?destination=${destination}&_t=${Date.now()}`,
                 { useBearerAuth: true }
             );
 
-            let items = [];
-
             if (response?.status === "success" && response.data) {
                 let rawData = [];
+
+                // Data normalization
                 if (Array.isArray(response.data)) {
                     rawData = response.data;
                 } else if (destination === "expenses" && Array.isArray(response.data.projects)) {
@@ -325,51 +342,41 @@ const AddExpenses = () => {
                     rawData = response.data[destination];
                 }
 
-                // Map with Index to ensure uniqueness
-                items = rawData.map((i, index) => {
+                // Formatting items
+                let items = rawData.map((i, index) => {
                     const labelText = config.label(i);
-
-                    if (labelText && labelText !== "Unknown Category") {
+                    if (labelText && labelText !== "Unknown") {
                         return {
                             label: String(labelText),
                             value: String(labelText),
-                            // Unique key using index + label
                             key: `${destination}-${index}-${labelText}`
                         };
                     }
                     return null;
-                }).filter(item => item !== null);
-            }
+                }).filter(Boolean);
 
-            // Edit mode fallback logic
-            if (editingRecord) {
-                let currentValue;
-                switch (destination) {
-                    case "expenses": currentValue = editingRecord.project; break;
-                    case "expense_categories": currentValue = editingRecord.category; break;
-                    case "vendors": currentValue = editingRecord.vendor; break;
-                    case "payment_options": currentValue = editingRecord.payment_option || editingRecord.paymentType; break;
+                // 4. Edit mode fallback (agar current value list mein na ho)
+                if (editingRecord) {
+                    const map = {
+                        expenses: editingRecord.project,
+                        expense_categories: editingRecord.category,
+                        vendors: editingRecord.vendor,
+                        payment_options: editingRecord.payment_option || editingRecord.paymentType
+                    };
+                    const currentVal = map[destination];
+                    if (currentVal && !items.find(i => i.value === currentVal)) {
+                        items.unshift({ label: String(currentVal), value: String(currentVal), key: `fallback-${currentVal}` });
+                    }
                 }
 
-                if (currentValue && !items.find(i => i.value === currentValue)) {
-                    items = [{
-                        label: String(currentValue),
-                        value: String(currentValue),
-                        key: `edit-fallback-${currentValue}`
-                    }, ...items];
-                }
+                // 5. Update State and Sync Cache
+                config.setItems(items);
+                await storeCache(CACHE_KEY_HINTS, { data: items, timestamp: Date.now() });
             }
-
-            config.setItems(items);
-
-            if (isConnected && items.length > 0) {
-                await storeCache(`cache_hints_${destination}`, { data: items, timestamp: Date.now() });
-            }
-
         } catch (e) {
-            console.error(`Error fetching ${destination}:`, e);
-            const cached = await readCache(`cache_hints_${destination}`);
-            config.setItems(cached?.data || []);
+            console.error(`Fetch Error (${destination}):`, e.message);
+            // Fail hone ki surat mein humne pehle hi cache set kar diya tha (Step 1), 
+            // isliye user ko purana data dikhta rahega.
         } finally {
             config.setLoading(false);
         }
@@ -384,236 +391,386 @@ const AddExpenses = () => {
 
         }
         loadFund()
-    }, [editingRecord]); //  keep editingRecord as dependency to fetch fallback
+    }, [editingRecord, isConnected]); //  keep editingRecord as dependency to fetch fallback
+
+    //=============================
+    // Handle Add expense 
+    // =============================
 
     const handleSubmit = async () => {
-        let errors = {
-            amount: "",
-            category: "",
-            vendor: "",
-            paymentType: "",
-            project: "",
-        };
-
-        let hasError = false;
-
+        // 🔑 Validate mandatory field
         if (!formData.amount) {
-            errors.amount = "Amount is required";
-            hasError = true;
+            setFormErrors({ amount: "Amount is required" });
+            return;
         }
 
-        setFormErrors(errors);
-        if (hasError) return;
+        // 🔑 Format date
+        const formattedDate = date.toISOString().split("T")[0];
+        const tempId = `local_${Date.now()}`;
 
-        // ✅ Expense object (for cache)
-        const newExpense = {
-            id: Date.now().toString(),
-            amount: formData.amount,
+        const expenseData = {
+            ...formData,
+            tempId,
             category: selectedCategory,
             vendor: selectedVendor,
             payment_option: selectedPayment,
             project: selectedProject,
-            memo: formData.memo || "",
+            date: formattedDate,
+            receipt, // just the URI
             sub_category: formData.subCatogry || "",
-            date: date.toISOString(),
-            receipt,
-            pending: !isConnected,
         };
 
+        setGlobalLoading(true);
+
         try {
-            // 1️⃣ Save locally first
-            let cachedData = await readCache(CACHE_KEY);
-            if (!cachedData || typeof cachedData !== "object") {
-                cachedData = { data: [] };
-            }
+            let isSavedOnline = false;
 
-            cachedData.data = [...(cachedData.data || []), newExpense];
-            await storeCache(CACHE_KEY, cachedData);
-
-            let offline = !isConnected;
-
-            // 2️⃣ Try online submit
+            /* =========================
+               1️⃣ TRY ONLINE SAVE
+            ========================== */
             if (isConnected) {
                 try {
                     const fd = new FormData();
+                    Object.keys(expenseData).forEach(key => {
+                        if (key === "receipt" && receipt) {
+                            fd.append("receipt", {
+                                uri: receipt,
+                                name: "receipt.jpg",
+                                type: "image/jpeg",
+                            });
+                        } else {
+                            fd.append(key, expenseData[key] ?? "");
+                        }
+                    });
 
-                    fd.append("amount", newExpense.amount);
-                    fd.append("category", newExpense.category || "");
-                    fd.append("vendor", newExpense.vendor || "");
-                    fd.append("payment_option", newExpense.payment_option || "");
-                    fd.append("project", newExpense.project || "");
-                    fd.append("memo", newExpense.memo);
-                    fd.append("sub_category", newExpense.sub_category);
-                    fd.append("date", newExpense.date);
-
-                    if (receipt) {
-                        fd.append("receipt", {
-                            uri: receipt,
-                            name: "receipt.jpg",
-                            type: "image/jpeg",
-                        });
-                    }
-
-                    const response = await post(
-                        "my-expenses/create-expense",
+                    const res = await post(
+                        "my-expenses/create",
                         fd,
+                        { useBearerAuth: true },
                         { isFormData: true }
                     );
 
-                    console.log("CREATE RESPONSE:", response);
-
-                    if (response?.status === "success") {
-                        newExpense.pending = false;
-                        showModal(response.message || "Expense added successfully", "success");
-                    } else {
-                        showModal(
-                            response?.error || response?.data || "Failed to save expense",
-                            "error"
-                        );
+                    if (res?.status === "success") {
+                        isSavedOnline = true;
                     }
-                } catch (err) {
-                    //  real network error
-                    offline = true;
-                    console.log("Network error:", err);
+                } catch (e) {
+                    console.log("Online failed → offline mode");
                 }
             }
 
-            //  Update cache pending flag
-            cachedData.data = cachedData.data.map((e) =>
-                e.id === newExpense.id ? newExpense : e
-            );
-            await storeCache(CACHE_KEY, cachedData);
+            /* =========================
+               2️⃣ OFFLINE SAVE
+            ========================== */
+            if (!isSavedOnline) {
+                // 🔹 Add to offline queue
+                await queueAction({
+                    method: "post",
+                    endpoint: "my-expenses/create",
+                    body: expenseData,
+                    isFormData: true,
+                    useToken: true,
+                    timestamp: Date.now(),
+                });
 
-            //  Reset form
-            resetFields()
+                // 🔹 Update current TAB CACHE only (this-week / prev-week / next-week)
 
-            if (offline) {
-                showModal("Saved offline. It will sync when online.", "info");
+                const TAB_CACHE_KEY = `expenses_${activeTab}_${from}_${to}`;
+                const cachedWrap = (await readCache(TAB_CACHE_KEY)) || [];
+
+                const newOfflineRecord = {
+                    ...expenseData,
+                    id: tempId,
+                    tempId,
+                    pending: true,
+                };
+
+                cachedWrap.unshift(newOfflineRecord);
+
+                await storeCache(TAB_CACHE_KEY, cachedWrap);
             }
+
+            // 🔹 Flag so fetchEffect can refresh
+            await storeCache("newRecordAdded", true);
+
+            /* =========================
+               3️⃣ SHOW MODAL
+            ========================== */
+            showModal(
+                isSavedOnline
+                    ? "Expense created successfully!"
+                    : "Expense saved offline. Avoid duplicate names to prevent conflicts.",
+                isSavedOnline ? "success" : "warning",
+                false,
+                [
+                    { label: "Add More", bgColor: "bg-green-600", onPress: () => hideModal() },
+                    { label: "View All", bgColor: "bg-blue-600", onPress: () => { hideModal(); router.back(); } },
+                ]
+            );
+
+            // 🔹 Reset form fields
+            resetFields();
         } catch (err) {
-            console.log("Expense Submit Error:", err);
-            showModal("Failed to save expense locally", "error");
+            console.error("Submit error:", err);
+            showModal("Failed to save expense", "error");
+        } finally {
+            setGlobalLoading(false);
         }
     };
 
+
+    //========================================
+    //  Update Expenses Report
+    //=======================================
 
     const updateExpense = async () => {
-        if (!editingRecord) return;
+    if (!editingRecord) return;
 
-        let errors = {
-            amount: "",
-            category: "",
-            vendor: "",
-            paymentType: "",
-            project: "",
-        };
+    if (!formData.amount) {
+        setFormErrors({ amount: "Amount is required" });
+        return;
+    }
 
-        let hasError = false;
+    setGlobalLoading(true);
+    const formattedDate = date.toISOString().split("T")[0];
 
-        if (!formData.amount) {
-            errors.amount = "Amount is required";
-            hasError = true;
-        }
-
-        setFormErrors(errors);
-        if (hasError) return;
-
-        //  Updated expense (cache purpose)
-        const updatedExpense = {
-            ...editingRecord,
-            amount: formData.amount,
-            category: selectedCategory,
-            vendor: selectedVendor,
-            payment_option: selectedPayment,
-            project: selectedProject,
-            memo: formData.memo || "",
-            sub_category: formData.subCatogry || "",
-            date: date.toISOString(),
-            receipt,
-            pending: !isConnected,
-            METHOD_OVERRIDE
-        };
-
-        try {
-            //  Update cache immediately
-            let cachedData = await readCache(CACHE_KEY);
-            if (!cachedData || typeof cachedData !== "object") {
-                cachedData = { data: [] };
-            }
-
-            cachedData.data = cachedData.data.map((e) =>
-                e.id === updatedExpense.id ? updatedExpense : e
-            );
-
-            await storeCache(CACHE_KEY, cachedData);
-
-            let offline = !isConnected;
-
-            // 2️⃣ Try online update
-            if (isConnected) {
-                try {
-                    const fd = new FormData();
-
-                    fd.append("amount", updatedExpense.amount);
-                    fd.append("category", updatedExpense.category || "");
-                    fd.append("vendor", updatedExpense.vendor || "");
-                    fd.append("payment_option", updatedExpense.payment_option || "");
-                    fd.append("project", updatedExpense.project || "");
-                    fd.append("memo", updatedExpense.memo);
-                    fd.append("sub_category", updatedExpense.sub_category);
-                    fd.append("date", updatedExpense.date);
-
-                    //  send image ONLY if changed
-                    if (receipt && receipt !== editingRecord.receipt) {
-                        fd.append("receipt", {
-                            uri: receipt,
-                            name: "receipt.jpg",
-                            type: "image/jpeg",
-                        });
-                    }
-
-                    const response = await post(
-                        `my-expenses/update-expense/${updatedExpense.id}`,
-                        fd,
-                        true,
-                        { isFormData: true }
-                    );
-
-                    console.log("UPDATE RESPONSE:", response);
-
-                    if (response?.status === "success") {
-                        updatedExpense.pending = false;
-                        showModal(response.message || "Expense updated successfully", "success");
-                    } else {
-                        showModal(
-                            response?.error || response?.message || "Failed to update expense",
-                            "error"
-                        );
-                    }
-                } catch (err) {
-                    offline = true;
-                    console.log("Update network error:", err);
-                }
-            }
-
-            //  Update cache pending flag
-            cachedData.data = cachedData.data.map((e) =>
-                e.id === updatedExpense.id ? updatedExpense : e
-            );
-
-            await storeCache(CACHE_KEY, cachedData);
-
-            //  Reset form
-            resetFields()
-
-            if (offline) {
-                showModal("Updated offline. It will sync when online.", "info");
-            }
-        } catch (err) {
-            console.log("Update Expense Error:", err);
-            showModal("Failed to update expense locally", "error");
-        }
+    const updatedExpense = {
+        id: editingRecord.id, 
+        amount: formData.amount,
+        category: selectedCategory,
+        vendor: selectedVendor,
+        payment_option: selectedPayment,
+        project: selectedProject,
+        memo: formData.memo.trim() || "",
+        sub_category: formData.subCatogry || "",
+        date: formattedDate,
+        receipt, 
     };
+
+    try {
+        let isSavedOnline = false;
+
+        if (isConnected) {
+            try {
+                const fd = new FormData();
+                // Method override for server
+                fd.append("_method", "PUT");
+                fd.append("id", String(updatedExpense.id));
+
+                Object.keys(updatedExpense).forEach(key => {
+                    if (key !== "id") {
+                        // Agar receipt nayi hai toh append karein
+                        if (key === "receipt") {
+                            if (receipt && receipt !== editingRecord.receipt && !receipt.startsWith('http')) {
+                                fd.append("receipt", {
+                                    uri: receipt,
+                                    name: "receipt.jpg",
+                                    type: "image/jpeg",
+                                });
+                            }
+                        } else {
+                            fd.append(key, String(updatedExpense[key] || ""));
+                        }
+                    }
+                });
+
+                const res = await post("my-expenses/update", fd, { useBearerAuth: true }, { isFormData: true });
+                if (res?.status === "success") isSavedOnline = true;
+            } catch (err) {
+                console.log("Online update failed → shifting to offline");
+            }
+        }
+
+        /* 🚨 OFFLINE LOGIC FIXED HERE */
+        if (!isSavedOnline) {
+            // 1. Context wala queueAction use karein (Ye sync trigger karega)
+            await queueAction({
+                method: "post", // Server side par _method: PUT handle ho raha hai
+                endpoint: "my-expenses/update",
+                body: { ...updatedExpense, _method: "PUT" },
+                isFormData: true,
+                useToken: true,
+                affectedIds: [updatedExpense.id] // Taake sync ke baad UI refresh ho
+            });
+
+            // 2. Local Cache Update (Taake list mein foran tabdeeli dikhe)
+            const TAB_CACHE_KEY = `expenses_${activeTab}_${from}_${to}`;
+            const cachedData = await readCache(TAB_CACHE_KEY);
+            // Handle different cache structures
+            let list = Array.isArray(cachedData) ? cachedData : (cachedData?.data || []);
+
+            const offlineRecord = {
+                ...updatedExpense,
+                pending: true,
+            };
+
+            const idx = list.findIndex(e => String(e.id) === String(updatedExpense.id));
+            if (idx >= 0) {
+                list[idx] = { ...list[idx], ...offlineRecord };
+            }
+
+            await storeCache(TAB_CACHE_KEY, Array.isArray(cachedData) ? list : { ...cachedData, data: list });
+        }
+
+        await storeCache("recordUpdated", true);
+
+        showModal(
+            isSavedOnline ? "Expense updated successfully!" : "Expense updated offline. It will sync when online.",
+            isSavedOnline ? "success" : "warning",
+            false,
+            [
+                { label: "View", bgColor: "bg-green-600", onPress: () => hideModal() },
+                { label: "View All", bgColor: "bg-blue-600", onPress: () => { hideModal(); router.back(); } },
+            ]
+        );
+
+        resetFields();
+
+    } catch (error) {
+        console.error("Update error:", error);
+        showModal("Failed to update expense", "error");
+    } finally {
+        setGlobalLoading(false);
+    }
+};
+
+    // const updateExpense = async () => {
+    //     if (!editingRecord) return;
+
+    //     // 🔑 Validate mandatory field
+    //     if (!formData.amount) {
+    //         setFormErrors({ amount: "Amount is required" });
+    //         return;
+    //     }
+
+    //     setGlobalLoading(true);
+
+    //     const formattedDate = date.toISOString().split("T")[0];
+
+    //     // 🔹 Construct updated expense object
+    //     const updatedExpense = {
+    //         id: editingRecord.id, // must be present
+    //         amount: formData.amount,
+    //         category: selectedCategory,
+    //         vendor: selectedVendor,
+    //         payment_option: selectedPayment,
+    //         project: selectedProject,
+    //         memo: formData.memo.trim() || "",
+    //         sub_category: formData.subCatogry || "",
+    //         date: formattedDate,
+    //         receipt, // just the URI if changed
+    //     };
+
+    //     try {
+    //         let isSavedOnline = false;
+
+    //         /* =========================
+    //            1️⃣ TRY ONLINE UPDATE
+    //         ========================== */
+    //         if (isConnected) {
+    //             try {
+    //                 const fd = new FormData();
+
+    //                 // Append method override for PUT (server expects this)
+    //                 fd.append("OVERRIDE_METHOD", "PUT");
+    //                 fd.append("METHOD_OVERRIDE", "PUT");
+    //                 fd.append("_method", "PUT");
+
+    //                 fd.append("id", String(updatedExpense.id)); // ID required
+
+    //                 // Append all other fields
+    //                 Object.keys(updatedExpense).forEach(key => {
+    //                     if (key !== "id") {
+    //                         fd.append(key, String(updatedExpense[key] || ""));
+    //                     }
+    //                 });
+
+    //                 // Append receipt if changed
+    //                 if (receipt && receipt !== editingRecord.receipt) {
+    //                     fd.append("receipt", {
+    //                         uri: receipt,
+    //                         name: "receipt.jpg",
+    //                         type: "image/jpeg",
+    //                     });
+    //                 }
+
+    //                 // POST request (server handles as PUT with override)
+    //                 const res = await post(
+    //                     "my-expenses/update",
+    //                     fd,
+    //                     { useBearerAuth: true },
+    //                     { isFormData: true }
+    //                 );
+
+    //                 if (res?.status === "success") isSavedOnline = true;
+    //                 else console.log("Server rejected update:", res);
+    //             } catch (err) {
+    //                 console.log("Online update failed → fallback offline:", err);
+    //             }
+    //         }
+
+    //         /* =========================
+    //            2️⃣ OFFLINE SAVE (queue + tab cache)
+    //         ========================== */
+    //         if (!isSavedOnline) {
+    //             // 2a. Add to offline queue
+    //             const queue = (await readCache("offlineQueue")) || [];
+    //             queue.push({
+    //                 method: "post",
+    //                 endpoint: "my-expenses/update",
+    //                 body: { ...updatedExpense, OVERRIDE_METHOD: "PUT", METHOD_OVERRIDE: "PUT" },
+    //                 isFormData: true,
+    //                 timestamp: Date.now(),
+    //             });
+    //             await storeCache("offlineQueue", queue);
+
+    //             // 2b. Update current TAB CACHE only (like add record)
+    //             const TAB_CACHE_KEY = `expenses_${activeTab}_${from}_${to}`;
+    //             const cachedWrap = (await readCache(TAB_CACHE_KEY)) || [];
+
+    //             const offlineRecord = {
+    //                 ...updatedExpense,
+    //                 id: updatedExpense.id,
+    //                 tempId: `local_${Date.now()}`,
+    //                 pending: true, //  pending flag for offline
+    //             };
+
+    //             // Replace existing record if date matches
+    //             const idx = cachedWrap.findIndex(e => String(e.id) === String(updatedExpense.id));
+    //             if (idx >= 0) cachedWrap[idx] = offlineRecord;
+    //             else cachedWrap.unshift(offlineRecord);
+
+    //             await storeCache(TAB_CACHE_KEY, cachedWrap);
+    //         }
+
+    //         // 🔹 Flag to notify fetchEffect
+    //         await storeCache("recordUpdated", true);
+
+    //         /* =========================
+    //            3️⃣ SHOW MODAL
+    //         ========================== */
+    //         showModal(
+    //             isSavedOnline
+    //                 ? "Expense updated successfully!"
+    //                 : "Expense updated offline. it will suyn when you are online",
+    //             isSavedOnline ? "success" : "warning",
+    //             false,
+    //             [
+    //                 { label: "View", bgColor: "bg-green-600", onPress: () => hideModal() },
+    //                 { label: "View All", bgColor: "bg-blue-600", onPress: () => { hideModal(); router.back(); } },
+    //             ]
+    //         );
+
+    //         // 🔹 Reset form fields
+    //         resetFields();
+
+    //     } catch (error) {
+    //         console.error("Global update error:", error);
+    //         showModal("Failed to update expense", "error");
+    //     } finally {
+    //         setGlobalLoading(false);
+    //     }
+    // };
+
 
 
     const resetFields = () => {
@@ -640,119 +797,124 @@ const AddExpenses = () => {
     return (
         <SafeAreacontext className="flex-1">
             <PageHeader routes={` ${id ? "Edit Expense" : "Add Expenses"}`} />
-            <ScrollView className="p-3">
+            <KeyboardAvoidingView
+                behavior={Platform.OS === "ios" ? "padding" : "height"}
+                style={{ flex: 1 }}
+            >
+                <ScrollView className="p-3">
 
-                {/* Receipt */}
-                <ThemedView className={`mb-4 p-4 rounded-lg ${bgColor} border border-gray-300`} style={{ elevation: 3 }}>
-                    <TouchableOpacity className="flex-row justify-between items-center" onPress={pickImage}>
-                        <View className="flex-row items-center">
-                            <Ionicons name="attach-outline" size={24} color={darkMode ? "#fff" : "#1f2937"} />
-                            <ThemedText className="ml-3 text-base">Attach Receipt</ThemedText>
-                        </View>
-                        {receipt ? (
-                            <View>
-                                <Image source={{ uri: receipt }} style={{ width: 40, height: 40, borderRadius: 8 }} className="ml-5" />
-                                <TouchableOpacity onPress={() => setImageFullSize(true)}>
-                                    <Text className="text-blue-700 underline">View receipt</Text>
-                                </TouchableOpacity>
-                            </View>
-                        ) : (
-                            <Ionicons name="image-outline" size={26} color={darkMode ? "#aaa" : "#1f2937"} />
-                        )}
-                    </TouchableOpacity>
-                </ThemedView>
-                {formErrors.receiptSize && (
-                    <ThemedText className="my-1 text-red-500">{formErrors.receiptSize}</ThemedText>
-                )}
-
-                {/* Date */}
-                {!id && (
+                    {/* Receipt */}
                     <ThemedView className={`mb-4 p-4 rounded-lg ${bgColor} border border-gray-300`} style={{ elevation: 3 }}>
-                        <ThemedText className="mb-1 text-base">Date of purchase:</ThemedText>
-                        <TouchableOpacity className="flex-row items-center" onPress={() => setShowDatePicker(true)} style={{ width: "100%" }}>
-                            <View style={{ flex: 1, marginRight: 60 }}>
-                                <Input
-                                    value={date.toDateString()}
-                                    onchange={() => { }}
-                                    placeholder="Date of Purchase"
-                                    inputError=""
-                                    editable={true}
-                                />
+                        <TouchableOpacity className="flex-row justify-between items-center" onPress={pickImage}>
+                            <View className="flex-row items-center">
+                                <Ionicons name="attach-outline" size={24} color={darkMode ? "#fff" : "#1f2937"} />
+                                <ThemedText className="ml-3 text-base">Attach Receipt</ThemedText>
                             </View>
-                            <Ionicons name="calendar-outline" size={24} color={darkMode ? "#fff" : "#1f2937"} />
+                            {receipt ? (
+                                <View>
+                                    <Image source={{ uri: receipt.startsWith('http') ? receipt : `${IMAGE_BASE_URL}${receipt}` }} style={{ width: 40, height: 40, borderRadius: 8 }} className="ml-5" />
+                                    <TouchableOpacity onPress={() => setImageFullSize(true)}>
+                                        <Text className="text-blue-700 underline">View receipt</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            ) : (
+                                <Ionicons name="image-outline" size={26} color={darkMode ? "#aaa" : "#1f2937"} />
+                            )}
                         </TouchableOpacity>
-                        {showDatePicker && (
-                            <DateTimePicker
-                                value={date}
-                                mode="date"
-                                display="default"
-                                onChange={handleDateChange}
-                                maximumDate={new Date()}
-                            />
-                        )}
                     </ThemedView>
-                )}
+                    {formErrors.receiptSize && (
+                        <ThemedText className="my-1 text-red-500">{formErrors.receiptSize}</ThemedText>
+                    )}
 
-                {/* Amount */}
-                <ThemedView className={`mb-4 p-4 rounded-lg ${bgColor} border border-gray-300`} style={{ elevation: 3 }}>
-                    <ThemedText className="mb-1 text-base">Amount:</ThemedText>
-                    <Input
-                        value={formData.amount}
-                        onchange={(val) => setFormData({ ...formData, amount: val })}
-                        placeholder="Amount"
-                        keyboardType="numeric"
-                        inputError={formErrors.amount}
-                        setInputError={(err) => setFormErrors({ ...formErrors, amount: err })}
+                    {/* Date */}
+                    {!id && (
+                        <ThemedView className={`mb-4 p-4 rounded-lg ${bgColor} border border-gray-300`} style={{ elevation: 3 }}>
+                            <ThemedText className="mb-1 text-base">Date of purchase:</ThemedText>
+                            <TouchableOpacity className="flex-row items-center" onPress={() => setShowDatePicker(true)} style={{ width: "100%" }}>
+                                <View style={{ flex: 1, marginRight: 60 }}>
+                                    <Input
+                                        value={date.toDateString()}
+                                        onchange={() => { }}
+                                        placeholder="Date of Purchase"
+                                        inputError=""
+                                        editable={true}
+                                    />
+                                </View>
+                                <Ionicons name="calendar-outline" size={24} color={darkMode ? "#fff" : "#1f2937"} />
+                            </TouchableOpacity>
+                            {showDatePicker && (
+                                <DateTimePicker
+                                    value={date}
+                                    mode="date"
+                                    display="default"
+                                    onChange={handleDateChange}
+                                    maximumDate={new Date()}
+                                />
+                            )}
+                        </ThemedView>
+                    )}
+
+                    {/* Amount */}
+                    <ThemedView className={`mb-4 p-4 rounded-lg ${bgColor} border border-gray-300`} style={{ elevation: 3 }}>
+                        <ThemedText className="mb-1 text-base">Amount:</ThemedText>
+                        <Input
+                            value={formData.amount}
+                            onchange={(val) => setFormData({ ...formData, amount: val })}
+                            placeholder="Amount"
+                            keyboardType="numeric"
+                            inputError={formErrors.amount}
+                            setInputError={(err) => setFormErrors({ ...formErrors, amount: err })}
+                        />
+                    </ThemedView>
+
+                    {/* Select Fields */}
+                    <SelectField label="Project" items={projectItems} value={selectedProject} onChange={setSelectedProject} loading={projectLoading}
+                        message={"To select a project,just click on it . if the desired project is not in the list.it could be because you might have disabled the project"}
                     />
-                </ThemedView>
-
-                {/* Select Fields */}
-                <SelectField label="Project" items={projectItems} value={selectedProject} onChange={setSelectedProject} loading={projectLoading}
-                    message={"To select a project,just click on it . if the desired project is not in the list.it could be because you might have disabled the project"}
-                />
-                <SelectField label="Category" items={categoryItems} value={selectedCategory} onChange={setSelectedCategory} loading={categoryLoading}
-                    message={"To select a project,just click on it . if the desired project is not in the list.it could be because you might have disabled the project"}
-                />
-                <SelectField label="Vendor" items={vendorItems} value={selectedVendor} onChange={setSelectedVendor} loading={vendorLoading}
-                    message={"To select a project,just click on it . if the desired project is not in the list.it could be because you might have disabled the project"}
-                />
-                <SelectField
-                    label="Payment Type"
-                    items={paymentItems}
-                    value={selectedPayment}
-                    onChange={setSelectedPayment}
-                    loading={paymentLoading}
-                    message={"To select a project,just click on it . if the desired project is not in the list.it could be because you might have disabled the project"}
-                />
-                <ThemedView className={`mb-4 p-4 rounded-lg ${bgColor} border border-gray-300`} style={{ elevation: 3 }}>
-                    <ThemedText className="mb-1 text-base">Sub categories:</ThemedText>
-                    <Input
-                        value={formData.subCatogry}
-                        onchange={(val) => setFormData({ ...formData, subCatogry: val })}
-                        placeholder="Enter sub category"
-                        inputError={formErrors.subCatogry}
-                        setInputError={(err) => setFormErrors({ ...formErrors, subCatogry: err })}
+                    <SelectField label="Category" items={categoryItems} value={selectedCategory} onChange={setSelectedCategory} loading={categoryLoading}
+                        message={"To select a category,just click on it . if the desired category is not in the list.it could be because you might have disabled the category"}
                     />
-                </ThemedView>
-
-                {/* Memo */}
-                <ThemedView className={`mb-2 p-4 rounded-lg ${bgColor} border border-gray-300`} style={{ elevation: 3 }}>
-                    <ThemedText className="mb-1 text-base">Memo:</ThemedText>
-                    <Input
-                        value={formData.memo}
-                        onchange={(val) => setFormData({ ...formData, memo: val })}
-                        placeholder="Memo"
-                        multiline
+                    <SelectField label="Vendor" items={vendorItems} value={selectedVendor} onChange={setSelectedVendor} loading={vendorLoading}
+                        message={"To select a vendor,just click on it . if the desired vendor is not in the list.it could be because you might have disabled the vendor"}
                     />
-                </ThemedView>
+                    <SelectField
+                        label="Payment Type"
+                        items={paymentItems}
+                        value={selectedPayment}
+                        onChange={setSelectedPayment}
+                        loading={paymentLoading}
+                        message={"To select a payment option,just click on it . if the desired payment option is not in the list.it could be because you might have disabled the payment option"}
+                    />
+                    <ThemedView className={`mb-4 p-4 rounded-lg ${bgColor} border border-gray-300`} style={{ elevation: 3 }}>
+                        <ThemedText className="mb-1 text-base">Sub categories:</ThemedText>
+                        <Input
+                            value={formData.subCatogry}
+                            onchange={(val) => setFormData({ ...formData, subCatogry: val })}
+                            placeholder="Enter sub category"
+                            inputError={formErrors.subCatogry}
+                            setInputError={(err) => setFormErrors({ ...formErrors, subCatogry: err })}
+                        />
+                    </ThemedView>
 
-                {/* Submit */}
-                <View className="mb-6">
-                    <Button title={` ${id ? "Update" : "Submit"}`} onClickEvent={id ? updateExpense : handleSubmit} />
-                </View>
+                    {/* Memo */}
+                    <ThemedView className={`mb-2 p-4 rounded-lg ${bgColor} border border-gray-300`} style={{ elevation: 3 }}>
+                        <ThemedText className="mb-1 text-base">Memo:</ThemedText>
+                        <Input
+                            value={formData.memo}
+                            onchange={(val) => setFormData({ ...formData, memo: val })}
+                            placeholder="Memo"
+                            multiline
+                        />
+                    </ThemedView>
 
-                <ShowImageFullSizeModal visibility={imageFullSize} onPress={() => setImageFullSize(false)} receipt={receipt} />
-            </ScrollView>
+                    {/* Submit */}
+                    <View className="mb-6">
+                        <Button title={` ${id ? "Update" : "Submit"}`} onClickEvent={id ? updateExpense : handleSubmit} />
+                    </View>
+
+                    <ShowImageFullSizeModal visibility={imageFullSize} onPress={() => setImageFullSize(false)} receipt={receipt} />
+                </ScrollView>
+            </KeyboardAvoidingView>
         </SafeAreacontext>
     );
 };
@@ -771,6 +933,7 @@ const SelectField = ({ label, items, value, onChange, loading, message }) => {
 };
 
 const ShowImageFullSizeModal = ({ visibility, onPress, receipt = null }) => {
+    const IMAGE_BASE_URL = "https://trackingdudes.com/uploads/receipts/"
     const { darkMode } = useTheme();
     useModalBars(visibility, darkMode);
     return (
@@ -780,7 +943,7 @@ const ShowImageFullSizeModal = ({ visibility, onPress, receipt = null }) => {
                     width: "90%", maxHeight: "85%", backgroundColor: darkMode ? "#1f2938" : "#fff",
                     justifyContent: "center", alignItems: "center",
                 }}>
-                    <Image source={{ uri: receipt }} style={{ width: "100%", height: "100%", resizeMode: "contain" }} />
+                    <Image source={{ uri: receipt?.startsWith('http') ? receipt : `${IMAGE_BASE_URL}${receipt}` }} style={{ width: "100%", height: "100%", resizeMode: "contain" }} />
                 </View>
                 <TouchableOpacity onPress={onPress} className="absolute top-10 right-5" style={{ elevation: 2 }}>
                     <Ionicons name="close-circle" size={45} color="#fff" />

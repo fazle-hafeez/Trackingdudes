@@ -1,28 +1,14 @@
 
 
 import React, { useState, useRef, useEffect } from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  Modal,
-  FlatList,
-  Animated,
-  Easing,
-  Dimensions,
-  ActivityIndicator,
-} from "react-native";
-import {
-  Ionicons,
-  FontAwesome,
-  FontAwesome5,
-  MaterialIcons,
-} from "@expo/vector-icons";
-
+import { View, Text, TouchableOpacity, Modal, FlatList, Animated, Easing, Dimensions, ActivityIndicator, } from "react-native";
+import { Ionicons, FontAwesome, FontAwesome5, FontAwesome6, MaterialIcons, AntDesign } from "@expo/vector-icons";
+import { Image } from "react-native";
 import { useTheme } from "../context/ThemeProvider";
 import Input from "./Input";
 import { ThemedText } from "./ThemedColor";
 import { useModalBars } from "../hooks/useModalBar";
+import { getVendorIcon } from "../utils/getVendorIcon";
 
 const { height } = Dimensions.get("window");
 
@@ -35,6 +21,19 @@ const RenderIcon = ({ icon, type, size = 26, color }) => {
 
     case "FontAwesome5":
       return <FontAwesome5 name={icon} size={size} color={color} />;
+
+    case "FontAwesome5":
+      return <FontAwesome5 name={icon} size={size} color={color} />;
+
+    case "FontAwesome6":
+      return <FontAwesome6 name={icon} size={size} color={color} />;
+
+    case "AntDesign":
+      return <AntDesign name={icon} size={size} color={color} />;
+    case "SvgIcon":
+      const SvgComponent = getVendorIcon(icon);
+      // SvgComponent will now be a functional component, not a number
+      return <SvgComponent width={30} height={ 30} fill={color} />;
 
     case "MaterialIcons":
       return <MaterialIcons name={icon} size={size} color={color} />;

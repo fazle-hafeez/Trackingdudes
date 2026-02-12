@@ -1,11 +1,9 @@
-import React, { useState, useEffect, useContext, act } from "react";
+import React, { useState, useEffect, useContext } from "react";
 import { View, Text } from "react-native";
-import { FontAwesome, FontAwesome5, MaterialIcons, Ionicons } from "@expo/vector-icons";
 import { ThemedView, ThemedText, SafeAreacontext } from "../../../src/components/ThemedColor";
 import PageHeader from "../../../src/components/PageHeader";
 import Button from "../../../src/components/Button";
 import Input from "../../../src/components/Input";
-import Select from "../../../src/components/Select";
 import { readCache, storeCache } from "../../../src/offline/cache";
 import { OfflineContext } from "../../../src/offline/OfflineProvider";
 import { useApi } from "../../../src/hooks/useApi";
@@ -13,7 +11,10 @@ import { useAuth } from "../../../src/context/UseAuth";
 import { router } from "expo-router";
 import { useLocalSearchParams } from "expo-router";
 import { useDebounce } from "../../../src/hooks/useDebounce";
-import { parseIconString } from "../../../src/helper";
+import { parseIconString,RenderIcons } from "../../../src/helper";
+import { EXPENSE_VENDOR_ICONS } from "../../../src/constants/icons";
+import IconPicker from "../../../src/components/IconPicker";
+
 
 
 const CACHE_KEY = "expense_cache_data";
@@ -27,52 +28,17 @@ const Vendor = () => {
     const { showModal, setGlobalLoading, hideModal } = useAuth();
     const { isConnected } = useContext(OfflineContext);
     const { id = null, activeStatus } = useLocalSearchParams()
-    console.log("status:", activeStatus);
-    
+
     const { post, put, get } = useApi();
 
     const [vendorName, setVendorName] = useState("");
-    const [selectedIcon, setSelectedIcon] = useState("");
+    const [selectedIcon, setSelectedIcon] = useState(null);
     const [message, setMessage] = useState("");
     const [messageStatus, setMessageStatus] = useState(false);
     const [vendorList, setVendorList] = useState([]);
     const [isFocused, setIsFocused] = useState(false);
     const debouncedName = useDebounce(vendorName, 600);
 
-    const iconOptions = [
-        // --- Shopping & Retail ---
-        { icon: "storefront", label: "Shop", type: "Ionicons", prefix: "Ion" },
-        { icon: "shopping-cart", label: "Cart", type: "FontAwesome", prefix: "font" },
-        { icon: "shopping-bag", label: "Brand", type: "FontAwesome", prefix: "font" },
-        { icon: "tag", label: "Retail", type: "FontAwesome", prefix: "font" },
-
-        // --- Food & Drinks ---
-        { icon: "fast-food", label: "Food", type: "Ionicons", prefix: "Ion" },
-        { icon: "restaurant", label: "Dining", type: "Ionicons", prefix: "Ion" },
-        { icon: "coffee", label: "Cafe", type: "FontAwesome", prefix: "font" },
-        { icon: "pizza", label: "Pizza", type: "Ionicons", prefix: "Ion" },
-
-        // --- Services & Transport ---
-        { icon: "car-sport", label: "Transport", type: "Ionicons", prefix: "Ion" },
-        { icon: "tools", label: "Repair", type: "FontAwesome5", prefix: "font5" },
-        { icon: "local-gas-station", label: "gas station", type: "MaterialIcons", prefix: "mater" },
-        { icon: "medical", label: "Health", type: "Ionicons", prefix: "Ion" },
-        { icon: "build", label: "Services", type: "Ionicons", prefix: "Ion" },
-
-        // --- Tech & Office ---
-        { icon: "laptop", label: "Tech", type: "FontAwesome", prefix: "font" },
-        { icon: "print", label: "Print", type: "FontAwesome", prefix: "font" },
-        { icon: "desktop-outline", label: "Software", type: "Ionicons", prefix: "Ion" },
-        { icon: "wifi", label: "Internet", type: "Ionicons", prefix: "Ion" },
-
-        // --- Others ---
-        { icon: "globe-outline", label: "Online", type: "Ionicons", prefix: "Ion" },
-        { icon: "card", label: "Bank", type: "Ionicons", prefix: "Ion" },
-        { icon: "gift", label: "Gifts", type: "FontAwesome", prefix: "font" },
-        { icon: "fitness", label: "Gym", type: "Ionicons", prefix: "Ion" },
-        { icon: "briefcase", label: "Work", type: "FontAwesome", prefix: "font" },
-
-    ];
 
     // ===============Load cached vendors on mount======================
     useEffect(() => {
@@ -85,7 +51,6 @@ const Vendor = () => {
                 ...(vendorsTab.disabled || [])
             ];
 
-            console.log("offline res is :", cachedVendors);
 
             setVendorList(cachedVendors);
 
@@ -100,9 +65,10 @@ const Vendor = () => {
                     setVendorName(finalRecord.vendor || finalRecord.label || "");
 
                     const parsed = parseIconString(finalRecord.icon ?? "");
-                    const matchedIcon = iconOptions.find(
-                        i => i.icon === parsed.icon && i.prefix === parsed.prefix
+                    const matchedIcon = EXPENSE_VENDOR_ICONS.find(
+                        i => i.icon === parsed.icon && (i.prefix === parsed.prefix || i.type?.toLowerCase() === parsed.prefix)
                     );
+
                     setSelectedIcon(matchedIcon || null);
 
                 }
@@ -112,16 +78,17 @@ const Vendor = () => {
                 if (isConnected) {
                     setGlobalLoading(true);
                     try {
-                        const res = await get(`my-expenses/vendors/vendor?id= ${Number(id)}`, { useBearerAuth: true });
+                        const res = await get(`my-expenses/vendors/vendor?id=${Number(id)}&_t=${Date.now()}`, { useBearerAuth: true });
                         console.log("online:", res);
 
                         if (res?.status === "success" && res.data) {
                             setVendorName(res.data.vendor || "");
 
                             const parsed = parseIconString(res.data.icon ?? "");
-                            const matchedIcon = iconOptions.find(
-                                i => i.icon === parsed.icon && i.prefix === parsed.prefix
+                            const matchedIcon = EXPENSE_VENDOR_ICONS.find(
+                                i => i.icon === parsed.icon && (i.prefix === parsed.prefix || i.type?.toLowerCase() === parsed.prefix)
                             );
+
                             setSelectedIcon(matchedIcon || null);
                         }
 
@@ -187,13 +154,13 @@ const Vendor = () => {
             });
 
             if (duplicate) {
-                setMessage("This name is already used (Local Cache)");
+                setMessage("This Vendor is already used (Local Cache)");
                 setMessageStatus(true);
             } else {
                 // if network are anabled or not in casge
                 const offlineWarning = isConnected
                     ? "Server error, could not verify name."
-                    : "Offline: Name verified in local cache only.";
+                    : " Vendor verified in local cache only.";
 
                 setMessage(offlineWarning);
                 setMessageStatus(false);
@@ -222,7 +189,7 @@ const Vendor = () => {
                 tempId: tempId
             };
 
-            let isOffline = false;
+            let isOffline = !isConnected;
             let serverResult = null;
 
             try {
@@ -237,6 +204,15 @@ const Vendor = () => {
                 isOffline = true;
             }
 
+            if (isOffline) {
+                const existingQueue = (await readCache("offlineQueue")) || [];
+                const newEntry = {
+                    method: "POST",
+                    endpoint: "my-expenses/vendors/create",
+                    body: payload
+                };
+                await storeCache("offlineQueue", [...existingQueue, newEntry]);
+            }
             await storeCache("newRecordAdded", true);
 
             showModal(
@@ -410,18 +386,6 @@ const Vendor = () => {
     };
 
 
-    const RenderVendorIcon = ({ item, size = 26, color = "#000" }) => {
-        switch (item.type) {
-            case "FontAwesome":
-                return <FontAwesome name={item.icon} size={size} color={color} />;
-            case "FontAwesome5":
-                return <FontAwesome5 name={item.icon} size={size} color={color} />;
-            case "MaterialIcons":
-                return <MaterialIcons name={item.icon} size={size} color={color} />;
-            default:
-                return <Ionicons name={item.icon} size={size} color={color} />;
-        }
-    };
 
     return (
         <SafeAreacontext bgColor="#eff6ff" className="flex-1">
@@ -445,7 +409,7 @@ const Vendor = () => {
                         } />
                     {message ? (
                         <Text
-                           preventWrap={true}
+                            preventWrap={true}
                             className="mt-1"
                             style={{ color: messageStatus ? "#dc2626" : "#16a34a" }}
                         >
@@ -458,16 +422,21 @@ const Vendor = () => {
                 {/* Icon Select */}
                 <ThemedView className="p-4 rounded-lg" style={{ elevation: 2 }}>
                     <ThemedText className="mb-2">Choose an icon:</ThemedText>
-                    <Select
-                        items={iconOptions.map((i) => ({ label: i.label, value: i.icon, icon: i.icon, type: i.type, prefix: i.prefix }))}
-                        value={selectedIcon?.icon || ""} // show selected
+                    <IconPicker
+                        items={EXPENSE_VENDOR_ICONS}
+                        value={selectedIcon}
+                        filterOptions={[
+                            { label: "Fuel", value: "fuel" },
+                            { label: "Supplies", value: "supplies" },
+                            { label: "Food", value: "food_meals" },
+                            { label: "transport", value: "travel_transport" }
+                        ]}
                         onChange={(val) => {
-                            const obj = iconOptions.find(i => i.icon === val);
-                            setSelectedIcon(obj);
+                            console.log(val);
+
+                            setSelectedIcon(val);
                         }}
 
-                        iconVisibility={true}
-                        placeholder="Choose an icon"
                     />
                 </ThemedView>
 
@@ -477,8 +446,8 @@ const Vendor = () => {
                         className="flex-row items-center p-4 rounded-xl my-4"
                         style={{ elevation: 5, borderColor: "#2563eb", borderWidth: 1 }}
                     >
-                        <RenderVendorIcon
-                            item={selectedIcon ? { icon: selectedIcon.icon, type: selectedIcon.type } : { icon: '', type: 'Ionicons' }}
+                        <RenderIcons
+                            item={selectedIcon}
                             color="#2563eb"
                             size={28}
                         />
