@@ -1,193 +1,4 @@
 
-
-// import React, { createContext, useState, useEffect, useCallback } from "react";
-// import NetInfo from "@react-native-community/netinfo";
-// import { apiPost, apiPut, apiGet } from "../utils/api";
-// import { storeCache, readCache } from "./cache";
-
-// export const OfflineContext = createContext();
-
-// export const OfflineProvider = ({ children }) => {
-//   const [isConnected, setIsConnected] = useState(true);
-//   const [offlineQueue, setOfflineQueue] = useState([]);
-//   const [queueListeners, setQueueListeners] = useState([]);
-//   const [pendingUpdates, setPendingUpdates] = useState({});
-
-//   // -----------------------------
-//   // Queue listener system
-//   // -----------------------------
-//   const addQueueListener = (callback) => {
-//     setQueueListeners(prev => [...prev, callback]);
-//     return () => setQueueListeners(prev => prev.filter(cb => cb !== callback));
-//   };
-//   
-//   // Added a new listener function to also pass old temporary IDs
-//   const notifyQueueSync = (syncedIds, tempIds) => queueListeners.forEach(cb => cb({ syncedIds, tempIds }));
-
-//   // -----------------------------
-//   // Queue actions
-//   // -----------------------------
-//   const queueAction = async (action) => {
-//     // Ensure every POST request has a tempId for later cleanup
-//     if (action.method === "post" && !action.body.tempId) {
-//       action.body.tempId = `local_${Date.now()}`;
-//     }
-//     const newQueue = [...offlineQueue, action];
-//     setOfflineQueue(newQueue);
-//     await storeCache("offlineQueue", newQueue);
-//     console.log("[OFFLINE QUEUE ADDED]", action);
-//   };
-
-//   const saveQueue = async (data) => {
-//     setOfflineQueue(data);
-//     await storeCache("offlineQueue", data);
-//   };
-
-//   // -----------------------------
-//   // Load queue from cache
-//   // -----------------------------
-//   const loadQueue = useCallback(async () => {
-//     const savedQueue = await readCache("offlineQueue") || [];
-//     setOfflineQueue(savedQueue);
-
-//     const savedPending = await readCache("pendingUpdates") || {};
-//     setPendingUpdates(savedPending);
-
-//     console.log("[QUEUE LOADED]", savedQueue);
-//     console.log("[PENDING LOADED]", savedPending);
-//   }, []);
-
-//   // -----------------------------
-//   // Process / sync offline queue
-//   // -----------------------------
-//   const processQueue = useCallback(async () => {
-//     if (!isConnected || offlineQueue.length === 0) return;
-
-//     let newQueue = [...offlineQueue];
-//     const syncedIds = [];
-//     const syncedTempIds = [];
-//     let pending = { ...pendingUpdates };
-
-//     for (let i = 0; i < newQueue.length; i++) {
-//       const action = newQueue[i];
-//       console.log(`[SYNCING] ${action.method} ${action.endpoint}`);
-
-//       try {
-//         let res;
-//         if (action.method === "post") {
-//           res = await apiPost(action.endpoint, action.body, action.useToken, action.isFormData, action.options);
-//         } else if (action.method === "put") {
-//           res = await apiPut(action.endpoint, action.body, action.useToken, action.isFormData, action.options);
-//         }
-
-//         // ----------------------------------------------------
-//         // 🚨 CORRECTION 1: Handle POST (New Record)
-//         // ----------------------------------------------------
-//         if (action.method === "post" && action.body.tempId && res?.id) {
-//           // New record synced successfully!
-//           syncedTempIds.push(action.body.tempId);
-//           // Remove the pending update flag if it was using tempId
-//           delete pending[action.body.tempId];
-//           console.log(`[POST SUCCESS] Temp ID ${action.body.tempId} converted to ID ${res.id}`);
-//         }
-
-//         // ----------------------------------------------------
-//         // 🚨 CORRECTION 2: Handle PUT (Status/Update) - PROJECTS & VEHICLES
-//         // ----------------------------------------------------
-//         if (action.method === "put") {
-//           // Clean up pending updates for both vehicles and projects
-//           const putIds = [...(action.body?.vehicle_nos || []), ...(action.body?.project_nos || [])];
-//           if (putIds.length) {
-//             syncedIds.push(...putIds);
-//           }
-//         }
-//         
-//         // Remove synced item from queue
-//         newQueue.splice(i, 1);
-//         i--; // Adjust counter because an item was removed
-
-//         await saveQueue(newQueue);
-
-//         // ----------------------------------------------------
-//         // Cache Update: This needs to be smarter. 
-//         // Instead of fetching the entire list (which might be huge),
-//         // we should only fetch the list when the view is focused.
-//         // For now, we will leave the full fetch/put for context.
-//         // ----------------------------------------------------
-//         if (action.method === "put" || action.method === "post") {
-//           // Set a flag so MyProjects.js knows to refetch all data from server
-//           await storeCache("recordUpdated", true); 
-//         }
-
-//       } catch (err) {
-//         console.log("[SYNC FAILED] Will retry later", err.message, action);
-//         // If sync fails, stop and wait for the next connection event
-//         break; 
-//       }
-//     }
-
-//     // ----------------------------------------------------
-//     // Cleanup pendingUpdates cache
-//     // ----------------------------------------------------
-//     if (syncedIds.length > 0 || syncedTempIds.length > 0) {
-//       // 1. Clean up PUT updates (vehicle/project status)
-//       syncedIds.forEach(id => delete pending[id]);
-//       
-//       // 2. Clean up POST temporary IDs
-//       syncedTempIds.forEach(id => delete pending[id]);
-
-//       setPendingUpdates(pending);
-//       await storeCache("pendingUpdates", pending);
-//       
-//       // Notify the consuming components (like MyProjects) to refetch/update UI
-//       notifyQueueSync(syncedIds, syncedTempIds); 
-//     }
-
-//     console.log("[SYNC END]");
-//   }, [isConnected, offlineQueue, pendingUpdates]); // Added pendingUpdates to dependencies
-
-//   // -----------------------------
-//   // Network listener
-//   // -----------------------------
-//   useEffect(() => {
-//     const unsubscribe = NetInfo.addEventListener((state) => {
-//       const online = state.isConnected && state.isInternetReachable;
-//       setIsConnected(online);
-//       console.log("[NETWORK STATUS]", online);
-//     });
-
-//     loadQueue();
-
-//     return () => unsubscribe();
-//   }, [loadQueue]);
-
-//   // -----------------------------
-//   // Auto sync when online
-//   // -----------------------------
-//   useEffect(() => {
-//     if (isConnected && offlineQueue.length > 0) { // Added check for queue length
-//       processQueue();
-//     }
-//   }, [isConnected, offlineQueue, processQueue]); // Added offlineQueue to re-trigger sync after queue is added
-
-//   return (
-//     <OfflineContext.Provider value={{
-//       isConnected,
-//       offlineQueue,
-//       pendingUpdates,
-//       setPendingUpdates,
-//       queueAction,
-//       processQueue,
-//       addQueueListener
-//     }}>
-//       {children}
-//     </OfflineContext.Provider>
-//   );
-// };
-
-
-
-
 import React, { createContext, useState, useEffect, useCallback } from "react";
 import NetInfo from "@react-native-community/netinfo";
 import { apiPost, apiPut } from "../utils/api";
@@ -196,137 +7,260 @@ import { storeCache, readCache } from "./cache";
 export const OfflineContext = createContext();
 
 export const OfflineProvider = ({ children }) => {
-  const [isConnected, setIsConnected] = useState(true);
-  const [offlineQueue, setOfflineQueue] = useState([]);
-  const [queueListeners, setQueueListeners] = useState([]);
-  const [pendingUpdates, setPendingUpdates] = useState({});
 
-  const addQueueListener = (callback) => {
-    setQueueListeners((prev) => [...prev, callback]);
-    return () => setQueueListeners((prev) => prev.filter((cb) => cb !== callback));
-  };
+    // Track internet connectivity
+    const [isConnected, setIsConnected] = useState(true);
 
-  const notifyQueueSync = (syncedIds, tempIds) => {
-    queueListeners.forEach((cb) => cb({ syncedIds, tempIds }));
-  };
+    // Stores all pending offline actions
+    const [offlineQueue, setOfflineQueue] = useState([]);
 
-  const queueAction = async (action) => {
-    // Add local ID for new POST records
-    if (action.method === "post" && !action.body.tempId && !action.body.id) {
-      action.body.tempId = `local_${Date.now()}`;
-    }
-    const newQueue = [...offlineQueue, action];
-    setOfflineQueue(newQueue);
-    await storeCache("offlineQueue", newQueue);
-    console.log("[OFFLINE QUEUE ADDED]", action.endpoint);
-  };
+    // Allows screens to listen when queue sync completes
+    const [queueListeners, setQueueListeners] = useState([]);
 
-  const saveQueue = async (data) => {
-    setOfflineQueue(data);
-    await storeCache("offlineQueue", data);
-  };
+    // Track items currently waiting to sync
+    const [pendingUpdates, setPendingUpdates] = useState({});
 
-  const loadQueue = useCallback(async () => {
-    const savedQueue = (await readCache("offlineQueue")) || [];
-    const savedPending = (await readCache("pendingUpdates")) || {};
-    setOfflineQueue(savedQueue);
-    setPendingUpdates(savedPending);
-  }, []);
+    /**
+     * Allow UI components to listen when queue sync completes
+     */
+    const addQueueListener = (callback) => {
+        setQueueListeners((prev) => [...prev, callback]);
+        return () =>
+            setQueueListeners((prev) => prev.filter((cb) => cb !== callback));
+    };
 
-  const processQueue = useCallback(async () => {
-    if (!isConnected || offlineQueue.length === 0) return;
+    /**
+     * Notify UI when sync happens
+     */
+    const notifyQueueSync = (syncedIds, tempIds) => {
+        queueListeners.forEach((cb) => cb({ syncedIds, tempIds }));
+    };
 
-    let newQueue = [...offlineQueue];
-    let pending = { ...pendingUpdates };
-    const syncedIds = [];
-    const syncedTempIds = [];
+    /**
+     * Add any offline API action to queue
+     */
+    const queueAction = async (action) => {
 
-    for (let i = 0; i < newQueue.length; i++) {
-      const action = newQueue[i];
+        // Assign tempId for new POST records (for UI tracking)
+        if (action.method === "post" && !action.body.tempId && !action.body.id) {
+            action.body.tempId = `local_${Date.now()}`;
+        }
 
-      try {
-        let payload;
-        // --- 🚨 STEP 1: Form Data vs JSON Logic ---
-        if (action.isFormData) {
-          const fd = new FormData();
-          Object.keys(action.body).forEach((key) => {
-            if (key === "receipt" && action.body.receipt && typeof action.body.receipt === 'string') {
-              fd.append("receipt", {
-                uri: action.body.receipt,
-                name: "receipt.jpg",
-                type: "image/jpeg",
-              });
-            } else {
-              fd.append(key, action.body[key] ?? "");
+        const newQueue = [...offlineQueue, action];
+
+        setOfflineQueue(newQueue);
+        await storeCache("offlineQueue", newQueue);
+
+        console.log("[OFFLINE QUEUE ADDED]", action.endpoint);
+    };
+
+    /**
+     * Save updated queue into state + cache
+     */
+    const saveQueue = async (data) => {
+        setOfflineQueue(data);
+        await storeCache("offlineQueue", data);
+    };
+
+    /**
+     * Load queue from local cache when app starts
+     */
+    const loadQueue = useCallback(async () => {
+        const savedQueue = (await readCache("offlineQueue")) || [];
+        const savedPending = (await readCache("pendingUpdates")) || {};
+
+        setOfflineQueue(savedQueue);
+        setPendingUpdates(savedPending);
+    }, []);
+
+    /**
+     * MAIN SYNC ENGINE
+     * Runs when internet returns
+     */
+    const processQueue = useCallback(async () => {
+
+        // Stop if offline or queue empty
+        if (!isConnected || offlineQueue.length === 0) return;
+
+        let newQueue = [...offlineQueue];
+        let pending = { ...pendingUpdates };
+
+        const syncedIds = [];
+        const syncedTempIds = [];
+
+        for (let i = 0; i < newQueue.length; i++) {
+            const action = newQueue[i];
+
+            try {
+
+                let payload;
+
+                /**
+                 * STEP 1: Build payload (FormData OR JSON)
+                 */
+                if (action.isFormData) {
+
+                    const fd = new FormData();
+
+                    Object.keys(action.body).forEach((key) => {
+
+                        /**
+                         * Handle receipt file upload
+                         */
+                        if (
+                            key === "receipt" &&
+                            action.body.receipt &&
+                            typeof action.body.receipt === "string"
+                        ) {
+                            fd.append("receipt", {
+                                uri: action.body.receipt,
+                                name: "receipt.jpg",
+                                type: "image/jpeg",
+                            });
+
+                            /**
+                             * Ensure PUT override is always sent correctly
+                             */
+                        } else if (key === "OVERRIDE_METHOD") {
+                            fd.append("OVERRIDE_METHOD", action.body[key]);
+
+                            /**
+                             * Normal field append
+                             */
+                        } else {
+                            fd.append(key, action.body[key] ?? "");
+                        }
+
+                    });
+
+                    payload = fd;
+
+                } else {
+                    payload = action.body;
+                }
+
+                /**
+                 * STEP 2: Decide which request method to call
+                 */
+
+                let res;
+                // const options = action.options || { useBearerAuth: true };
+                const options = {
+                    useBearerAuth: true,
+                    ...(action.options || {})
+                };
+
+                // If server requires PUT override via POST
+                if (action.body?.OVERRIDE_METHOD === "PUT") {
+
+                    // Send POST but server will treat as PUT
+                    res = await apiPost(
+                        action.endpoint,
+                        payload,
+                        action.useToken,
+                        true,
+                        options
+                    );
+
+                }
+                else if (action.method === "post") {
+
+                    res = await apiPost(
+                        action.endpoint,
+                        payload,
+                        action.useToken,
+                        action.isFormData,
+                        options
+                    );
+
+                }
+                else if (action.method === "put") {
+
+                    res = await apiPut(
+                        action.endpoint,
+                        payload,
+                        action.useToken,
+                        action.isFormData,
+                        options
+                    );
+                }
+
+                /**
+                 * STEP 3: Success handling
+                 * Remove item from queue
+                 */
+
+                if (action.body.tempId) {
+                    syncedTempIds.push(action.body.tempId);
+                    delete pending[action.body.tempId];
+                }
+
+                if (action.body.id) {
+                    syncedIds.push(action.body.id);
+                    delete pending[action.body.id];
+                }
+
+                newQueue.splice(i, 1);
+                i--;
+
+                await saveQueue(newQueue);
+                await storeCache("recordUpdated", true);
+
+            } catch (err) {
+
+                console.log("[SYNC FAILED] Stopping queue processing", err.message);
+
+                // Stop further processing to avoid API overload
+                break;
             }
-          });
-          payload = fd;
-        } else {
-          payload = action.body;
         }
 
-        // --- 🚨 STEP 2: Execute Request ---
-        let res;
-        const options = action.options || { useBearerAuth: true };
-        
-        if (action.method === "post") {
-          res = await apiPost(action.endpoint, payload, action.useToken, action.isFormData, options);
-        } else if (action.method === "put") {
-          res = await apiPut(action.endpoint, payload, action.useToken, action.isFormData, options);
+        /**
+         * Update pending updates cache
+         */
+        setPendingUpdates(pending);
+        await storeCache("pendingUpdates", pending);
+
+        notifyQueueSync(syncedIds, syncedTempIds);
+
+    }, [isConnected, offlineQueue, pendingUpdates]);
+
+    /**
+     * Listen to network status changes
+     */
+    useEffect(() => {
+        const unsubscribe = NetInfo.addEventListener((state) => {
+            const online = state.isConnected && state.isInternetReachable;
+            setIsConnected(online);
+        });
+
+        loadQueue();
+
+        return () => unsubscribe();
+    }, [loadQueue]);
+
+    /**
+     * Auto-run sync when internet returns
+     */
+    useEffect(() => {
+        if (isConnected && offlineQueue.length > 0) {
+            processQueue();
         }
+    }, [isConnected, offlineQueue, processQueue]);
 
-        // --- 🚨 STEP 3: Success Cleanup ---
-        if (action.body.tempId) {
-          syncedTempIds.push(action.body.tempId);
-          delete pending[action.body.tempId];
-        }
-        if (action.body.id) {
-          syncedIds.push(action.body.id);
-          delete pending[action.body.id];
-        }
-
-        newQueue.splice(i, 1);
-        i--; 
-        await saveQueue(newQueue);
-        await storeCache("recordUpdated", true);
-
-      } catch (err) {
-        console.log("[SYNC FAILED] Stopping queue processing", err.message);
-        break; 
-      }
-    }
-
-    setPendingUpdates(pending);
-    await storeCache("pendingUpdates", pending);
-    notifyQueueSync(syncedIds, syncedTempIds);
-  }, [isConnected, offlineQueue, pendingUpdates]);
-
-  useEffect(() => {
-    const unsubscribe = NetInfo.addEventListener((state) => {
-      const online = state.isConnected && state.isInternetReachable;
-      setIsConnected(online);
-    });
-    loadQueue();
-    return () => unsubscribe();
-  }, [loadQueue]);
-
-  useEffect(() => {
-    if (isConnected && offlineQueue.length > 0) {
-      processQueue();
-    }
-  }, [isConnected, offlineQueue, processQueue]);
-
-  return (
-    <OfflineContext.Provider value={{
-      isConnected,
-      offlineQueue,
-      pendingUpdates,
-      setPendingUpdates,
-      queueAction,
-      processQueue,
-      addQueueListener
-    }}>
-      {children}
-    </OfflineContext.Provider>
-  );
+    return (
+        <OfflineContext.Provider
+            value={{
+                isConnected,
+                offlineQueue,
+                pendingUpdates,
+                setPendingUpdates,
+                queueAction,
+                processQueue,
+                addQueueListener
+            }}
+        >
+            {children}
+        </OfflineContext.Provider>
+    );
 };

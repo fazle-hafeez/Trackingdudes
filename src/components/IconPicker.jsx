@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from "react";
+import React, { useState, useRef, useEffect, useMemo ,forwardRef, useImperativeHandle} from "react";
 import { View, Text, TouchableOpacity, Modal, FlatList, Animated, Easing, Dimensions, ScrollView } from "react-native";
 import { Ionicons, FontAwesome, FontAwesome5, FontAwesome6, MaterialIcons, AntDesign } from "@expo/vector-icons";
 import { useTheme } from "../context/ThemeProvider";
@@ -47,17 +47,18 @@ const RenderIcon = ({ icon, type, size = 26, color }) => {
     }
 };
 
-const IconPicker = ({
+const IconPicker = forwardRef(({
     items = [],
     filterOptions = [],   // 3 Buttons data: [{label: 'Fuel', value: 'fuel']
     value = null,
     onChange = () => { },
     placeholder = "Select Vendor",
-    modalTitle = "Choose Vendor",
+    modalTitle = "Choose a vendor",
     inputPlaceholder = "Search vendor name......",
     error = "",
     disabled = false,
-}) => {
+    isPickerContentShown = false
+},ref) => {
     const [open, setOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
     const [activeTab, setActiveTab] = useState("all");
@@ -81,6 +82,15 @@ const IconPicker = ({
         });
     }, [searchQuery, activeTab, items]);
 
+    useImperativeHandle(ref, () => ({
+        open: () => {
+            openModal();
+        },
+        close: () => {
+            closeModal();
+        }
+    }));
+
     const openModal = () => {
         setOpen(true);
         Animated.parallel([
@@ -100,23 +110,23 @@ const IconPicker = ({
         });
     };
 
-    const borderColor = error ? "border-red-500" : disabled ? "border-gray-300 opacity-60" : darkMode ? "border-gray-700" : "border-[#ccc]";
+    const borderColor = isPickerContentShown ? '' : error ? " border border-red-500" : disabled ? "border border-gray-300 opacity-60" : darkMode ? "border border-gray-700" : " border border-[#ccc]";
     const selectedItem = value;
 
 
     return (
-        <View>
+        <View className="">
             {/* Input Field Appearance */}
             <TouchableOpacity
                 onPress={openModal}
-                className={`border rounded-md px-4 py-4 flex-row justify-between items-center ${borderColor}`}
+                className={` rounded-md px-4 py-4 flex-row justify-between items-center ${borderColor}`}
             >
                 <View className="">
                     <Text className={`text-lg ${selectedItem ? (darkMode ? "text-white" : "text-black") : "text-gray-400"}`}>
-                        {selectedItem ? selectedItem.label : placeholder}
+                        { isPickerContentShown ? '' : selectedItem ? selectedItem.label : placeholder}
                     </Text>
                 </View>
-                <Ionicons name="chevron-down" size={20} color="#888" />
+             { !isPickerContentShown && (<Ionicons name="chevron-down" size={20} color="#888" />)}
             </TouchableOpacity>
 
             <Modal transparent visible={open} animationType="none">
@@ -140,11 +150,18 @@ const IconPicker = ({
 
                     {/* Search Input */}
                     <Input
-                        placeholder={inputPlaceholder}
+                        placeholder={ inputPlaceholder}
                         value={searchQuery}
                         onchange={setSearchQuery}
                         className="mb-4"
                     />
+
+                    <View className="flex-row justify-between items-center mb-4">
+                        <ThemedText className=" text-lg">Most populer vendors</ThemedText>
+                        <TouchableOpacity className="border border-blue-600  rounded-lg p-2">
+                            <ThemedText preventWrap={true} >Add custom vendor</ThemedText>
+                        </TouchableOpacity>
+                    </View>
 
                     {/* Dynamic Filter - Auto-width based on text */}
                     <View className="mb-5">
@@ -207,6 +224,6 @@ const IconPicker = ({
             </Modal>
         </View>
     );
-};
+});
 
 export default IconPicker;

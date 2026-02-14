@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useContext } from "react";
-import { View, Text } from "react-native";
+import React, { useState, useEffect, useContext, useMemo, useRef } from "react";
+import { View, Text, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
 import { ThemedView, ThemedText, SafeAreacontext } from "../../../src/components/ThemedColor";
 import PageHeader from "../../../src/components/PageHeader";
+import { Feather } from "@expo/vector-icons";
 import Button from "../../../src/components/Button";
 import Input from "../../../src/components/Input";
 import { readCache, storeCache } from "../../../src/offline/cache";
@@ -11,7 +12,7 @@ import { useAuth } from "../../../src/context/UseAuth";
 import { router } from "expo-router";
 import { useLocalSearchParams } from "expo-router";
 import { useDebounce } from "../../../src/hooks/useDebounce";
-import { parseIconString,RenderIcons } from "../../../src/helper";
+import { parseIconString, RenderIcons } from "../../../src/helper";
 import { EXPENSE_VENDOR_ICONS } from "../../../src/constants/icons";
 import IconPicker from "../../../src/components/IconPicker";
 
@@ -30,6 +31,7 @@ const Vendor = () => {
     const { id = null, activeStatus } = useLocalSearchParams()
 
     const { post, put, get } = useApi();
+    const pickerRef = useRef(null)
 
     const [vendorName, setVendorName] = useState("");
     const [selectedIcon, setSelectedIcon] = useState(null);
@@ -38,6 +40,18 @@ const Vendor = () => {
     const [vendorList, setVendorList] = useState([]);
     const [isFocused, setIsFocused] = useState(false);
     const debouncedName = useDebounce(vendorName, 600);
+    const [isPickerVisible, setIsPickerVisible] = useState(false);
+
+
+    const suggestedIcons = useMemo(() => {
+        if (!vendorName.trim()) {
+            return EXPENSE_VENDOR_ICONS.slice(0, 6); // Default 6 icons
+        }
+        const filtered = EXPENSE_VENDOR_ICONS.filter(item =>
+            item.label.toLowerCase().includes(vendorName.toLowerCase())
+        );
+        return filtered.slice(0, 6); // Max 6 icons for 2 rows (3 per row)
+    }, [vendorName]);
 
 
     // ===============Load cached vendors on mount======================
@@ -390,78 +404,130 @@ const Vendor = () => {
     return (
         <SafeAreacontext bgColor="#eff6ff" className="flex-1">
             <PageHeader routes={` ${id ? "Edit Vendor" : "Adding Vendor"}`} />
-            <View className="p-4 flex-1">
-                {/* Card Header */}
-                <ThemedView className="p-4 rounded-lg mb-5" style={{ elevation: 2 }}>
-                    <ThemedText color="#374151" className="text-center text-lg font-medium mb-1">
-                        {id ? "Edit Vendor" : "Add Vendor"}
-                    </ThemedText>
-                </ThemedView>
+            <KeyboardAvoidingView
+                behavior={Platform.OS === "ios" ? "padding" : "height"}
+                keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
+            >
+                <ScrollView
+                    contentContainerStyle={{  padding: 12 }}
+                >
 
-                {/* Vendor Name Input */}
-                <ThemedView className="p-4 rounded-lg mb-5" style={{ elevation: 2 }}>
-                    <ThemedText className="mb-1">Vendor:</ThemedText>
-                    <Input placeholder="Enter vendor name" value={vendorName}
-                        onchange={(val) => {
-                            setVendorName(val);
-                            setIsFocused(true)
-                        }
-                        } />
-                    {message ? (
-                        <Text
-                            preventWrap={true}
-                            className="mt-1"
-                            style={{ color: messageStatus ? "#dc2626" : "#16a34a" }}
-                        >
-                            {message}
-                        </Text>
+                    {/* Card Header */}
+                    <ThemedView className="p-4 rounded-lg mb-5" style={{ elevation: 2 }}>
+                        <ThemedText color="#374151" className=" text-lg font-medium mb-1">
+                            {/* {id ? "Edit Vendor" : "Add Vendor"} */}
+                            Please choose an icon that best represents this vendor. Also, give it a good name.This helps identify vendors quickly in the app.
+                        </ThemedText>
+                    </ThemedView>
 
-                    ) : null}
-                </ThemedView>
 
-                {/* Icon Select */}
-                <ThemedView className="p-4 rounded-lg" style={{ elevation: 2 }}>
-                    <ThemedText className="mb-2">Choose an icon:</ThemedText>
+                    {/* Icon Select */}
+                    {!isPickerVisible && (
+                        <ThemedView className="p-4 rounded-lg" style={{ elevation: 2 }}>
+                            <View className="flex-row justify-between items-center">
+                                <ThemedText className="mb-2">Choose icon here:</ThemedText>
+                                <TouchableOpacity onPress={() => pickerRef.current?.open()}>
+                                    <Feather
+                                        name="search"
+                                        size={22}
+                                        color="#9ca3af"
+                                        style={{ marginLeft: 8 }}
+                                    />
+                                </TouchableOpacity>
+
+                            </View>
+
+                            <View className="flex-row flex-wrap justify-between mt-4">
+                                {suggestedIcons.map((item, index) => (
+                                    <TouchableOpacity
+                                        key={index}
+                                        onPress={() => {
+                                            setSelectedIcon(item);
+                                            setVendorName(item.label);
+
+                                        }}
+                                        style={{ width: '31%', marginBottom: 10 }}
+                                        className={`items-center p-3 rounded-xl border ${selectedIcon?.label === item.label
+                                            ? "border-blue-500 bg-blue-50"
+                                            : "border-gray-200 bg-gray-50"
+                                            }`}
+                                    >
+                                        <RenderIcons item={item} color={selectedIcon?.label === item.label ? "#2563eb" : "#4b5563"} size={22} />
+                                        <Text numberOfLines={1} className="text-[10px] mt-1 text-gray-500">{item.label}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+
+                            {/* Load More / Open Picker Button */}
+                            <TouchableOpacity
+                                onPress={() => pickerRef.current?.open()}
+                                className="py-2 mt-1 border-t border-gray-100 items-center"
+                            >
+                                {
+                                    !vendorName && !selectedIcon && (
+                                        <ThemedText preventWrap={true} style={{ color: '#2563eb' }} className="font-medium">
+                                            Load More Icons.....
+                                        </ThemedText>
+                                    )
+                                }
+
+                            </TouchableOpacity>
+                        </ThemedView>
+                    )}
+
+
+                    {/* Vendor Name Input */}
+                    <ThemedView className="p-4 rounded-lg mt-6 my-5" style={{ elevation: 2 }}>
+                        <ThemedText className="mb-1">Give the vendor a label or name:</ThemedText>
+                        <Input
+                            placeholder="Enter vendor name here"
+                            value={vendorName}
+                            rightIcon={true}
+                            iconEvent={() => {
+                                pickerRef.current?.open()
+                            }} // Toggle picker
+                            onchange={(val) => {
+                                setVendorName(val);
+                                setIsFocused(true);
+
+                            }}
+                        />
+                        {message ? (
+                            <Text
+                                preventWrap={true}
+                                className="mt-1"
+                                style={{ color: messageStatus ? "#dc2626" : "#16a34a" }}
+                            >
+                                {message}
+                            </Text>
+
+                        ) : null}
+                    </ThemedView>
+
+                    <Button title={`${id ? "Update" : "Save"} `} onClickEvent={id ? handleUpdateVendor : handleAddVendor} />
+
                     <IconPicker
+                        ref={pickerRef}
                         items={EXPENSE_VENDOR_ICONS}
                         value={selectedIcon}
+                        isPickerContentShown={true}
                         filterOptions={[
                             { label: "Fuel", value: "fuel" },
                             { label: "Supplies", value: "supplies" },
                             { label: "Food", value: "food_meals" },
-                            { label: "transport", value: "travel_transport" }
+                            { label: "Transport", value: "travel_transport" },
                         ]}
                         onChange={(val) => {
-                            console.log(val);
-
+                            setVendorName(val.label);
                             setSelectedIcon(val);
+                            setIsPickerVisible(false);
                         }}
-
                     />
-                </ThemedView>
 
-                {/* Live Preview */}
-                {vendorName && selectedIcon && (
-                    <ThemedView
-                        className="flex-row items-center p-4 rounded-xl my-4"
-                        style={{ elevation: 5, borderColor: "#2563eb", borderWidth: 1 }}
-                    >
-                        <RenderIcons
-                            item={selectedIcon}
-                            color="#2563eb"
-                            size={28}
-                        />
+                </ScrollView>
+            </KeyboardAvoidingView>
 
-                        <ThemedText className="text-base font-semibold ml-3">{vendorName}</ThemedText>
-                    </ThemedView>
-                )}
 
-                <Button title={`${id ? "Update" : "Save"} `} onClickEvent={id ? handleUpdateVendor : handleAddVendor} />
-
-                <ThemedText color="#374151" className="mt-4 text-lg">
-                    Please choose an icon that best represents this vendor. This helps identify vendors quickly in the app.
-                </ThemedText>
-            </View>
         </SafeAreacontext>
     );
 };

@@ -33,7 +33,7 @@ const AddExpenses = () => {
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [editingRecord, setEditingRecord] = useState(null);
 
-     const CACHE_KEY = `expenses_${activeTab}_${from}_${to}`
+    const CACHE_KEY = `expenses_${activeTab}_${from}_${to}`
 
 
     const [formData, setFormData] = useState({
@@ -73,6 +73,15 @@ const AddExpenses = () => {
     const [selectedCategory, setSelectedCategory] = useState(null);
     const [selectedVendor, setSelectedVendor] = useState(null);
     const [selectedPayment, setSelectedPayment] = useState(null);
+
+
+    //---------------
+
+    const displayAmount = (amt) => {
+        // Convert string to float first
+        const num = parseFloat(amt);
+        return Number.isInteger(num) ? num.toString() : num.toFixed(2);
+    };
 
     // ----------- OCR FUNCTION ---------------
 
@@ -289,8 +298,9 @@ const AddExpenses = () => {
     //cleaning the code this fun is call above
     const updateFormFields = (data) => {
         setEditingRecord(data);
+        const amount = displayAmount(data.amount?.toString() || "")
         setFormData({
-            amount: data.amount?.toString() || "",
+            amount: amount,
             category: data.category || "",
             project: data.project || "",
             vendor: data.vendor || "",
@@ -523,253 +533,136 @@ const AddExpenses = () => {
     //=======================================
 
     const updateExpense = async () => {
-    if (!editingRecord) return;
+        if (!editingRecord) return;
 
-    if (!formData.amount) {
-        setFormErrors({ amount: "Amount is required" });
-        return;
-    }
+        if (!formData.amount) {
+            setFormErrors({ amount: "Amount is required" });
+            return;
+        }
 
-    setGlobalLoading(true);
-    const formattedDate = date.toISOString().split("T")[0];
+        setGlobalLoading(true);
+        const formattedDate = date.toISOString().split("T")[0];
+        const amount = displayAmount(formData.amount)
 
-    const updatedExpense = {
-        id: editingRecord.id, 
-        amount: formData.amount,
-        category: selectedCategory,
-        vendor: selectedVendor,
-        payment_option: selectedPayment,
-        project: selectedProject,
-        memo: formData.memo.trim() || "",
-        sub_category: formData.subCatogry || "",
-        date: formattedDate,
-        receipt, 
-    };
+        const updatedExpense = {
+            id: editingRecord.id,
+            amount: amount,
+            category: selectedCategory,
+            vendor: selectedVendor,
+            payment_option: selectedPayment,
+            project: selectedProject,
+            memo: formData.memo.trim() || "",
+            sub_category: formData.subCatogry || "",
+            date: formattedDate,
+            receipt,
+        };
 
-    try {
-        let isSavedOnline = false;
+        try {
+            let isSavedOnline = false;
 
-        if (isConnected) {
-            try {
-                const fd = new FormData();
-                // Method override for server
-                fd.append("_method", "PUT");
-                fd.append("id", String(updatedExpense.id));
+            if (isConnected) {
+                try {
+                    const fd = new FormData();
 
-                Object.keys(updatedExpense).forEach(key => {
-                    if (key !== "id") {
-                        // Agar receipt nayi hai toh append karein
-                        if (key === "receipt") {
-                            if (receipt && receipt !== editingRecord.receipt && !receipt.startsWith('http')) {
-                                fd.append("receipt", {
-                                    uri: receipt,
-                                    name: "receipt.jpg",
-                                    type: "image/jpeg",
-                                });
+                    fd.append("id", String(updatedExpense.id));
+                    fd.append("METHOD_OVERRIDE", "PUT"); // body
+
+                    Object.keys(updatedExpense).forEach(key => {
+                        if (key !== "id") {
+                            if (key === "receipt") {
+                                if (receipt && receipt !== editingRecord.receipt && !receipt.startsWith('http')) {
+                                    fd.append("receipt", {
+                                        uri: receipt,
+                                        name: "receipt.jpg",
+                                        type: "image/jpeg",
+                                    });
+                                }
+                            } else {
+                                fd.append(key, String(updatedExpense[key] || ""));
                             }
-                        } else {
-                            fd.append(key, String(updatedExpense[key] || ""));
                         }
-                    }
+                    });
+
+                    // 🚨 IMPORTANT → Send header override too
+                    const res = await post(
+                        "my-expenses/update",
+                        fd,
+                        { useBearerAuth: true },
+                        {
+                            headers: {
+                                HTTP_X_HTTP_METHOD_OVERRIDE: "PUT"
+                            },
+                            isFormData: true
+                        }
+                    );
+                    console.log('updated recored is:', res);
+
+                    if (res?.status === "success") isSavedOnline = true;
+                } catch (err) {
+                    console.log("Online update failed → shifting to offline");
+                }
+            }
+
+            /* 🚨 OFFLINE LOGIC FIXED HERE */
+            if (!isSavedOnline) {
+                // 1. Context wala queueAction use karein (Ye sync trigger karega)
+                await queueAction({
+                    method: "post",
+                    endpoint: "my-expenses/update",
+                    body: {
+                        ...updatedExpense,
+                        METHOD_OVERRIDE: "PUT"
+                    },
+                    isFormData: true,
+                    useToken: true,
+                    options: {
+                        headers: {
+                            HTTP_X_HTTP_METHOD_OVERRIDE: "PUT"
+                        }
+                    },
+                    affectedIds: [updatedExpense.id]
                 });
 
-                const res = await post("my-expenses/update", fd, { useBearerAuth: true }, { isFormData: true });
-                if (res?.status === "success") isSavedOnline = true;
-            } catch (err) {
-                console.log("Online update failed → shifting to offline");
-            }
-        }
+                // 2. Local Cache Update (Taake list mein foran tabdeeli dikhe)
+                const TAB_CACHE_KEY = `expenses_${activeTab}_${from}_${to}`;
+                const cachedData = await readCache(TAB_CACHE_KEY);
+                // Handle different cache structures
+                let list = Array.isArray(cachedData) ? cachedData : (cachedData?.data || []);
 
-        /* 🚨 OFFLINE LOGIC FIXED HERE */
-        if (!isSavedOnline) {
-            // 1. Context wala queueAction use karein (Ye sync trigger karega)
-            await queueAction({
-                method: "post", // Server side par _method: PUT handle ho raha hai
-                endpoint: "my-expenses/update",
-                body: { ...updatedExpense, _method: "PUT" },
-                isFormData: true,
-                useToken: true,
-                affectedIds: [updatedExpense.id] // Taake sync ke baad UI refresh ho
-            });
+                const offlineRecord = {
+                    ...updatedExpense,
+                    pending: true,
+                };
 
-            // 2. Local Cache Update (Taake list mein foran tabdeeli dikhe)
-            const TAB_CACHE_KEY = `expenses_${activeTab}_${from}_${to}`;
-            const cachedData = await readCache(TAB_CACHE_KEY);
-            // Handle different cache structures
-            let list = Array.isArray(cachedData) ? cachedData : (cachedData?.data || []);
+                const idx = list.findIndex(e => String(e.id) === String(updatedExpense.id));
+                if (idx >= 0) {
+                    list[idx] = { ...list[idx], ...offlineRecord };
+                }
 
-            const offlineRecord = {
-                ...updatedExpense,
-                pending: true,
-            };
-
-            const idx = list.findIndex(e => String(e.id) === String(updatedExpense.id));
-            if (idx >= 0) {
-                list[idx] = { ...list[idx], ...offlineRecord };
+                await storeCache(TAB_CACHE_KEY, Array.isArray(cachedData) ? list : { ...cachedData, data: list });
             }
 
-            await storeCache(TAB_CACHE_KEY, Array.isArray(cachedData) ? list : { ...cachedData, data: list });
+            await storeCache("recordUpdated", true);
+
+            showModal(
+                isSavedOnline ? "Expense updated successfully!" : "Expense updated offline. It will sync when online.",
+                isSavedOnline ? "success" : "warning",
+                false,
+                [
+                    { label: "View", bgColor: "bg-green-600", onPress: () => hideModal() },
+                    { label: "View All", bgColor: "bg-blue-600", onPress: () => { hideModal(); router.back(); } },
+                ]
+            );
+
+            resetFields();
+
+        } catch (error) {
+            console.error("Update error:", error);
+            showModal("Failed to update expense", "error");
+        } finally {
+            setGlobalLoading(false);
         }
-
-        await storeCache("recordUpdated", true);
-
-        showModal(
-            isSavedOnline ? "Expense updated successfully!" : "Expense updated offline. It will sync when online.",
-            isSavedOnline ? "success" : "warning",
-            false,
-            [
-                { label: "View", bgColor: "bg-green-600", onPress: () => hideModal() },
-                { label: "View All", bgColor: "bg-blue-600", onPress: () => { hideModal(); router.back(); } },
-            ]
-        );
-
-        resetFields();
-
-    } catch (error) {
-        console.error("Update error:", error);
-        showModal("Failed to update expense", "error");
-    } finally {
-        setGlobalLoading(false);
-    }
-};
-
-    // const updateExpense = async () => {
-    //     if (!editingRecord) return;
-
-    //     // 🔑 Validate mandatory field
-    //     if (!formData.amount) {
-    //         setFormErrors({ amount: "Amount is required" });
-    //         return;
-    //     }
-
-    //     setGlobalLoading(true);
-
-    //     const formattedDate = date.toISOString().split("T")[0];
-
-    //     // 🔹 Construct updated expense object
-    //     const updatedExpense = {
-    //         id: editingRecord.id, // must be present
-    //         amount: formData.amount,
-    //         category: selectedCategory,
-    //         vendor: selectedVendor,
-    //         payment_option: selectedPayment,
-    //         project: selectedProject,
-    //         memo: formData.memo.trim() || "",
-    //         sub_category: formData.subCatogry || "",
-    //         date: formattedDate,
-    //         receipt, // just the URI if changed
-    //     };
-
-    //     try {
-    //         let isSavedOnline = false;
-
-    //         /* =========================
-    //            1️⃣ TRY ONLINE UPDATE
-    //         ========================== */
-    //         if (isConnected) {
-    //             try {
-    //                 const fd = new FormData();
-
-    //                 // Append method override for PUT (server expects this)
-    //                 fd.append("OVERRIDE_METHOD", "PUT");
-    //                 fd.append("METHOD_OVERRIDE", "PUT");
-    //                 fd.append("_method", "PUT");
-
-    //                 fd.append("id", String(updatedExpense.id)); // ID required
-
-    //                 // Append all other fields
-    //                 Object.keys(updatedExpense).forEach(key => {
-    //                     if (key !== "id") {
-    //                         fd.append(key, String(updatedExpense[key] || ""));
-    //                     }
-    //                 });
-
-    //                 // Append receipt if changed
-    //                 if (receipt && receipt !== editingRecord.receipt) {
-    //                     fd.append("receipt", {
-    //                         uri: receipt,
-    //                         name: "receipt.jpg",
-    //                         type: "image/jpeg",
-    //                     });
-    //                 }
-
-    //                 // POST request (server handles as PUT with override)
-    //                 const res = await post(
-    //                     "my-expenses/update",
-    //                     fd,
-    //                     { useBearerAuth: true },
-    //                     { isFormData: true }
-    //                 );
-
-    //                 if (res?.status === "success") isSavedOnline = true;
-    //                 else console.log("Server rejected update:", res);
-    //             } catch (err) {
-    //                 console.log("Online update failed → fallback offline:", err);
-    //             }
-    //         }
-
-    //         /* =========================
-    //            2️⃣ OFFLINE SAVE (queue + tab cache)
-    //         ========================== */
-    //         if (!isSavedOnline) {
-    //             // 2a. Add to offline queue
-    //             const queue = (await readCache("offlineQueue")) || [];
-    //             queue.push({
-    //                 method: "post",
-    //                 endpoint: "my-expenses/update",
-    //                 body: { ...updatedExpense, OVERRIDE_METHOD: "PUT", METHOD_OVERRIDE: "PUT" },
-    //                 isFormData: true,
-    //                 timestamp: Date.now(),
-    //             });
-    //             await storeCache("offlineQueue", queue);
-
-    //             // 2b. Update current TAB CACHE only (like add record)
-    //             const TAB_CACHE_KEY = `expenses_${activeTab}_${from}_${to}`;
-    //             const cachedWrap = (await readCache(TAB_CACHE_KEY)) || [];
-
-    //             const offlineRecord = {
-    //                 ...updatedExpense,
-    //                 id: updatedExpense.id,
-    //                 tempId: `local_${Date.now()}`,
-    //                 pending: true, //  pending flag for offline
-    //             };
-
-    //             // Replace existing record if date matches
-    //             const idx = cachedWrap.findIndex(e => String(e.id) === String(updatedExpense.id));
-    //             if (idx >= 0) cachedWrap[idx] = offlineRecord;
-    //             else cachedWrap.unshift(offlineRecord);
-
-    //             await storeCache(TAB_CACHE_KEY, cachedWrap);
-    //         }
-
-    //         // 🔹 Flag to notify fetchEffect
-    //         await storeCache("recordUpdated", true);
-
-    //         /* =========================
-    //            3️⃣ SHOW MODAL
-    //         ========================== */
-    //         showModal(
-    //             isSavedOnline
-    //                 ? "Expense updated successfully!"
-    //                 : "Expense updated offline. it will suyn when you are online",
-    //             isSavedOnline ? "success" : "warning",
-    //             false,
-    //             [
-    //                 { label: "View", bgColor: "bg-green-600", onPress: () => hideModal() },
-    //                 { label: "View All", bgColor: "bg-blue-600", onPress: () => { hideModal(); router.back(); } },
-    //             ]
-    //         );
-
-    //         // 🔹 Reset form fields
-    //         resetFields();
-
-    //     } catch (error) {
-    //         console.error("Global update error:", error);
-    //         showModal("Failed to update expense", "error");
-    //     } finally {
-    //         setGlobalLoading(false);
-    //     }
-    // };
+    };
 
 
 

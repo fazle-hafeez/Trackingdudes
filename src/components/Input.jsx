@@ -1,5 +1,5 @@
 
-import { View, Text, TextInput, Animated } from 'react-native'
+import { View, Text, TextInput, Animated ,TouchableOpacity} from 'react-native'
 import React, { useState, useRef, useEffect } from 'react'
 import { useTheme } from '../context/ThemeProvider'
 import { Feather } from "@expo/vector-icons";
@@ -14,11 +14,13 @@ const Input = ({
   inputError = "",
   onFocus = () => { },
   setInputError = () => { },
+  iconEvent = () => {},
   placeholder,
   keyboardType = 'default',
   autoCapitalize = 'words',
   borderColors,
-  editable = true
+  editable = true,
+  rightIcon = false
 }) => {
 
   const [focus, setFocus] = useState(false)
@@ -71,25 +73,29 @@ const Input = ({
     <View className="shadow-xl">
       {/* Shadow wrapper fixes Android/iOS border bug */}
       <View
-       style={{
-        shadowColor: focus ? focusColor : '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 3,
-        
-      }}>
+        style={{
+          shadowColor: focus ? focusColor : '#000',
+          shadowOffset: { width: 0, height: 1 },
+          shadowOpacity: 0.1,
+          shadowRadius: 3,
+
+        }}>
         <Animated.View
           style={{
-            borderWidth:  1 ,
+            borderWidth: 1,
             borderRadius: 5,
-            paddingHorizontal: 5,
+            paddingHorizontal: 10,
             paddingVertical: 4,
             borderColor: borderColor,
             transform: [{ translateX: shakeAnim }],
+            flexDirection: 'row',
+            itemsCenter: 'center',
           }}
-          className={` ${className} flex-row items-center px-3 `}
+          className={`${className} flex-row items-center`}
         >
-          {icon && (<Feather name="search" size={22} color="#9ca3af" />)}
+          {/* Left Icon */}
+          {icon && <Feather name="search" size={22} color="#9ca3af" />}
+
           <TextInput
             placeholder={placeholder}
             keyboardType={keyboardType}
@@ -99,16 +105,27 @@ const Input = ({
             editable={editable}
             value={value}
             onChangeText={(val) => {
-              onchange(val)
-              if (val !== "") setInputError('')
+              onchange(val);
+              if (val !== "") setInputError('');
             }}
             onFocus={() => {
-              setFocus(true)
+              setFocus(true);
               onFocus();
             }}
             onBlur={() => setFocus(false)}
-            style={[style, { fontSize: 16, color: finalColor }]}
+            style={[style, { fontSize: 16, color: finalColor, flex: 1, marginLeft: icon ? 8 : 0 }]}
           />
+
+          {rightIcon && (
+            <TouchableOpacity onPress={iconEvent}>
+            <Feather
+              name="search"
+              size={22}
+              color="#9ca3af"
+              style={{ marginLeft: 8 }}
+            />
+            </TouchableOpacity>
+          )}
         </Animated.View>
       </View>
 
