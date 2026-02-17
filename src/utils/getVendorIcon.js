@@ -7,7 +7,6 @@ export function getVendorIcon(vendorName) {
 
     // LOGGING FOR DEBUGGING:
     const icon = VENDOR_ICONS[key] || DEFAULT_VENDOR_ICON;
-    console.log("Icon type:", typeof icon); // This should now say 'function' or 'object'
 
     return icon;
 }

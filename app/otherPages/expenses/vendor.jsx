@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext, useMemo, useRef } from "react";
 import { View, Text, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
 import { ThemedView, ThemedText, SafeAreacontext } from "../../../src/components/ThemedColor";
 import PageHeader from "../../../src/components/PageHeader";
-import { Feather } from "@expo/vector-icons";
+import { Feather, FontAwesome5 } from "@expo/vector-icons";
 import Button from "../../../src/components/Button";
 import Input from "../../../src/components/Input";
 import { readCache, storeCache } from "../../../src/offline/cache";
@@ -12,9 +12,10 @@ import { useAuth } from "../../../src/context/UseAuth";
 import { router } from "expo-router";
 import { useLocalSearchParams } from "expo-router";
 import { useDebounce } from "../../../src/hooks/useDebounce";
-import { parseIconString, RenderIcons } from "../../../src/helper";
+import { parseIconString, RenderIcon } from "../../../src/helper";
 import { EXPENSE_VENDOR_ICONS } from "../../../src/constants/icons";
 import IconPicker from "../../../src/components/IconPicker";
+import { useTheme } from "../../../src/context/ThemeProvider";
 
 
 
@@ -29,29 +30,24 @@ const Vendor = () => {
     const { showModal, setGlobalLoading, hideModal } = useAuth();
     const { isConnected } = useContext(OfflineContext);
     const { id = null, activeStatus } = useLocalSearchParams()
-
+    const { darkMode } = useTheme();
     const { post, put, get } = useApi();
     const pickerRef = useRef(null)
 
     const [vendorName, setVendorName] = useState("");
+    const [vendorError, setVendorErr] = useState("")
     const [selectedIcon, setSelectedIcon] = useState(null);
     const [message, setMessage] = useState("");
     const [messageStatus, setMessageStatus] = useState(false);
     const [vendorList, setVendorList] = useState([]);
     const [isFocused, setIsFocused] = useState(false);
-    const debouncedName = useDebounce(vendorName, 600);
+    const debouncedName = useDebounce(vendorName, 900);
     const [isPickerVisible, setIsPickerVisible] = useState(false);
 
 
     const suggestedIcons = useMemo(() => {
-        if (!vendorName.trim()) {
-            return EXPENSE_VENDOR_ICONS.slice(0, 6); // Default 6 icons
-        }
-        const filtered = EXPENSE_VENDOR_ICONS.filter(item =>
-            item.label.toLowerCase().includes(vendorName.toLowerCase())
-        );
-        return filtered.slice(0, 6); // Max 6 icons for 2 rows (3 per row)
-    }, [vendorName]);
+        return EXPENSE_VENDOR_ICONS.slice(0, 6);
+    }, []);
 
 
     // ===============Load cached vendors on mount======================
@@ -139,11 +135,12 @@ const Vendor = () => {
                         { useBearerAuth: true }
                     );
 
+                    console.log(res);
 
                     if (res) {
                         if (res.status === "error") {
-                            setMessage(res.message || res.data || "This name already exists.");
                             setMessageStatus(true);
+                            setMessage(res.message || res.data || "This name already exists.");
                         } else {
                             setMessage(res.message || res.data || "The name is available");
                             setMessageStatus(false);
@@ -151,8 +148,8 @@ const Vendor = () => {
                         return;
                     }
                 } catch (err) {
-                    console.log("API Error Details:", err?.response?.data || err.message);
-                }
+                    // console.log("API Error Details:", err?.response?.data || err.message);
+                } 
             }
 
             // --- 2. OFFLINE FALLBACK ---
@@ -187,8 +184,16 @@ const Vendor = () => {
 
     ///=========== handle create vender ============
     const handleAddVendor = async () => {
-        if (!vendorName?.trim() || !selectedIcon) {
-            showModal("Enter vendor name and select icon", "error");
+        if (!vendorName?.trim()) {
+            setVendorErr("Field is required.");
+            return;
+        }
+
+        if (!selectedIcon) {
+            showModal(
+                "Please select an icon that best represents this vendor...",
+                "warning"
+            );
             return;
         }
 
@@ -239,7 +244,7 @@ const Vendor = () => {
                 ]
             );
         } catch (err) {
-            showModal(err?.message || "Server error", "error");
+            // showModal(err?.message || "Server error", "error");
         } finally {
             setGlobalLoading(false);
         }
@@ -248,7 +253,18 @@ const Vendor = () => {
 
 
     const handleUpdateVendor = async () => {
-        if (!vendorName?.trim() || !selectedIcon || messageStatus) return;
+        if (!vendorName?.trim()) {
+            setVendorErr("Field is required.");
+            return;
+        }
+
+        if (!selectedIcon) {
+            showModal(
+                "Please select an icon that best represents this vendor...",
+                "warning"
+            );
+            return;
+        }
 
         setGlobalLoading(true);
 
@@ -399,136 +415,200 @@ const Vendor = () => {
         setGlobalLoading(false);
     };
 
-
-
     return (
         <SafeAreacontext bgColor="#eff6ff" className="flex-1">
-            <PageHeader routes={` ${id ? "Edit Vendor" : "Adding Vendor"}`} />
-            <KeyboardAvoidingView
-                behavior={Platform.OS === "ios" ? "padding" : "height"}
-                keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
-            >
-                <ScrollView
-                    contentContainerStyle={{  padding: 12 }}
-                >
 
-                    {/* Card Header */}
-                    <ThemedView className="p-4 rounded-lg mb-5" style={{ elevation: 2 }}>
-                        <ThemedText color="#374151" className=" text-lg font-medium mb-1">
-                            {/* {id ? "Edit Vendor" : "Add Vendor"} */}
-                            Please choose an icon that best represents this vendor. Also, give it a good name.This helps identify vendors quickly in the app.
+            {/* Page Header */}
+            <PageHeader routes={`${id ? "Edit Vendor" : "Adding Vendor"}`} />
+
+            {/* Keyboard handler for inputs */}
+            <KeyboardAvoidingView
+                style={{ flex: 1 }}
+                behavior={Platform.OS === "ios" ? "padding" : "height"}
+            >
+
+                <ScrollView contentContainerStyle={{ padding: 12 }} >
+
+                    <ThemedView className="p-4 rounded-lg mt-2 mb-4 " style={{ elevation: 2 }} >
+                        <ThemedText color="#374151" className="text-lg  mb-1">
+                            Choose a popular vendor or add a new one
                         </ThemedText>
                     </ThemedView>
 
 
-                    {/* Icon Select */}
+                    {/* ---------------- Suggested Icon Section ---------------- */}
                     {!isPickerVisible && (
                         <ThemedView className="p-4 rounded-lg" style={{ elevation: 2 }}>
-                            <View className="flex-row justify-between items-center">
-                                <ThemedText className="mb-2">Choose icon here:</ThemedText>
-                                <TouchableOpacity onPress={() => pickerRef.current?.open()}>
-                                    <Feather
-                                        name="search"
-                                        size={22}
-                                        color="#9ca3af"
-                                        style={{ marginLeft: 8 }}
-                                    />
+
+                            {/* Header Row */}
+                            <View className="flex-row justify-between items-center mb-1">
+                                <ThemedText className="">Choose icon here:</ThemedText>
+
+                                {/* Open full picker */}
+                                <TouchableOpacity onPress={() => {
+                                    pickerRef.current?.open();
+                                    setIsFocused(true)
+                                }}>
+                                    <Feather name="search" size={22} color="#9ca3af" />
                                 </TouchableOpacity>
-
                             </View>
 
-                            <View className="flex-row flex-wrap justify-between mt-4">
-                                {suggestedIcons.map((item, index) => (
-                                    <TouchableOpacity
-                                        key={index}
-                                        onPress={() => {
-                                            setSelectedIcon(item);
-                                            setVendorName(item.label);
+                            {/* Suggested Icons */}
+                            <View className={`
+                                flex-row flex-wrap justify-between mt-1 border rounded-lg p-4 ${darkMode ? "border-gray-500" : "border-gray-300"}
+                                `}>
+                                {(() => {
+                                    let iconsToDisplay = [];
 
-                                        }}
-                                        style={{ width: '31%', marginBottom: 10 }}
-                                        className={`items-center p-3 rounded-xl border ${selectedIcon?.label === item.label
-                                            ? "border-blue-500 bg-blue-50"
-                                            : "border-gray-200 bg-gray-50"
-                                            }`}
-                                    >
-                                        <RenderIcons item={item} color={selectedIcon?.label === item.label ? "#2563eb" : "#4b5563"} size={22} />
-                                        <Text numberOfLines={1} className="text-[10px] mt-1 text-gray-500">{item.label}</Text>
-                                    </TouchableOpacity>
-                                ))}
+                                    if (selectedIcon) {
+                                        // 1. Filter out the selected icon from the default list to avoid duplication
+                                        const otherIcons = suggestedIcons.filter(
+                                            (item) => item.label !== selectedIcon.label
+                                        );
+
+                                        // 2. Place the selected icon at the first position (index 0)
+                                        // 3. Take the remaining icons and slice to ensure the total count is exactly 6
+                                        iconsToDisplay = [selectedIcon, ...otherIcons].slice(0, 6);
+                                    } else {
+                                        // If no icon is selected, show the default top 6 icons
+                                        iconsToDisplay = suggestedIcons;
+                                    }
+
+                                    return iconsToDisplay.map((item, index) => (
+                                        <TouchableOpacity
+                                            key={`${item.label}-${index}`}
+                                            onPress={() => {
+                                                setSelectedIcon(item);
+                                                setVendorName(item.label);
+                                                setIsFocused(true);
+                                            }}
+                                            style={{ width: '31%', marginBottom: 10 }}
+                                            className={`items-center p-3 rounded-xl border ${selectedIcon?.label === item.label
+                                                ? darkMode ? "border-blue-500" : "border-blue-500 bg-blue-50" // Highlighted state
+                                                : darkMode ? "border-gray-500 " : "border-gray-200 bg-gray-50"  // Default state
+                                                }`}
+                                        >
+                                            {/* Custom Icon Component */}
+                                            <RenderIcon
+                                                icon={item.icon}
+                                                color={selectedIcon?.label === item.label ? "#2563eb" : "#4b5563"}
+                                                size={30}
+                                                prefix={item.prefix}
+                                            />
+
+                                            {/* Icon Label - Truncated if too long */}
+                                            <Text numberOfLines={1} className="text-[10px] mt-1 text-gray-500 text-center">
+                                                {item.label}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    ));
+                                })()}
                             </View>
 
-                            {/* Load More / Open Picker Button */}
+                            {/* Load More Button */}
                             <TouchableOpacity
-                                onPress={() => pickerRef.current?.open()}
-                                className="py-2 mt-1 border-t border-gray-100 items-center"
+                                onPress={() => {
+                                    pickerRef.current?.open();
+                                    setIsFocused(true)
+                                }}
+                                className={`py-2 mt-2 border-t ${darkMode ? "border-gray-500" : "border-gray-300"} items-center`}
                             >
-                                {
-                                    !vendorName && !selectedIcon && (
-                                        <ThemedText preventWrap={true} style={{ color: '#2563eb' }} className="font-medium">
-                                            Load More Icons.....
-                                        </ThemedText>
-                                    )
-                                }
+
+                                <Text preventWrap={true} className={`font-medium ${darkMode ? 'text-blue-500' : 'text-blue-600'}`}>
+                                    Load More Icons.....
+                                </Text>
 
                             </TouchableOpacity>
+
                         </ThemedView>
                     )}
 
+                    {/* ---------------- Vendor Name Input ---------------- */}
+                    <ThemedView className="p-4 rounded-lg mt-6" style={{ elevation: 2 }}>
 
-                    {/* Vendor Name Input */}
-                    <ThemedView className="p-4 rounded-lg mt-6 my-5" style={{ elevation: 2 }}>
-                        <ThemedText className="mb-1">Give the vendor a label or name:</ThemedText>
+                        <ThemedText className="mb-2">Give the vendor a label or name:  </ThemedText>
                         <Input
                             placeholder="Enter vendor name here"
                             value={vendorName}
+                            // Open icon picker from input icon *
                             rightIcon={true}
-                            iconEvent={() => {
-                                pickerRef.current?.open()
-                            }} // Toggle picker
+                            iconEvent={() => pickerRef.current?.open()}
                             onchange={(val) => {
-                                setVendorName(val);
+                                // If value comes from picker (object), extract label
+                                const textValue = typeof val === 'object' ? val?.label : val;
+
+                                setVendorName(textValue || "");
+
+                                // Set selected icon only if full object received
+                                if (typeof val === 'object' && val !== null) {
+                                    setSelectedIcon(val);
+                                }
+
                                 setIsFocused(true);
 
+                                // Clear icon if input becomes empty
+                                if (!textValue || textValue.trim() === "") {
+                                    setSelectedIcon(null);
+                                    setVendorErr("");
+                                }
                             }}
-                        />
-                        {message ? (
-                            <Text
-                                preventWrap={true}
-                                className="mt-1"
-                                style={{ color: messageStatus ? "#dc2626" : "#16a34a" }}
-                            >
-                                {message}
-                            </Text>
 
-                        ) : null}
+                            inputError={vendorError}
+                            setInputError={setVendorErr}
+                        />
+                        {
+                            message !== "" && (
+                                <Text preventWrap={true} className={`${messageStatus ? "text-red-500" : "text-green-500"} mt-2`}>
+                                    {message}
+                                </Text>
+                            )
+                        }
+
                     </ThemedView>
 
-                    <Button title={`${id ? "Update" : "Save"} `} onClickEvent={id ? handleUpdateVendor : handleAddVendor} />
-
-                    <IconPicker
-                        ref={pickerRef}
-                        items={EXPENSE_VENDOR_ICONS}
-                        value={selectedIcon}
-                        isPickerContentShown={true}
-                        filterOptions={[
-                            { label: "Fuel", value: "fuel" },
-                            { label: "Supplies", value: "supplies" },
-                            { label: "Food", value: "food_meals" },
-                            { label: "Transport", value: "travel_transport" },
-                        ]}
-                        onChange={(val) => {
-                            setVendorName(val.label);
-                            setSelectedIcon(val);
-                            setIsPickerVisible(false);
-                        }}
+                    {/* ---------------- Save / Update Button ---------------- */}
+                    <Button
+                        className="mt-5"
+                        title={`${id ? "Update" : "Save"}`}
+                        onClickEvent={id ? handleUpdateVendor : handleAddVendor}
                     />
 
+
+                    {/* ---------------- Info Card ---------------- */}
+                    <View className="p-2 rounded-lg mt-2" >
+                        <ThemedText color="#374151" className="text-lg  mb-1">
+                            Please choose an icon that best represents this vendor and give it a proper name.
+                            This helps identify vendors quickly inside the app.
+                        </ThemedText>
+                    </View>
+
                 </ScrollView>
-            </KeyboardAvoidingView>
+            </KeyboardAvoidingView >
 
+            {/* ---------------- Hidden Full Icon Picker ---------------- */}
+            <View View className="opacity-0" >
+                <IconPicker
+                    ref={pickerRef}
+                    items={EXPENSE_VENDOR_ICONS}
+                    value={selectedIcon}
+                    isPickerContentShown={true}
+                    filterOptions={[
+                        { label: "Fuel", value: "fuel" },
+                        { label: "Supplies", value: "supplies" },
+                        { label: "Food", value: "food_meals" },
+                        { label: "Transport", value: "travel_transport" },
+                    ]}
+                    onChange={(val) => {
+                        console.log("selected icon :", val);
+                        setVendorName(val.label);
+                        setSelectedIcon(val);
+                        setIsPickerVisible(false);
+                        setIsFocused(true);
+                    }}
+                />
+            </View>
 
-        </SafeAreacontext>
+        </SafeAreacontext >
     );
 };
 

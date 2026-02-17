@@ -24,7 +24,7 @@ const ModalComponent = ({
 
   const buttonColored = darkMode ? "border border-blue-950 bg-blue-600" : "bg-customBlue";
 
-  useModalBars(visible, darkMode);
+  useModalBars(visible, darkMode, "#030025");
 
   // Main Logic Effect
   useEffect(() => {

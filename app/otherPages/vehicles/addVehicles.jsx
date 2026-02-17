@@ -149,17 +149,17 @@ const AddVehicles = () => {
     const newErrors = {};
 
     if (form.vehicleName.trim() === "") {
-      setErrors({ vehicleName: "Vehicle name required" });
+      setErrors({ vehicleName: "Field is required" });
       return false;
     }
 
     if (form.fuelEcnomy.trim() === "") {
-      setErrors({ fuelEcnomy: "Fuel economy required" });
+      setErrors({ fuelEcnomy: "Field is required" });
       return false;
     }
 
     if (form.tankCapacity.trim() === "") {
-      setErrors({ tankCapacity: "Tank capacity required" });
+      setErrors({ tankCapacity: "Field is required" });
       return false;
     }
 
@@ -242,6 +242,7 @@ const AddVehicles = () => {
 
   //Handle update vehicle
 
+ //====================================================
 
   const handleUpdateVehicle = async () => {
     if (!validateForm()) return;
@@ -293,7 +294,7 @@ const AddVehicles = () => {
       await storeCache(CACHE_KEY, { data: oldData });
       await storeCache("recordUpdated", true);
 
-         showModal(
+      showModal(
         isOffline
           ? "Vehicle updated successfully in offline mode. Avoid duplicate names to prevent conflicts."
           : "Vehicle updated successfully!",
@@ -320,9 +321,11 @@ const AddVehicles = () => {
       {/* <View className="p-4 bg-white rounded-xl mx-4 mt-2"> */}
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
       >
 
-        <ScrollView className="px-3" contentContainerStyle={{ flexGrow: 1 }}>
+        <ScrollView className="px-3" contentContainerStyle={{ paddingBottom: 80 }}
+          keyboardShouldPersistTaps="handled">
           <Section
             label="Vehicle"
             icon={<FontAwesome5 name="car" size={22} />}
@@ -385,7 +388,7 @@ const AddVehicles = () => {
                 placeholder="Enter tank capacity"
                 keyboardType="numeric" />}
           />
-          <View className="mt-2 mb-4">
+          <View className="mt-2">
             <Button title={id ? "Update" : "Save"} onClickEvent={id ? handleUpdateVehicle : handleCreateVehicle} />
           </View>
           {/* </View> */}

@@ -237,91 +237,11 @@ const AddingProject = () => {
   };
 
 
-  //  OFFLINE CREATE PROJECT
+ //======================= Handle Create project ========
 
-  // const handleCreateProject = async () => {
-  //   if (!validateForm() || messageStatus) return; // Don't allow if duplicate message is shown
-
-  //   setGlobalLoading(true);
-  //   try {
-  //     const payload = {
-  //       project: project.name.trim(),
-  //       in_trips: project.in_trips,
-  //       in_shifts: project.in_shifts,
-  //       in_times: project.in_times,
-  //       in_expenses: project.in_expenses,
-  //       suggestions: project.suggestions,
-  //       status: "enabled",
-  //       tempId: Date.now(), // Temporary ID for offline
-  //     };
-
-  //     // Attempt online post
-  //     let result = null;
-  //     let isOffline = false;
-  //     try {
-  //       result = await post("/my-projects/create-project", payload, {
-  //         useBearerAuth: true,
-  //       });
-  //       if (!result || result.offline) isOffline = true;
-  //     } catch (err) {
-  //       console.log("Offline detected or network error", err);
-  //       isOffline = true;
-  //     }
-
-  //     // READ OLD CACHE
-  //     const cachedWrapOld = (await readCache(CACHE_KEY)) || { data: [] };
-  //     const oldData = Array.isArray(cachedWrapOld.data) ? cachedWrapOld.data : [];
-
-  //     // PREPARE NEW PROJECT ITEM
-  //     const newProject = {
-  //       ...payload,
-  //       id: payload.tempId,
-  //       tempId: payload.tempId,
-  //       pending: true, // mark as pending
-  //       in_shifts: !!payload.in_shifts,
-  //       in_trips: !!payload.in_trips,
-  //       in_times: !!payload.in_times,
-  //       in_expenses: !!payload.in_expenses,
-  //     };
-
-  //     // MERGE CACHE (duplicate-free)
-  //     const mergedList = [...oldData, newProject]; // <-- yahan simple array push kar do
-  //     await storeCache(CACHE_KEY, { data: mergedList });
-  //     await storeCache("newRecordAdded", true); // flag list refresh ke liye
-
-  //     // SHOW MODAL
-  //     showModal(
-  //       isOffline
-  //         ? "Project was added successfully you are in offline mode please don't use the dublicate project name it may be crashed your request (offline)"
-  //         : result?.message || "Project created successfully!",
-  //       isOffline ? "warning" : "success",
-  //       false,
-  //       [
-  //         {
-  //           label: "Add More",
-  //           bgColor: "bg-green-600",
-  //           onPress: () => {
-  //             hideModal();
-  //             resetForm();
-  //           },
-  //         },
-  //         {
-  //           label: "View All",
-  //           bgColor: "bg-blue-600",
-  //           onPress: () => {
-  //             hideModal();
-  //             router.back();
-  //           },
-  //         },
-  //       ]
-  //     );
-  //   } catch (error) {
-  //     console.error(error);
-  //     showModal(error?.error || "A server error occurred.", "error");
-  //   } finally {
-  //     setGlobalLoading(false);
-  //   }
-  // };
+              //======================//
+              
+//========================================================
 
   const handleCreateProject = async () => {
     if (!validateForm() || messageStatus) return;
@@ -516,7 +436,8 @@ const AddingProject = () => {
               }}
             />
             {message ? (
-              <Text
+              <Text 
+                preventWrap={true}
                 className={`mt-1 ${messageStatus ? "text-red-500" : "text-green-500"
                   }`}
               >

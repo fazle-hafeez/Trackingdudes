@@ -1,4 +1,6 @@
 import { getVendorIcon } from "./utils/getVendorIcon";
+import { Ionicons, FontAwesome, FontAwesome5, FontAwesome6, MaterialIcons, AntDesign, Feather } from "@expo/vector-icons";
+import { Svg } from "react-native-svg";
 
 export const normalizeStatus = (value) => {
   if (!value) return null;
@@ -127,13 +129,14 @@ export const parseIconString = (iconStr = "") => {
   const [prefix, iconName] = iconStr.split(":");
 
   const map = {
-    font: "FontAwesome",
-    font5: "FontAwesome5",
-    font6: "FontAwesome6",
+    fa: "FontAwesome",
+    fa5: "FontAwesome5",
+    fa6: "FontAwesome6",
     ion: "Ionicons",
-    mater: "MaterialIcons",
+    mat: "MaterialIcons",
     svg: "SvgIcon",
-    ant: "AntDesign"
+    ant: "AntDesign",
+    fth: "Feather"
   };
 
   return {
@@ -145,38 +148,45 @@ export const parseIconString = (iconStr = "") => {
 
 
 // To display icon
-export const RenderIcons = ({ item, size = 26, color = "#000" }) => {
-  if (!item || !item.icon) return null;
+export const RenderIcon = ({ icon, size = 26, color = "#000", prefix }) => {
+  if (!icon || "") return null;
 
   // Type ya prefix dono mein se jo mile use use karein
-  const iconType = (item.type || item.prefix || "").toLowerCase();
+  const iconType = (prefix || "").toLowerCase();
 
-  switch (iconType) {
-    case "fontawesome":
-    case "font":
-      return <FontAwesome name={item.icon} size={size} color={color} />;
+  switch (iconType.toLowerCase()) {
 
-    case "fontawesome5":
-    case "font5":
-      return <FontAwesome5 name={item.icon} size={size} color={color} />;
-
-    case "materialicons":
-    case "mater":
-      return <MaterialIcons name={item.icon} size={size} color={color} />;
-
-    case "antdesign":
-    case "ant":
-      return <AntDesign name={item.icon} size={size} color={color} />;
-
-    case "svgicon":
     case "svg":
-      const SvgComponent = getVendorIcon(item.icon);
+      const SvgComponent = getVendorIcon(icon);
       if (!SvgComponent) return null;
-      return <SvgComponent width={size} height={size} fill={color} />;
+      // return <SvgComponent width={size} height={size} fill={color} preserveAspectRatio="xMidYMid meet" overflow="visible" />;
+      return (
+        <Svg width={size} height={size}  viewBox="0 0 64 64" fill={color}>
+          <SvgComponent width={size * 2} height={size * 2} />
+        </Svg>
+      );
 
-    case "ionicons":
-    case "ion":
+    case "fa5":
+      return <FontAwesome5 name={icon} size={size} color={color} />;
+
+    case "ant":
+      return <AntDesign name={icon} size={size} color={color} />;
+
+    case "fa6":
+      return <FontAwesome6 name={icon} size={size} color={color} />;
+
+    case "mat":
+      return <MaterialIcons name={icon} size={size} color={color} />;
+
+    case "fth":
+      return <Feather name={icon} size={size} color={color} />;
+
+
+    case "fa":
+      return <FontAwesome name={icon} size={size} color={color} />;
+
+
     default:
-      return <Ionicons name={item.icon} size={size} color={color} />;
+      return <Ionicons name={icon} size={size} color={color} />;
   }
 };

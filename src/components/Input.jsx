@@ -130,7 +130,7 @@ const Input = ({
       </View>
 
       {showError && (
-        <Text className="text-sm text-red-500 mt-1">{inputError}</Text>
+        <Text preventEvent={true} className="text-sm text-red-500 mt-1">{inputError}</Text>
       )}
     </View>
   )

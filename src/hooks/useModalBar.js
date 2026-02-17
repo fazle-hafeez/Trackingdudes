@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { StatusBar, Platform } from "react-native";
 import * as NavigationBar from "expo-navigation-bar";
 
-export const useModalBars = (visible = false, darkMode = false) => {
+export const useModalBars = (visible = false, darkMode = false, color ="#04007d") => {
   useEffect(() => {
     if (!visible) return;
 
@@ -15,7 +15,7 @@ export const useModalBars = (visible = false, darkMode = false) => {
       try {
         StatusBar.setBarStyle("light-content", true);
         if (Platform.OS === "android") {
-          StatusBar.setBackgroundColor(darkMode ? "#000" : "#002", true);
+          StatusBar.setBackgroundColor(darkMode ? "#000" : color, true);
           await NavigationBar.setButtonStyleAsync(darkMode ? "light" : "dark");
           await NavigationBar.setVisibilityAsync("hidden");
         }
