@@ -1,18 +1,20 @@
-import React, { useState, useEffect, useContext } from "react";
-import { View, Text } from "react-native";
-import { FontAwesome, FontAwesome5, FontAwesome6, MaterialIcons, Ionicons } from "@expo/vector-icons";
+import React, { useState, useEffect, useContext, useMemo, useRef } from "react";
+import { View, Text, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity } from "react-native";
 import { ThemedView, ThemedText, SafeAreacontext } from "../../../src/components/ThemedColor";
 import PageHeader from "../../../src/components/PageHeader";
 import Button from "../../../src/components/Button";
 import Input from "../../../src/components/Input";
-import Select from "../../../src/components/Select";
+import { Feather, FontAwesome5 } from "@expo/vector-icons";
 import { readCache, storeCache } from "../../../src/offline/cache";
 import { OfflineContext } from "../../../src/offline/OfflineProvider";
 import { useApi } from "../../../src/hooks/useApi";
 import { useAuth } from "../../../src/context/UseAuth";
 import { router, useLocalSearchParams } from "expo-router";
 import { useDebounce } from "../../../src/hooks/useDebounce";
-import { parseIconString } from "../../../src/helper";
+import { parseIconString, RenderIcon } from "../../../src/helper";
+import { PAYMENT_OPTION_ICONS } from "../../../src/constants/icons";
+import IconPicker from "../../../src/components/IconPicker";
+import { useTheme } from "../../../src/context/ThemeProvider";
 
 const CACHE_KEY = "expense_cache_data";
 
@@ -24,6 +26,8 @@ const PaymentOption = () => {
   const { isConnected } = useContext(OfflineContext);
   const { id = null, activeTab } = useLocalSearchParams();
   const { post, put, get } = useApi();
+  const pickerRef = useRef(null)
+  const { darkMode } = useTheme()
 
   const [paymentName, setPaymentName] = useState("");
   const [selectedIcon, setSelectedIcon] = useState(null);
@@ -32,20 +36,14 @@ const PaymentOption = () => {
   const [paymentList, setPaymentList] = useState([]);
   const [isFocused, setIsFocused] = useState(false);
   const debouncedName = useDebounce(paymentName, 600);
+  const [isPickerVisible, setIsPickerVisible] = useState(false);
+  const [vendorError, setVendorErr] = useState("")
 
-  const iconOptions = [
-    { icon: "cash-outline", label: "Cash", type: "Ionicons", prefix: "Ion" },
-    { icon: "card", label: "Card", type: "Ionicons", prefix: "Ion" },
-    { icon: "account-balance-wallet", label: "Wallet", type: "MaterialIcons", prefix: "mater" },
-    { icon: "paypal", label: "PayPal", type: "FontAwesome", prefix: "font" },
-    { icon: "apple-pay", label: "Apple Pay", type: "FontAwesome5", prefix: "font5" },
-    { icon: "google-pay", label: "Google Pay", type: "FontAwesome6", prefix: "font6" }, // Ensure type is FontAwesome5
-    { icon: "bitcoin", label: "Crypto", type: "FontAwesome5", prefix: "font5" },
-    { icon: "bank", label: "Bank Transfer", type: "FontAwesome", prefix: "font" },
-    { icon: "globe-outline", label: "Online", type: "Ionicons", prefix: "Ion" },
-    { icon: "money-bill-alt", label: "Bill/Check", type: "FontAwesome5", prefix: "font5" },
 
-  ];
+
+  const suggestedIcons = useMemo(() => {
+    return PAYMENT_OPTION_ICONS.slice(0, 6);
+  }, []);
 
 
   // Map stored icon string (prefix:name) back to full object for the UI
@@ -57,7 +55,7 @@ const PaymentOption = () => {
     const parsed = parseIconString(iconStr);
 
     // Case 2: Try to find by icon name directly if prefix search fails
-    const found = iconOptions.find(opt =>
+    const found = PAYMENT_OPTION_ICONS.find(opt =>
       (opt.prefix === parsed.prefix && opt.icon === parsed.icon) ||
       (opt.icon === iconStr) // fallback for simple names
     );
@@ -88,7 +86,7 @@ const PaymentOption = () => {
         if (isConnected) {
           setGlobalLoading(true);
           try {
-            const res = await get(`my-expenses/payment-options/payment-option?id=${id}`, { useBearerAuth: true });
+            const res = await get(`my-expenses/payment-options/payment-option?id=${id}&t_=${Date.now()}`, { useBearerAuth: true });
             if (res?.status === "success" && res.data) {
               setPaymentName(res.data.payment_option || "");
               setSelectedIcon(getFullIconObject(res.data.icon));
@@ -308,87 +306,218 @@ const PaymentOption = () => {
     setGlobalLoading(false);
   };
 
-  // Icon Renderer
-  const RenderIcon = ({ item, size = 26, color = "#000" }) => {
-    if (!item) return null;
-    switch (item.type) {
-      case "FontAwesome": return <FontAwesome name={item.icon} size={size} color={color} />;
-      case "FontAwesome5": return <FontAwesome5 name={item.icon} size={size} color={color} />;
-      case "FontAwesome6": return <FontAwesome6 name={item.icon} size={size} color={color} />;
-      case "MaterialIcons": return <MaterialIcons name={item.icon} size={size} color={color} />;
-      default: return <Ionicons name={item.icon} size={size} color={color} />;
-    }
-  };
 
+  //=================================
+  //=======Filter option array == 
+  //=================================
 
+  const MAIN_CATEGORY_FILTER = [
+  { label: "Credit Cards", value: "credit_card" },
+  { label: "Bank Accounts", value: "bank_account" },
+  { label: "Digital Wallets", value: "digital_wallet"},
+  { label: "Processors", value: "payment_processor" },
+  { label: "BNPL", value: "bnpl_financing" },
+  { label: "Cash Methods", value: "cash" },
+  { label: "Crypto", value: "crypto" }
+];
 
   return (
     <SafeAreacontext bgColor="#eff6ff" className="flex-1">
-      <PageHeader routes={` ${id ? "Edit Payment" : "Adding Payment"}`} />
 
-      <View className="p-4 flex-1">
-        {/* Header Section */}
-        <ThemedView className="p-4 rounded-lg mb-5 shadow-sm">
-          <ThemedText className="text-center text-lg font-medium">
-            {id ? "Edit Payment Method" : "Add Payment Method"}
-          </ThemedText>
-        </ThemedView>
+      {/* Page Header */}
+      <PageHeader routes={`${id ? "Edit Payment Option" : "Adding Payment Option"}`} />
 
-        {/* Input Name Section */}
-        <ThemedView className="p-4 rounded-lg mb-5 shadow-sm">
-          <ThemedText className="mb-1 font-medium">Payment Method Name:</ThemedText>
-          <Input
-            placeholder="Enter a label for the payment method"
-            value={paymentName}
-            onchange={(val) => {
-              setPaymentName(val),
-                setIsFocused(true)
-            }}
-          />
-          {message ? (
-            <Text preventWrap={true} className="mt-1 text-md" style={{ color: messageStatus ? "#dc2626" : "#16a34a" }}>
-              {message}
-            </Text>
-          ) : null}
-        </ThemedView>
+      {/* Keyboard handler for inputs */}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
 
-        {/* Icon Selection Section */}
-        <ThemedView className="p-4 rounded-lg mb-5 shadow-sm">
-          <ThemedText className="mb-2 font-medium">Choose an icon:</ThemedText>
-          <Select
-            items={iconOptions.map((i) => ({ label: i.label, value: i.icon, icon: i.icon, type: i.type, prefix: i.prefix }))}
-            value={selectedIcon?.icon || ""}
-            onChange={(val) => {
-              const obj = iconOptions.find(i => i.icon === val);
-              setSelectedIcon(obj);
-            }}
-            iconVisibility={true}
-            placeholder="Select icon"
-          />
-        </ThemedView>
+        <ScrollView contentContainerStyle={{ padding: 12 }} >
 
-        {/* Live Preview */}
-        {paymentName && selectedIcon && (
-          <ThemedView className="flex-row items-center p-4 rounded-xl mb-6 border-blue-500 border bg-blue-50">
-            <RenderIcon item={selectedIcon} color="#2563eb" size={28} />
-            <ThemedText className="text-base font-bold ml-3 text-blue-700">{paymentName}</ThemedText>
+          <ThemedView className="p-4 rounded-lg mt-2 mb-4 " style={{ elevation: 2 }} >
+            <ThemedText color="#374151" className="text-lg  mb-1">
+              Choose a popular payment option or add a new one
+            </ThemedText>
           </ThemedView>
-        )}
 
-        {/* Submit Button */}
-        <Button
-          title={id ? "Update" : "Save"}
-          onClickEvent={id ? handleUpdatePaymentOption : handleAddPaymentOption}
+
+          {/* ---------------- Suggested Icon Section ---------------- */}
+          {!isPickerVisible && (
+            <ThemedView className="p-4 rounded-lg" style={{ elevation: 2 }}>
+
+              {/* Header Row */}
+              <View className="flex-row justify-between items-center mb-1">
+                <ThemedText className="">Choose icon here:</ThemedText>
+
+                {/* Open full picker */}
+                <TouchableOpacity onPress={() => {
+                  pickerRef.current?.open();
+                  setIsFocused(true)
+                }}>
+                  <Feather name="search" size={22} color="#9ca3af" />
+                </TouchableOpacity>
+              </View>
+
+              {/* Suggested Icons */}
+              <View className={`
+                                flex-row flex-wrap justify-between mt-1 border rounded-lg p-4 ${darkMode ? "border-gray-500" : "border-gray-300"}
+                                `}>
+                {(() => {
+                  let iconsToDisplay = [];
+
+                  if (selectedIcon) {
+                    // 1. Filter out the selected icon from the default list to avoid duplication
+                    const otherIcons = suggestedIcons.filter(
+                      (item) => item.label !== selectedIcon.label
+                    );
+
+                    // 2. Place the selected icon at the first position (index 0)
+                    // 3. Take the remaining icons and slice to ensure the total count is exactly 6
+                    iconsToDisplay = [selectedIcon, ...otherIcons].slice(0, 6);
+                  } else {
+                    // If no icon is selected, show the default top 6 icons
+                    iconsToDisplay = suggestedIcons;
+                  }
+
+                  return iconsToDisplay.map((item, index) => (
+                    <TouchableOpacity
+                      key={`${item.label}-${index}`}
+                      onPress={() => {
+                        setSelectedIcon(item);
+                        setPaymentName(item.label);
+                        setIsFocused(true);
+                      }}
+                      style={{ width: '31%', marginBottom: 10 }}
+                      className={`items-center p-3 rounded-xl border ${selectedIcon?.label === item.label
+                        ? darkMode ? "border-blue-500" : "border-blue-500 bg-blue-50" // Highlighted state
+                        : darkMode ? "border-gray-500 " : "border-gray-200 bg-gray-50"  // Default state
+                        }`}
+                    >
+                      {/* Custom Icon Component */}
+                      <RenderIcon
+                        icon={item.icon}
+                        color={selectedIcon?.label === item.label ? "#2563eb" : "#4b5563"}
+                        size={30}
+                        prefix={item.prefix}
+                        type = "payment"
+                      />
+
+                      {/* Icon Label - Truncated if too long */}
+                      <Text numberOfLines={1} className="text-[10px] mt-1 text-gray-500 text-center">
+                        {item.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ));
+                })()}
+              </View>
+
+              {/* Load More Button */}
+              <TouchableOpacity
+                onPress={() => {
+                  pickerRef.current?.open();
+                  setIsFocused(true)
+                }}
+                className={`py-2 mt-2 border-t ${darkMode ? "border-gray-500" : "border-gray-300"} items-center`}
+              >
+
+                <Text preventWrap={true} className={`font-medium ${darkMode ? 'text-blue-500' : 'text-blue-600'}`}>
+                  Load More Icons.....
+                </Text>
+
+              </TouchableOpacity>
+
+            </ThemedView>
+          )}
+
+          {/* ---------------- Vendor Name Input ---------------- */}
+          <ThemedView className="p-4 rounded-lg mt-6" style={{ elevation: 2 }}>
+
+            <ThemedText className="mb-2">Give the payment option a label or name:  </ThemedText>
+            <Input
+              placeholder="Enter vendor name here"
+              value={paymentName}
+              // Open icon picker from input icon *
+              rightIcon={true}
+              iconEvent={() => pickerRef.current?.open()}
+              onchange={(val) => {
+                // If value comes from picker (object), extract label
+                const textValue = typeof val === 'object' ? val?.label : val;
+
+                setPaymentName(textValue || "");
+
+                // Set selected icon only if full object received
+                if (typeof val === 'object' && val !== null) {
+                  setSelectedIcon(val);
+                }
+
+                setIsFocused(true);
+
+                // Clear icon if input becomes empty
+                if (!textValue || textValue.trim() === "") {
+                  setSelectedIcon(null);
+                  // setVendorErr("");
+                }
+              }}
+
+              inputError={vendorError}
+              setInputError={setVendorErr}
+            />
+            {
+              message !== "" && (
+                <Text preventWrap={true} className={`${messageStatus ? "text-red-500" : "text-green-500"} mt-2`}>
+                  {message}
+                </Text>
+              )
+            }
+
+          </ThemedView>
+
+          {/* ---------------- Save / Update Button ---------------- */}
+          <Button
+            className="mt-5"
+            title={`${id ? "Update" : "Save"}`}
+            onClickEvent={id ? handleUpdatePaymentOption : handleAddPaymentOption}
+          />
+
+
+          {/* ---------------- Info Card ---------------- */}
+          <View className="p-2 rounded-lg mt-2" >
+            <ThemedText color="#374151" className="text-lg  mb-1">
+              Please choose an icon that best represents this payment option and give it a proper name.
+              This helps identify payment option quickly inside the app.
+            </ThemedText>
+          </View>
+
+        </ScrollView>
+      </KeyboardAvoidingView >
+
+      {/* ---------------- Hidden Full Icon Picker ---------------- */}
+      <View View className="opacity-0" >
+        <IconPicker
+          ref={pickerRef}
+          placeholder="Select Payment option"
+          modalTitle="Choose a payment option"
+          inputPlaceholder="Search payment option......"
+          label="payment-option"
+          items={PAYMENT_OPTION_ICONS}
+          value={selectedIcon}
+          isPickerContentShown={true}
+          filterOptions={MAIN_CATEGORY_FILTER}
+          onChange={(val) => {
+            console.log("selected icon :", val);
+            setPaymentName(val.label);
+            setSelectedIcon(val);
+            setIsPickerVisible(false);
+            setIsFocused(true);
+          }}
         />
-
-        {/* Description Text Below Button */}
-        <ThemedText color="#374151" className="mt-6 text-lg leading-7 text-gray-500">
-          Please choose an icon that best represents this payment method. This helps identify payment methods quickly in the app.
-        </ThemedText>
-
       </View>
-    </SafeAreacontext>
+
+    </SafeAreacontext >
   );
 };
+
+
 
 export default PaymentOption;

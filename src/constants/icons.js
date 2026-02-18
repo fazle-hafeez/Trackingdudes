@@ -1,3 +1,8 @@
+
+
+
+//  ======= Vendors list array 
+
 export const EXPENSE_VENDOR_ICONS = [
 { label: "", icon: "DefaultIcon", type: "svgIcon", category: "supplies", categories: ["supplies","fuel","food_supplier"], prefix: "svg" },
 { label: "Costco", icon: "costco", type: "svgIcon", category: "supplies", categories: ["supplies","fuel","food_supplier"], prefix: "svg" },
@@ -71,4 +76,55 @@ export const EXPENSE_VENDOR_ICONS = [
 { label: "Adobe", icon: "adobe", type: "MaterialIcons ", category: "software_saas", categories: ["software_saas"], prefix: "mat" },
 { label: "Slack", icon: "slack", type: "AntDesign ", category: "software_saas", categories: ["software_saas"], prefix: "ant" },
 { label: "Zoom", icon: "zoom", type: "svgIcon", category: "software_saas", categories: ["software_saas"], prefix: "svg" }
+];
+
+
+// ==================== Payment option array or list
+
+export const PAYMENT_OPTION_ICONS = [
+{ label: "Visa", icon: "cc-visa", type: "FontAwesome5", category: "credit_card", categories: ["credit_card","network"], prefix: "fa5" },
+{ label: "Mastercard", icon: "cc-mastercard", type: "FontAwesome5", category: "credit_card", categories: ["credit_card","network"], prefix: "fa5" },
+{ label: "American Express", icon: "cc-amex", type: "FontAwesome5", category: "credit_card", categories: ["credit_card","network"], prefix: "fa5" },
+{ label: "Discover", icon: "cc-discover", type: "FontAwesome5", category: "credit_card", categories: ["credit_card","network"], prefix: "fa5" },
+{ label: "Diners Club", icon: "cc-diners-club", type: "FontAwesome5", category: "credit_card", categories: ["credit_card","network"], prefix: "fa5" },
+{ label: "JCB", icon: "cc-jcb", type: "FontAwesome5", category: "credit_card", categories: ["credit_card","network"], prefix: "fa5" },
+{ label: "Credit Card", icon: "credit-card", type: "FontAwesome5", category: "credit_card", categories: ["credit_card","generic"], prefix: "fa5" },
+
+{ label: "Chase", icon: "chase", type: "svgIcon", category: "bank_account", categories: ["bank_account","credit_card"], cards: ["Freedom","Sapphire","Slate","Ink"], prefix: "svg" },
+{ label: "Wells Fargo", icon: "wellsfargo", type: "svgIcon", category: "bank_account", categories: ["bank_account","credit_card"], cards: ["Propel","Cash Wise","Active Cash"], prefix: "svg" },
+{ label: "Bank of America", icon: "bankofamerica", type: "svgIcon", category: "bank_account", categories: ["bank_account","credit_card"], cards: ["Cash Rewards","Travel Rewards","Premium Rewards"], prefix: "svg" },
+{ label: "Capital One", icon: "capitalone", type: "svgIcon", category: "bank_account", categories: ["bank_account","credit_card"], cards: ["Venture","Quicksilver","Savor"], prefix: "svg" },
+{ label: "Citi", icon: "citi", type: "svgIcon", category: "bank_account", categories: ["bank_account","credit_card"], cards: ["Double Cash","Premier","Rewards+"], prefix: "svg" },
+{ label: "PNC Bank", icon: "pnc", type: "svgIcon", category: "bank_account", categories: ["bank_account","credit_card"], cards: ["Core","Premier","Cash Rewards"], prefix: "svg" },
+{ label: "US Bank", icon: "usb", type: "svgIcon", category: "bank_account", categories: ["bank_account","credit_card"], cards: ["Altitude","Cash+","Visa Signature"], prefix: "svg" },
+{ label: "Bank Account", icon: "account-balance", type: "MaterialIcons", category: "bank_account", categories: ["bank_account","generic"], prefix: "mat" },
+
+{ label: "PayPal", icon: "cc-paypal", type: "FontAwesome5", category: "digital_wallet", categories: ["digital_wallet","online_payment"], prefix: "fa5" },
+{ label: "Amazon Pay", icon: "cc-amazon-pay", type: "FontAwesome5", category: "digital_wallet", categories: ["digital_wallet","online_payment"], prefix: "fa5" },
+{ label: "Google Pay", icon: "google-pay", type: "FontAwesome5", category: "digital_wallet", categories: ["digital_wallet","mobile_payment"], prefix: "fa5" },
+{ label: "Apple Pay", icon: "apple-pay", type: "FontAwesome5", category: "digital_wallet", categories: ["digital_wallet","mobile_payment"], prefix: "fa5" },
+{ label: "Venmo", icon: "logo-venmo", type: "Ionicons", category: "digital_wallet", categories: ["digital_wallet","peer_to_peer"], prefix: "ion" },
+{ label: "Cash App", icon: "cashapp", type: "svgIcon", category: "digital_wallet", categories: ["digital_wallet","peer_to_peer"], prefix: "svg" },
+{ label: "Zelle", icon: "zelle", type: "svgIcon", category: "digital_wallet", categories: ["digital_wallet","peer_to_peer"], prefix: "svg" },
+{ label: "Digital Wallet", icon: "wallet", type: "FontAwesome5", category: "digital_wallet", categories: ["digital_wallet","generic"], prefix: "fa5" },
+
+{ label: "Stripe", icon: "cc-stripe", type: "FontAwesome5", category: "payment_processor", categories: ["payment_processor","online"], prefix: "fa5" },
+{ label: "Square", icon: "square", type: "svgIcon", category: "payment_processor", categories: ["payment_processor","online"], prefix: "svg" },
+{ label: "QuickBooks Payments", icon: "quickbooks", type: "svgIcon", category: "payment_processor", categories: ["payment_processor","online"], prefix: "svg" },
+{ label: "Payoneer", icon: "payoneer", type: "svgIcon", category: "payment_processor", categories: ["payment_processor","online"], prefix: "svg" },
+{ label: "Generic Processor", icon: "payments", type: "MaterialIcons", category: "payment_processor", categories: ["payment_processor","generic"], prefix: "mat" },
+
+{ label: "Klarna", icon: "klarna", type: "svgIcon", category: "bnpl_financing", categories: ["bnpl_financing","financing"], prefix: "svg" },
+{ label: "Afterpay", icon: "afterpay", type: "svgIcon", category: "bnpl_financing", categories: ["bnpl_financing","financing"], prefix: "svg" },
+{ label: "Affirm", icon: "affirm", type: "svgIcon", category: "bnpl_financing", categories: ["bnpl_financing","financing"], prefix: "svg" },
+
+{ label: "Cash", icon: "attach-money", type: "MaterialIcons", category: "cash", categories: ["cash","physical"], prefix: "mat" },
+{ label: "Check", icon: "receipt", type: "MaterialIcons", category: "cash", categories: ["cash","physical"], prefix: "mat" },
+{ label: "Wire Transfer", icon: "swap-horiz", type: "MaterialIcons", category: "cash", categories: ["cash","electronic"], prefix: "mat" },
+{ label: "ACH Transfer", icon: "sync-alt", type: "MaterialIcons", category: "cash", categories: ["cash","electronic"], prefix: "mat" },
+
+{ label: "Bitcoin", icon: "bitcoin", type: "FontAwesome5", category: "crypto", categories: ["crypto","digital_currency"], prefix: "fa5" },
+{ label: "Ethereum", icon: "ethereum", type: "FontAwesome5", category: "crypto", categories: ["crypto","digital_currency"], prefix: "fa5" },
+{ label: "Litecoin", icon: "litecoin", type: "svgIcon", category: "crypto", categories: ["crypto","digital_currency"], prefix: "svg" },
+{ label: "Generic Crypto", icon: "coins", type: "FontAwesome5", category: "crypto", categories: ["crypto","generic"], prefix: "fa5" }
 ];

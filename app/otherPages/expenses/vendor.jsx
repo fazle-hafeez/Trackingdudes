@@ -149,7 +149,7 @@ const Vendor = () => {
                     }
                 } catch (err) {
                     // console.log("API Error Details:", err?.response?.data || err.message);
-                } 
+                }
             }
 
             // --- 2. OFFLINE FALLBACK ---
@@ -415,6 +415,24 @@ const Vendor = () => {
         setGlobalLoading(false);
     };
 
+    //=================================
+    //=======Filter option array == 
+    //=================================
+
+    const filterOptions = [
+        { label: "Ads", value: "marketing_ads" },
+        { label: "Fuel", value: "fuel" },
+        { label: "Supplies", value: "supplies" },
+        { label: "Food", value: "food_meals" },
+        { label: "Transport", value: "travel_transport" },
+        { label: "Finance", value: "finance_payment" },
+        { label: "SaaS", value: "software_saas" },
+        { label: "Shipping", value: "shipping_logistics" },
+        { label: "Utilities", value: "utilities_telecom" },
+        { label: "Lodging", value: "travel_lodging" },
+        { label: "Office", value: "office_space" },
+    ]
+
     return (
         <SafeAreacontext bgColor="#eff6ff" className="flex-1">
 
@@ -494,6 +512,7 @@ const Vendor = () => {
                                                 color={selectedIcon?.label === item.label ? "#2563eb" : "#4b5563"}
                                                 size={30}
                                                 prefix={item.prefix}
+                                                type = "vendor"
                                             />
 
                                             {/* Icon Label - Truncated if too long */}
@@ -589,15 +608,11 @@ const Vendor = () => {
             <View View className="opacity-0" >
                 <IconPicker
                     ref={pickerRef}
+                    label="vendors"
                     items={EXPENSE_VENDOR_ICONS}
                     value={selectedIcon}
                     isPickerContentShown={true}
-                    filterOptions={[
-                        { label: "Fuel", value: "fuel" },
-                        { label: "Supplies", value: "supplies" },
-                        { label: "Food", value: "food_meals" },
-                        { label: "Transport", value: "travel_transport" },
-                    ]}
+                    filterOptions={filterOptions}
                     onChange={(val) => {
                         console.log("selected icon :", val);
                         setVendorName(val.label);

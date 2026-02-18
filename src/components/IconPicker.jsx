@@ -1,9 +1,7 @@
-import React, { useState, useRef, useMemo, forwardRef, useImperativeHandle, useEffect } from "react";
+import React, { useState, useRef, useMemo, forwardRef, useImperativeHandle} from "react";
 import {
-    View, Text, TouchableOpacity, Modal, FlatList, Animated, Easing, Dimensions, ScrollView,
-    Platform, KeyboardAvoidingView
-} from "react-native";
-import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
+    View, Text, TouchableOpacity, Modal, FlatList, Animated, Easing, Dimensions,
+     ScrollView,Platform, KeyboardAvoidingView } from "react-native";
 
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../context/ThemeProvider";
@@ -24,7 +22,8 @@ const IconPicker = forwardRef(({
     inputPlaceholder = "Search vendor name......",
     error = "",
     disabled = false,
-    isPickerContentShown = false
+    isPickerContentShown = false,
+    label = ""
 }, ref) => {
     const [open, setOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
@@ -136,10 +135,7 @@ const IconPicker = forwardRef(({
                         />
 
                         <View className="flex-row justify-between items-center mb-4">
-                            <ThemedText className=" text-lg">Most populer vendors</ThemedText>
-                            {/* <TouchableOpacity className="border border-blue-600  rounded-lg p-2">
-                            <Text preventWrap={true} className="text-blue-600">Add custom vendor</Text>
-                        </TouchableOpacity> */}
+                            <ThemedText className=" text-lg">Most populer {label || ''}</ThemedText>
                         </View>
 
                         {/* Dynamic Filter - Auto-width based on text */}
@@ -196,11 +192,11 @@ const IconPicker = forwardRef(({
                                     style={{ width: '31%', marginBottom: 12 }}
                                     className={`items-center mr-2 p-4 rounded-2xl ${darkMode ? "" : "bg-gray-100"} border ${(value?.label === item.label || value === item.label) ? "border-blue-500" : darkMode ? 'border-gray-500' : "border-transparent"}`}
                                 >
-                                    <RenderIcon icon={item.icon} color={darkMode ? "#121212" : "#333"} prefix={item.prefix} size={32} />
+                                    <RenderIcon icon={item.icon} color={darkMode ? "#fff" : "#333"} prefix={item.prefix} size={32} type ={label || 'vendor'} />
                                     <Text numberOfLines={1} className="text-[10px] mt-2 text-gray-500 text-center">{item.label}</Text>
                                 </TouchableOpacity>
                             )}
-                            ListEmptyComponent={<Text className="text-center text-gray-500 mt-10">No vendors found in this category</Text>}
+                            ListEmptyComponent={<Text className="text-center text-gray-500 mt-10">No {label || ''} found in this category</Text>}
                         />
                     </Animated.View>
                 </KeyboardAvoidingView>

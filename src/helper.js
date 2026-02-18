@@ -1,6 +1,7 @@
 import { getVendorIcon } from "./utils/getVendorIcon";
 import { Ionicons, FontAwesome, FontAwesome5, FontAwesome6, MaterialIcons, AntDesign, Feather } from "@expo/vector-icons";
 import { Svg } from "react-native-svg";
+import { getIconComponent } from "./utils/getIconComponent";
 
 export const normalizeStatus = (value) => {
   if (!value) return null;
@@ -148,7 +149,7 @@ export const parseIconString = (iconStr = "") => {
 
 
 // To display icon
-export const RenderIcon = ({ icon, size = 26, color = "#000", prefix }) => {
+export const RenderIcon = ({ icon, size = 26, color = "#000", prefix , type = "vendor" }) => {
   if (!icon || "") return null;
 
   // Type ya prefix dono mein se jo mile use use karein
@@ -157,7 +158,7 @@ export const RenderIcon = ({ icon, size = 26, color = "#000", prefix }) => {
   switch (iconType.toLowerCase()) {
 
     case "svg":
-      const SvgComponent = getVendorIcon(icon);
+      const SvgComponent = getIconComponent(icon , type );
       if (!SvgComponent) return null;
       // return <SvgComponent width={size} height={size} fill={color} preserveAspectRatio="xMidYMid meet" overflow="visible" />;
       return (

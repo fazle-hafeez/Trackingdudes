@@ -2,9 +2,11 @@
 
 import React, { useState, useCallback, useContext, useEffect } from "react";
 import { FlatList, View, TouchableOpacity, Text, RefreshControl } from "react-native";
-import { FontAwesome, FontAwesome5, FontAwesome6, MaterialIcons, Ionicons } from "@expo/vector-icons";
+import { FontAwesome, FontAwesome5, FontAwesome6, MaterialIcons, Ionicons, AntDesign, Feather } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { router } from "expo-router";
+import { Svg } from "react-native-svg";
+
 
 // --------- Components ---------
 import PageHeader from "../../../src/components/PageHeader";
@@ -26,7 +28,7 @@ import { OfflineContext } from "../../../src/offline/OfflineProvider";
 import { readCache, storeCache } from "../../../src/offline/cache";
 import { parseIconString } from "../../../src/helper";
 import usePersistentValue from "../../../src/hooks/usePersistentValue";
-import { getVendorIcon } from "../../../src/utils/getVendorIcon";
+import { getIconComponent } from "../../../src/utils/getIconComponent";
 
 
 const CACHE_KEY = "expense_cache_data";
@@ -113,6 +115,8 @@ const Expense = () => {
                         `my-expenses/${tabPath}?${query}`,
                         { useBearerAuth: true }
                     );
+
+                    console.log("fresh api :", res);
 
 
                     if (res?.status === "success" && Array.isArray(res.data)) {
@@ -602,36 +606,101 @@ const Expense = () => {
     // --- RENDER HELPERS ---
 
     const RenderIcons = ({ item, size = 26, color = "#2563eb" }) => {
-        if (!item.icon) return null;
+        if (!item.icon || item.icon === "undefined:undefined") {
+            // Fallback: try icon from vendor nme
+            return getSvgIconByVendor(item.vendor, size, color);
+        }
 
         const iconData = parseIconString(item.icon);
-
         const { type, icon } = iconData;
+        const types = type?.toLowerCase();
 
-        switch (type) {
-            case "SvgIcon":
-                const SvgComponent = getVendorIcon(icon);
-                // SvgComponent will now be a functional component, not a number
-                return <SvgComponent width={30} height={30} fill={color} />;
-            case "FontAwesome":
+        switch (types) {
+            case "svgicon":
+            case "svg":
+                // Complete tab-to-icon-type mapping
+                const iconType = getIconTypeFromTab(activeTab);
+                console.log(` Loading ${icon} as ${iconType} from ${activeTab} tab`);
+
+                const SvgComponent = getIconComponent(icon, iconType);
+                if (!SvgComponent) {
+                    console.log(` SVG not found: ${icon} in ${iconType} folder`);
+                    return null;
+                }
+                return (
+                    <Svg width={size} height={size} viewBox="0 0 64 64" fill={color}>
+                        <SvgComponent width={size * 2} height={size * 2} />
+                    </Svg>
+                );
+
+            // ... rest of font icons same
+            case "fa":
+            case "font":
                 return <FontAwesome name={icon} size={size} color={color} />;
-
-            case "FontAwesome5":
+            case "fa5":
+            case "font5":
                 return <FontAwesome5 name={icon} size={size} color={color} />;
 
-            case "FontAwesome5":
-                return <FontAwesome5 name={icon} size={size} color={color} />;
+            case "fa6":
+                return <FontFace name={icon} size={size} color={color} />;
 
-            case "FontAwesome6":
-                return <FontAwesome6 name={icon} size={size} color={color} />;
+            case "ant":
+                return <AntDesign name={icon} size={size} color={color} />;
 
-            case "MaterialIcons":
+            case "fth":
+                return <Feather name={icon} size={size} color={color} />;
+
+            case "mater":
+            case "mat":
                 return <MaterialIcons name={icon} size={size} color={color} />;
 
-            default:
+            case "ion":
                 return <Ionicons name={icon} size={size} color={color} />;
+            default:
+                return <Ionicons name={icon || "help-circle"} size={size} color={color} />;
         }
     };
+
+    // Tab to Icon Type mapping
+    const getIconTypeFromTab = (tab) => {
+        const tabMapping = {
+            "vendor": "vendor",
+            "payment-option": "payment",
+            "categories": "category",
+            "reporting": "vendor", // fallback
+            "vendor": "vendor" // explicit
+        };
+        return tabMapping[tab] || "vendor";
+    };
+
+    // Vendor fallback helper
+    const getSvgIconByVendor = (vendorName, size, color) => {
+        if (!vendorName) return <Ionicons name="storefront" size={size} color={color} />;
+
+        const vendorKey = vendorName.toLowerCase().replace(/\s+/g, '');
+
+        // Try vendor folder first
+        let SvgComponent = getIconComponent(vendorKey, "vendor");
+        if (SvgComponent) return renderSvg(SvgComponent, size, color);
+
+        // Try payment folder
+        SvgComponent = getIconComponent(vendorKey, "payment");
+        if (SvgComponent) return renderSvg(SvgComponent, size, color);
+
+        // Try category folder
+        SvgComponent = getIconComponent(vendorKey, "category");
+        if (SvgComponent) return renderSvg(SvgComponent, size, color);
+
+        return <Ionicons name="storefront" size={size} color={color} />;
+    };
+
+    const renderSvg = (SvgComponent, size, color) => (
+        <Svg width={size} height={size} viewBox="0 0 64 64" fill={color}>
+            <SvgComponent width={size * 2} height={size * 2} />
+        </Svg>
+    );
+
+
 
     const renderItem = ({ item }) => {
         const id = item.id || item.tempId;
