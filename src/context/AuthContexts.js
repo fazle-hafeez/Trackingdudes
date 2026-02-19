@@ -1,81 +1,198 @@
-import React, { createContext, useState, useEffect } from "react";
+import React, { createContext, useState, useEffect, useRef } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { router, usePathname } from "expo-router";
 
 export const AuthContext = createContext(null);
+const LAST_ROUTE_KEY = "LAST_ROUTE";
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(null);
+  const [tokens, setTokens] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [keepLoggedIn, setKeepLoggedIn] = useState(false);
+  const [globalLoading, setGlobalLoading] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [modalMessage, setModalMessage] = useState("");
+  const [modalType, setModalType] = useState("info");
+  const [modalButtons, setModalButtons] = useState([]);
+  const [autoHide, setAutoHide] = useState(true);
+  const [modalTitle, setModalTitle] = useState(null);
+  const [lastVisitedPath, setLastVisitedPath] = useState(null);
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
-  // Auto-load user on app start
+  const restoreDone = useRef(false);
+  const pathname = usePathname();
+
+  // Load session data
   useEffect(() => {
-    const loadUser = async () => {
+    const loadSession = async () => {
       try {
         const storedUser = await AsyncStorage.getItem("user");
-        const storedToken = await AsyncStorage.getItem("token");
-        const keepLoggedIn = await AsyncStorage.getItem("keepLoggedIn");
+        const storedTokens = await AsyncStorage.getItem("tokens");
+        const storedKeep = await AsyncStorage.getItem("keepLoggedIn");
+        const storedPath = await AsyncStorage.getItem(LAST_ROUTE_KEY);
 
-        if (storedUser && storedToken && keepLoggedIn === "true") {
+        console.log("LAST VISITED PATH on STARTUP:", storedPath);
+        setLastVisitedPath(storedPath);
+        setKeepLoggedIn(storedKeep === "true");
+
+        if (storedUser && storedTokens) {
           setUser(JSON.parse(storedUser));
-          setToken(storedToken);
-        } 
+          setTokens(JSON.parse(storedTokens));
+        }
       } catch (err) {
-        console.warn("Error loading user/token", err);
+        console.warn("Error loading session:", err);
       } finally {
         setLoading(false);
       }
     };
-    loadUser();
+
+    loadSession();
   }, []);
 
-  //  Login and save user + token
-  const login = async (userData, jwtToken, { remember, keepLoggedIn }) => {
-  setUser(userData);
-  setToken(jwtToken || null);
+  // Restore once after load
+  useEffect(() => {
+    if (loading || restoreDone.current) return;
+    if (!lastVisitedPath) return;
 
-  //  Save user safely
-  if (userData) {
-    await AsyncStorage.setItem("user", JSON.stringify(userData));
-  }
+    const restore = async () => {
+      restoreDone.current = true;
+      setIsRedirecting(true);
 
-  //  Only save token if it's valid (non-null / non-empty)
-  if (jwtToken) {
-    await AsyncStorage.setItem("token", jwtToken);
-  } else {
-    await AsyncStorage.removeItem("token");
-  }
+      // Don’t redirect if already on same path
+      if (pathname === lastVisitedPath) {
+        console.log(" Already on last path, skip redirect");
+        setIsRedirecting(false);
+        return;
+      }
 
-  //  Handle remember email
-  if (remember && userData?.username) {
-    await AsyncStorage.setItem("rememberedEmail", userData.username);
-  } else {
-    await AsyncStorage.removeItem("rememberedEmail");
-  }
+      const isAuthPath = lastVisitedPath.startsWith("/auth");
 
-  //  Handle keep logged in
-  if (keepLoggedIn) {
-    await AsyncStorage.setItem("keepLoggedIn", "true");
-  } else {
-    await AsyncStorage.removeItem("keepLoggedIn");
-  }
-};
+      setTimeout(() => {
+        try {
+          if (tokens && !isAuthPath) {
+            console.log("➡️ Restoring protected path:", lastVisitedPath);
+            router.replace(lastVisitedPath);
+          } else if (!tokens && isAuthPath) {
+            console.log("➡️ Restoring auth path:", lastVisitedPath);
+            router.replace(lastVisitedPath);
+          }
+        } catch (e) {
+          console.warn("Redirect failed:", e);
+        } finally {
+          setTimeout(() => setIsRedirecting(false), 500);
+        }
+      }, 300);
+    };
 
+    restore();
+  }, [loading, tokens, lastVisitedPath]);
 
-  //  Logout and clear everything
-  const logout = async () => {
-    setUser(null);
-    setToken(null);
-    await AsyncStorage.multiRemove([
-      "user",
-      "token",
-      "keepLoggedIn",
-      "rememberedEmail",
+  const login = async (userData, tokenResponse, { remember, keepLoggedIn }) => {
+    if (!tokenResponse) return;
+
+    const newTokens = {
+      access: tokenResponse?.access,
+      refresh: tokenResponse?.refresh,
+      accessExpires: tokenResponse?.accessExpires,
+      refreshExpires: tokenResponse?.refreshExpires,
+      issuedAt: tokenResponse.issuedAt || Math.floor(Date.now() / 1000),
+    };
+
+    setUser(userData || null);
+    setTokens(newTokens);
+    setKeepLoggedIn(keepLoggedIn);
+    await Promise.all([
+      AsyncStorage.setItem("user", JSON.stringify(userData)),
+      AsyncStorage.setItem("tokens", JSON.stringify(newTokens)),
+      AsyncStorage.setItem("keepLoggedIn", keepLoggedIn ? "true" : "false"),
     ]);
+
+    if (remember && userData?.username) {
+      await AsyncStorage.setItem("rememberedUserName", userData.username);
+    } else {
+      await AsyncStorage.removeItem("rememberedUserName");
+    }
+  };
+
+  const saveLastPath = async (path) => {
+    try {
+      await AsyncStorage.setItem(LAST_ROUTE_KEY, path);
+      setLastVisitedPath(path);
+    } catch (e) {
+      console.error("Error saving path:", e);
+    }
+  };
+
+  const logout = async () => {
+    setTokens(null);
+    setUser(null);
+    setLastVisitedPath(null);
+    restoreDone.current = false;
+    await AsyncStorage.multiRemove(["tokens", "user", LAST_ROUTE_KEY]);
+    router.replace("/auth/login");
+  };
+
+  const showModal = (...args) => {
+    let message = "";
+    let type = "success";
+    let title = null;
+    let autoHide = true;
+    let buttons = [];
+
+    message = args[0] ?? "";
+    type = args[1] ?? "success";
+    const rest = args.slice(2);
+    for (const arg of rest) {
+      if (typeof arg === "string") {
+        if (!title) title = arg;
+      } else if (typeof arg === "boolean") {
+        autoHide = arg;
+      } else if (Array.isArray(arg)) {
+        buttons = arg;
+      }
+    }
+    if (autoHide === undefined) autoHide = type === "success";
+
+    setModalMessage(message);
+    setModalType(type);
+    setModalTitle(title);
+    setAutoHide(autoHide);
+    setModalButtons(buttons);
+    setModalVisible(true);
+  };
+
+  const hideModal = () => {
+    setModalVisible(false);
+    setModalButtons([]);
+    setModalTitle(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, loading }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        tokens,
+        login,
+        logout,
+        loading,
+        keepLoggedIn,
+        globalLoading,
+        setGlobalLoading,
+        modalVisible,
+        modalMessage,
+        modalType,
+        autoHide,
+        modalButtons,
+        modalTitle,
+        showModal,
+        hideModal,
+        lastVisitedPath,
+        saveLastPath,
+        isRedirecting,
+        setIsRedirecting,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

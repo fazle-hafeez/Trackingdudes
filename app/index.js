@@ -1,9 +1,26 @@
+import { useContext, useEffect, useState } from "react";
 import { Redirect } from "expo-router";
-import { useContext } from "react";
 import { AuthContext } from "../src/context/AuthContexts";
 
 export default function Index() {
-  const { user } = useContext(AuthContext);
-  if (user) return <Redirect href="/dashboard/dashboardPage" />;
-  return <Redirect href="/auth/login" />;
+  const { tokens, user, lastVisitedPath, loading } = useContext(AuthContext);
+  const [finalPath, setFinalPath] = useState(null);
+
+  useEffect(() => {
+    if (loading) return;
+
+    let destination = "/auth/signup";
+
+    if (tokens && user) {
+      destination = lastVisitedPath && !lastVisitedPath.startsWith("/auth")
+        ? lastVisitedPath
+        : "/dashboard";
+    }
+
+    setFinalPath(destination);
+  }, [loading, tokens, user, lastVisitedPath]);
+
+  if (loading || !finalPath) return null;
+
+  return <Redirect href={finalPath} />;
 }

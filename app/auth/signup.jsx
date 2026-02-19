@@ -1,255 +1,173 @@
-import React, { useState, useEffect, useContext } from "react";
-import { View, Text, TextInput, StatusBar, TouchableOpacity, Platform, StyleSheet } from "react-native";
-import Checkbox from "expo-checkbox";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Link, useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
-import HeroSection from "../../src/components/HeroSection";
-import Button from "../../src/components/Button";
-import ModalComponent from "../../src/components/ModalComponent";
-import { AuthContext } from "../../src/context/AuthContexts";
-import LoadingComponent from "../../src/components/LoadingComponent";
-import { SafeAreaView } from "react-native-safe-area-context";
-import PasswordInputField from "../../src/components/ToggleField";
-const SignUpPage = () => {
-  const [username, setUserName] = useState("");
-  const [usernameError, setUserNameError] = useState("");
-  const [passError, setPassError] = useState("");
-  const [password, setPassword] = useState("");
-  const [remember, setRemember] = useState(true);
-  const [keepLoggedIn, setKeepLoggedIn] = useState(true);
-  const [showPassword, setShowPassword] = useState(false);
-  const [modalMess, setModalMess] = useState("");
-  const [modalVisibility, setModalVisibility] = useState(false);
-  const [modalErrorType, setModalErrorType] = useState("");
-  const [isButton, setIsButton] = useState(true);
-  const [loading, setLoading] = useState(false)
+import React, { useState } from "react";
+import { View, Text, StatusBar, TouchableOpacity, Platform } from "react-native";
+import { Link, useLocalSearchParams, useRouter } from "expo-router";
 
+
+//Hooks
+import { useApi } from "../../src/hooks/useApi";
+import { useAuth } from "../../src/context/UseAuth";
+import { useTheme } from "../../src/context/ThemeProvider";
+
+//components
+import HeaderSection from "../../src/components/HeaderSection";
+import Button from "../../src/components/Button"
+import Input from "../../src/components/Input";
+import { ThemedView,ThemedText,SafeAreacontext } from "../../src/components/ThemedColor";
+
+const SignUp = () => {
+  const route = useLocalSearchParams();
+  const {darkMode} = useTheme()
   const router = useRouter();
-  const { user, login } = useContext(AuthContext);
-  useEffect(() => {
-    const loadRemembered = async () => {
-      try {
-        const savedUseName = await AsyncStorage.getItem("rememberedEmail");
-        if (savedUseName) {
-          setUserName(savedUseName);
-        }
-      } catch (err) {
-        console.warn(err);
-      }
-    };
-    loadRemembered();
-  }, []);
+  const { post } = useApi();
+  const { showModal, hideModal, setGlobalLoading, } = useAuth();
 
-  useEffect(() => {
-  const loadUser = async () => {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [usernameError, setUsernameError] = useState("");
+  const [emailError, setEmailError] = useState("");
+  const [lastSubmittedEmail, setLastSubmittedEmail] = useState("");
+  const [receivedcode, setReceivedCode] = useState(false)
+
+  const receivedCode = () => {
+    router.push({
+      pathname: "/auth/emailVerification",
+      params: {
+        enableBtn: true,
+        trimmedEmail: route.trimmedEmail || trimmedEmail,
+        resetEmail: route.resetEmail,
+      },
+    });
+  };
+
+  const handleLogin = async () => {
+    let hasError = false;
+
+    if (!name.trim()) {
+      setUsernameError("Field is required");
+      hasError = true;
+      return;
+    }
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
+      setEmailError("Field is required");
+      hasError = true;
+      return;
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      setEmailError("Email is not valid");
+      hasError = true;
+      return;
+    } else {
+      setEmailError("");
+    }
+    if (hasError) return;
+    setGlobalLoading(true);
+
     try {
-      const savedUser = await AsyncStorage.getItem("user");
-      if (savedUser) {
-        const parsedUser = JSON.parse(savedUser);
-        console.log("Loaded user:", parsedUser);
-        setUserName(parsedUser.username); // example usage
+      const response = await post(
+        "/register/register-email",
+        { name, email: trimmedEmail },
+        false
+      );
+      if (response?.status === "success") {
+        showModal(response.data || "Verification email sent successfully!", "success");
+        setReceivedCode(true)
+        if (response.action === "Next") {
+          setTimeout(() => {
+            hideModal();
+            router.push({
+              pathname: "/auth/emailVerification",
+              params: { name, trimmedEmail },
+            });
+          }, 2000);
+        }
+        setLastSubmittedEmail("");
+      } else if (response?.status === "error") {
+        if (lastSubmittedEmail === trimmedEmail) {
+          showModal("You are making too many requests in a short time. Please wait a bit before trying again.", "error");
+        } else {
+          showModal(response?.data || "Another user is already registered with that email.", "error");
+          setLastSubmittedEmail(trimmedEmail);
+        }
       } else {
-        console.log("No user found in storage");
+        showModal(response.message || "Something went wrong. Please try again.", "error");
       }
     } catch (error) {
-      console.warn("Failed to load user:", error);
+      showModal(error.error || "A server error occurred. Please try again later.", "error");
+    } finally {
+      setGlobalLoading(false);
     }
   };
 
-  loadUser();
-}, []);
-
-
-  // during complete registration i put this user into localstrorage now i get it here
-  useEffect(() => {
-    const loadUser = async () => {
-      try {
-        const savedUseName = await AsyncStorage.getItem("user");
-        const parsed = JSON.parse(savedUseName)
-        if (parsed) {
-          setUserName(parsed.username);
-        }
-      } catch (err) {
-        console.warn(err);
-      }
-    };
-    loadUser();
-  }, []);
-
-  const handleLogin = async () => {
-  let hasError = false;
-
-  if (username.trim() === "") {
-    setUserNameError("Field is required");
-    hasError = true;
-  }
-
-  if (password.trim() === "") {
-    setPassError("Field is required");
-    hasError = true;
-  }
-
-  if (hasError) return;
-
-  setLoading(true);
-
-  try {
-    const cleanUsername = username.trim().replace(/\s+/g, "");
-    const payload = {
-      username: cleanUsername,
-      password: password,
-      keep_logged_in: keepLoggedIn, 
-    };
-
-    const response = await fetch("https://trackingdudes.com/apis/tokens/refresh/", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    });
-
-    const result = await response.json();
-    console.log("API Result:", result);
-
-    if (result.status === "success" && result.tokens) {
-      //  Save tokens
-      await AsyncStorage.setItem("tokens", JSON.stringify(result.tokens));
-
-      //  Remember username locally if checked
-      if (remember) {
-        await AsyncStorage.setItem("rememberedEmail", cleanUsername);
-      } else {
-        await AsyncStorage.removeItem("rememberedEmail");
-      }
-
-      setModalErrorType("success");
-      setModalMess(result.data || "Login successful!");
-      setModalVisibility(true);
-      setIsButton(false);
-
-      //  Navigate after short delay
-      setTimeout(() => {
-        setModalVisibility(false);
-        router.push("/dashboard/dashboardPage");
-      }, 2000);
-    } else {
-      setModalErrorType("error");
-      setModalMess(result.data || "Invalid username or password");
-      setModalVisibility(true);
-    }
-  } catch (error) {
-    console.error("Login failed:", error);
-    setModalErrorType("error");
-    setModalMess("Something went wrong. Please try again.");
-    setModalVisibility(true);
-  } finally {
-    setLoading(false);
-  }
-};
   return (
-    <SafeAreaView className="flex-1 bg-white">
-      <StatusBar barStyle="light-content" backgroundColor="#0000ff" />
-      <HeroSection />
-      <View className="flex-1 p-4">
-        <View
-          className={`bg-[rgba(255,255,255,0.9)] rounded-xl p-6 ${Platform.OS === "ios" ? " shadow-sm" : ''
+    <SafeAreacontext className="flex-1 ">
+      <HeaderSection />
+
+      <View className="flex-1 p-3">
+        <ThemedView
+        bgColor={'rgba(255,255,255,0.9)'}
+          className={` rounded-xl p-6 ${Platform.OS === "ios" ? "shadow-sm" : ""
             }`}
-          style={{ marginTop: -230, elevation: 5 }}
+          style={{ marginTop: -200, elevation: 5 }}
         >
-          <Text className="text-xl mb-2 text-headercolor">Enter your user name</Text>
-          <TextInput
-            className={`rounded-md text-lg  text-headercolor border ${usernameError ? "border-red-500 " : "border-gray-400 "
-              }`}
-            placeholder="type your user name here"
-            autoFocus
+          <ThemedText color={'#646060ff'} className="text-headercolor text-2xl font-medium mb-3">
+            Register
+          </ThemedText>
+
+          <ThemedText color={'#646060ff'} className="text-xl mb-2 text-headercolor">Enter your name</ThemedText>
+          <Input
+            value={name}
+            placeholder="This is to call you with, in the email"
+            onchange={(val) => setName(val)}
+            inputError={usernameError}
+            setInputError={setUsernameError}
+
+          />
+
+          <ThemedText color={'#646060ff'} className="text-xl my-3 text-headercolor">
+            Enter your email address
+          </ThemedText>
+
+          <Input
+            placeholder="You will use this for account recovery"
             keyboardType="email-address"
             autoCapitalize="none"
-            value={username}
-            onChangeText={(val) => {
-              setUserName(val);
-              setUserNameError("");
-            }}
+            value={email}
+            onchange={(val) => setEmail(val)}
+            inputError={emailError}
+            setInputError={setEmailError}
           />
-          {usernameError ? (
-            <Text className="text-sm text-red-500 my-1">{usernameError}</Text>
-          ) : null}
-
-          <Text className="text-xl mb-2 text-headercolor mt-2">Enter your password</Text>
-          <PasswordInputField 
-           password={password}
-           setPassword={setPassword}
-           passwordError={passError}
-           setPasswordError={setPassError}
-           placeholder={"Type your password here"}
-          />
-          <View className="flex-row items-center my-3">
-            <Checkbox value={remember} onValueChange={setRemember}
-              color={remember ? '#0000ff' : ''} />
-            <Text className="text-lg ml-2 text-headercolor">
-              Remember username
-            </Text>
-          </View>
-
-          <View className="flex-row items-center">
-            <Checkbox value={keepLoggedIn} onValueChange={setKeepLoggedIn}
-              color={keepLoggedIn ? '#0000ff' : ''}
-            />
-            <Text className="text-lg ml-2 text-headercolor">
-              Keep logged in
-            </Text>
-          </View>
 
           <View className="mt-2">
             <Button title="Submit" onClickEvent={handleLogin} />
           </View>
 
-          <View className="mt-2 items-center">
-            <Text className="text-lg text-headercolor">
-              No account yet?{" "}
-              <Link className="text-blue underline" href="/auth/login">
-                Sign up
+          <View className="mt-2 mb-2">
+            <ThemedText color={'#646060ff'} className="text-lg text-headercolor font-normal">
+              Already have an account?
+              <Link href="/auth/login" className="text-blue-600 underline">
+                {" "}
+                Sign in
               </Link>
-            </Text>
-            <Text className="mt-1 text-lg text-headercolor">
-              Forgot password?{" "}
-              <Link className="text-blue underline" href="/auth/resetPassword">
-                Reset
-              </Link>
-            </Text>
+            </ThemedText>
           </View>
-        </View>
+        </ThemedView>
 
-        <View className="mt-3 pl-2">
-          <View className="flex-row">
-            <Link href="/otherPages/home" className="text-blue underline text-lg">
-              Help
-            </Link>
-            <Link href="/otherPages/home" className="text-blue underline ml-2 text-lg">
-              Terms of use
-            </Link>
+        {receivedcode || route.show && (
+          <View className="flex-row mt-3 pl-5 ml-1 items-center">
+            <ThemedText color={'#646060ff'} className="text-xl font-normal text-headercolor">
+              I received the code?
+            </ThemedText>
+            <TouchableOpacity onPress={receivedCode}>
+              <Text className="text-lg underline text-customBlue font-normal">
+                {" "}
+                Verify now
+              </Text>
+            </TouchableOpacity>
           </View>
-          <Text className="text-lg text-headercolor">
-            Logging into your tracker account
-          </Text>
-        </View>
+        )}
       </View>
-      {/* modal component*/}
-      <ModalComponent
-        visible={modalVisibility}
-        onClose={() => setModalVisibility(false)}
-        message={modalMess}
-        errorType={modalErrorType}
-        isButton={isButton}
-      />
-
-      {/* loading component */}
-      <LoadingComponent
-        visible={loading}
-      />
-    </SafeAreaView>
+    </SafeAreacontext>
   );
 };
 
-export default SignUpPage;
+export default SignUp;

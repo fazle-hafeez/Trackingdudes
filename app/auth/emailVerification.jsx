@@ -1,323 +1,394 @@
-import { Link, useLocalSearchParams, useRouter } from "expo-router";
-import React, { useState, useEffect } from "react";
-import { View, Text, TextInput, TouchableOpacity, StatusBar, Platform } from "react-native"
-import HeroSection from "../../src/components/HeroSection";
-import Button from "../../src/components/Button";
-import LoadingComponent from "../../src/components/LoadingComponent";
-import ModalComponent from "../../src/components/ModalComponent";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Link, useLocalSearchParams, router } from "expo-router";
+import React, { useState, useEffect, useRef } from "react";
+import { View, Text, TextInput, TouchableOpacity, Platform, Animated } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+//Hooks
+import { useApi } from "../../src/hooks/useApi";
+import { useAuth } from "../../src/context/UseAuth";
+import { useTheme } from "../../src/context/ThemeProvider";
+
+//components
+import HeaderSection from "../../src/components/HeaderSection";
+import Button from "../../src/components/Button";
+import { ThemedView, ThemedText, SafeAreacontext } from "../../src/components/ThemedColor";
+
+
 const EmailVerification = () => {
-    const router = useRouter();
+  const { post, put } = useApi();
+  const { showModal, hideModal, setGlobalLoading } = useAuth();
+  const { trimmedEmail, changePassword, enableBtn, reastartEmail, resetEmail } = useLocalSearchParams();
+  const { darkMode } = useTheme()
+  const inputRef = useRef(null);
 
-    const [code, setCode] = useState("");
-    const [otpError, setOtpError] = useState("");
-    const [wrongAttempts, setWrongAttempts] = useState(0);
-    const [isBlocked, setIsBlocked] = useState(false);
-    const [blockTimer, setBlockTimer] = useState(180); // 3 minutes
-    const [resendTimer, setResendTimer] = useState(60);
-    const [restartTimer, setRestartTimer] = useState(30);
-    const [canResend, setCanResend] = useState(false);
-    const [canRestart, setCanRestart] = useState(false);
-    const [loading, setLoading] = useState(false);
-    const [modalVisibility, setModalVisibility] = useState(false);
-    const [modalMess, setModalMess] = useState("");
-    const [modalErrorType, setModalErrorType] = useState("");
-    const [isButton, setIsButton] = useState(true);
-    const { trimmedEmail, changePassword, enableBtn, reastartEmail, resetEmail } = useLocalSearchParams();
+  const [code, setCode] = useState("");
+  const [otpError, setOtpError] = useState("");
+  const [wrongAttempts, setWrongAttempts] = useState(0);
+  const [isBlocked, setIsBlocked] = useState(false);
+  const [blockTimer, setBlockTimer] = useState(0);
+  const [lockoutEndTime, setLockoutEndTime] = useState(null);
+  const [resendTimer, setResendTimer] = useState(60);
+  const [restartTimer, setRestartTimer] = useState(30);
+  const [canResend, setCanResend] = useState(false);
+  const [canRestart, setCanRestart] = useState(false);
 
-    // Disable all buttons during block or loading
-    const isAllDisabled = isBlocked || loading;
+  const isAllDisabled = isBlocked;
 
-    // Format seconds to mm:ss
-    const formatTime = (seconds) => {
-        const m = Math.floor(seconds / 60);
-        const s = seconds % 60;
-        return `${m}:${s < 10 ? "0" : ""}${s}`;
-    };
+  // Format time mm:ss
+  const formatTime = (seconds) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s < 10 ? "0" : ""}${s}`;
+  };
 
-    // Timers
-    useEffect(() => {
-        const interval = setInterval(() => {
-            setResendTimer((prev) => {
-                if (prev <= 1) {
-                    clearInterval(interval);
-                    setCanResend(true);
-                    return 0;
-                }
-                return prev - 1;
-            });
-        }, 1000);
-        return () => clearInterval(interval);
-    }, []);
-
-    useEffect(() => {
-        const interval = setInterval(() => {
-            setRestartTimer((prev) => {
-                if (prev <= 1) {
-                    clearInterval(interval);
-                    setCanRestart(true);
-                    return 0;
-                }
-                return prev - 1;
-            });
-        }, 1000);
-        return () => clearInterval(interval);
-    }, []);
-
-    // 3-minute block timer
-    useEffect(() => {
-        let interval;
-        if (isBlocked) {
-            interval = setInterval(() => {
-                setBlockTimer((prev) => {
-                    if (prev <= 1) {
-                        clearInterval(interval);
-                        setIsBlocked(false);
-                        setWrongAttempts(0);
-                        setBlockTimer(180); // reset
-                        return 180;
-                    }
-                    return prev - 1;
-                });
-            }, 1000);
+  //  Load lockout state on mount
+  useEffect(() => {
+    const loadLockoutState = async () => {
+      const storedEndTime = await AsyncStorage.getItem("lockoutEndTime");
+      if (storedEndTime) {
+        const endTime = parseInt(storedEndTime);
+        const remaining = Math.max(0, Math.ceil((endTime - Date.now()) / 1000));
+        if (remaining > 0) {
+          setIsBlocked(true);
+          setLockoutEndTime(endTime);
+          setBlockTimer(remaining);
+        } else {
+          await AsyncStorage.removeItem("lockoutEndTime");
         }
-        return () => clearInterval(interval);
-    }, [isBlocked]);
+      }
+    };
+    loadLockoutState();
+  }, []);
 
-    // Submit OTP
-    const submitCode = async () => {
-        if (isBlocked) return;
-        if (code.trim() === "") {
-            setOtpError("Field is required!");
-            return;
+  // Save lockoutEndTime when blocked
+  useEffect(() => {
+    if (lockoutEndTime && isBlocked) {
+      AsyncStorage.setItem("lockoutEndTime", lockoutEndTime.toString());
+    } else if (!isBlocked) {
+      AsyncStorage.removeItem("lockoutEndTime");
+    }
+  }, [isBlocked, lockoutEndTime]);
+
+  // Resend timer
+  useEffect(() => {
+    const resendInterval = setInterval(() => {
+      setResendTimer((prev) => {
+        if (prev <= 1) {
+          clearInterval(resendInterval);
+          setCanResend(true);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(resendInterval);
+  }, []);
+
+  // Restart timer
+  useEffect(() => {
+    const restartInterval = setInterval(() => {
+      setRestartTimer((prev) => {
+        if (prev <= 1) {
+          clearInterval(restartInterval);
+          setCanRestart(true);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(restartInterval);
+  }, []);
+
+  // Lockout countdown
+  useEffect(() => {
+    let interval;
+    if (isBlocked && lockoutEndTime) {
+      interval = setInterval(() => {
+        const remaining = Math.max(0, Math.ceil((lockoutEndTime - Date.now()) / 1000));
+        setBlockTimer(remaining);
+        if (remaining <= 0) {
+          clearInterval(interval);
+          setIsBlocked(false);
+          setWrongAttempts(0);
+          setLockoutEndTime(null);
+          AsyncStorage.removeItem("lockoutEndTime");
+        }
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [isBlocked, lockoutEndTime]);
+
+  const shakeAnim = useRef(new Animated.Value(0)).current;
+  const borderAnim = useRef(new Animated.Value(0)).current;
+  const [isFocused, setIsFocused] = useState(false);
+
+  const errorColor = darkMode ? "#ef4444" : "#dc3545";
+  const focusColor = darkMode ? "#3b82f6" : "#0d6efd";
+  const defaultColor = darkMode ? "#6b7280" : "#ccc";
+
+  const showError = otpError && code === "";
+
+  // Animate border + shake
+  useEffect(() => {
+    let toValue = 0;
+
+    if (showError) toValue = 2;
+    else if (isFocused) toValue = 1;
+
+    Animated.timing(borderAnim, {
+      toValue,
+      duration: 250,
+      useNativeDriver: false,
+    }).start();
+
+    // Shake only when real error
+    if (showError) {
+      Animated.sequence([
+        Animated.timing(shakeAnim, { toValue: 10, duration: 70, useNativeDriver: false }),
+        Animated.timing(shakeAnim, { toValue: -10, duration: 70, useNativeDriver: false }),
+        Animated.timing(shakeAnim, { toValue: 6, duration: 70, useNativeDriver: false }),
+        Animated.timing(shakeAnim, { toValue: -6, duration: 70, useNativeDriver: false }),
+        Animated.timing(shakeAnim, { toValue: 0, duration: 60, useNativeDriver: false }),
+      ]).start();
+    }
+  }, [showError, isFocused]);
+
+  useEffect(() => {
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 300);
+  }, []);
+
+  const borderColor = borderAnim.interpolate({
+    inputRange: [0, 1, 2],
+    outputRange: [defaultColor, focusColor, errorColor],
+  });
+  //  Submit OTP
+  const submitCode = async () => {
+    if (isBlocked) return;
+    if (!code.trim()) {
+      setOtpError("Field is required!");
+      return;
+    }
+
+    setGlobalLoading(true);
+    try {
+      const response = await post("register/verify-email", { code });
+      const msg = response?.data || response?.message || "Unexpected response.";
+
+      if (response?.status === "success") {
+        showModal(msg, "success");
+
+        if (response?.tokens) {
+          await AsyncStorage.setItem("tokens", JSON.stringify(response.tokens));
+        } else {
+          await AsyncStorage.removeItem("tokens");
         }
 
-        setLoading(true);
-        try {
-            const result = await fetch("https://trackingdudes.com/apis/register/verify-email/", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ code }),
+        if (response?.action === "Next") {
+          setTimeout(() => {
+            hideModal();
+            router.push({
+              pathname: changePassword
+                ? "/auth/changePassword"
+                : "/auth/completeRegistration",
+              params: { trimmedEmail: changePassword ? resetEmail : trimmedEmail },
             });
-
-            const response = await result.json();
-            console.log(response);
-            //  If backend says success
-            if (response.status === "success") {
-                setLoading(false);
-                setModalMess(response.data || "Email verified successfully!");
-                setModalErrorType("success");
-                const tokens = {
-                    accessToken: response?.tokens?.access,
-                    accessExpires: response?.tokens?.accessExpires,
-                    issuedAt: response?.tokens?.issuedAt
-                };
-                try {
-                    await AsyncStorage.setItem("tokens", JSON.stringify(tokens));
-                    setModalVisibility(true);
-                    setIsButton(false);
-                    setTimeout(() => {
-                        setModalVisibility(false);
-                        router.push({
-                            pathname: changePassword ? "/auth/changePassword" : "/auth/registerNewUser",
-                            params: { trimmedEmail: changePassword ? resetEmail : trimmedEmail },
-                        });
-                    }, 2000);
-
-                } catch (err) {
-                    console.log("Failed to saved tokens:", err);
-                }
-            }
-
-            //  If backend says error
-            else if (response.status === "error") {
-                setLoading(false);
-                setWrongAttempts((prev) => {
-                    const next = prev + 1;
-                    if (next >= 3) {
-                        setIsBlocked(true);
-                        setModalMess("You’ve entered the wrong code 3 times. Try again after 3 minutes.");
-                        setModalErrorType("error");
-                        setModalVisibility(true);
-                        setIsButton(true)
-                    } else {
-                        setModalMess(response.data || "Invalid OTP. Please try again.");
-                        setModalErrorType("error");
-                        setModalVisibility(true);
-                        setIsButton(true)
-                    }
-                    return next;
-                });
-            }
-            //  Unexpected response
-            else {
-                setLoading(false);
-                setModalMess("Unexpected response from server.");
-                setModalErrorType("error");
-                setModalVisibility(true);
-                setIsButton(true)
-            }
-        } catch (error) {
-            setLoading(false);
-            setModalMess("Something went wrong. Try again later.");
-            setModalErrorType("error");
-            setModalVisibility(true);
-            setIsButton(true)
+          }, 2000);
         }
-    };
-
-
-    // Restart process
-    const restart = () => {
-        router.push({
-            pathname: "/auth/login",
-            params: { show: true, trimmedEmail, resetEmail },
-        });
-    };
-
-    // Resend email
-    const sendEmailCode = async () => {
-        setLoading(true);
-        try {
-            const response = await fetch(`https://trackingdudes.com/apis/register/resend-email/`, {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-            });
-
-            const result = await response.json();
-            console.log(result);
-
-            if (result.status === "success") {
-                setLoading(false); //  enable buttons again
-                setModalMess("Verification email sent successfully!");
-                setModalErrorType("success");
-                setModalVisibility(true);
-                return;
+      } else if (response?.status === "error") {
+        if (response?.action === "LockOut") {
+          const duration = response?.lockoutDuration || 180;
+          setIsBlocked(true);
+          setLockoutEndTime(Date.now() + duration * 1000);
+          showModal(
+            response?.data || `You are locked out. Try again in ${duration} seconds.`,
+            "error"
+          );
+        } else {
+          setWrongAttempts((prev) => {
+            const next = prev + 1;
+            if (next >= 3) {
+              const fallbackDuration = 180;
+              setIsBlocked(true);
+              setLockoutEndTime(Date.now() + fallbackDuration * 1000);
+              showModal(
+                "You’ve entered the wrong code 3 times. Try again after 3 minutes.",
+                "error"
+              );
+            } else {
+              showModal(msg || "Invalid OTP. Please try again.", "error");
             }
-
-            //  Error case
-            setLoading(false);
-            setModalMess(result.data);
-            setModalErrorType("error");
-            setModalVisibility(true);
-            setIsButton(true)
-        } catch (error) {
-            console.log(error);
-            setLoading(false);
-            setModalMess("Failed to resend verification email. Try again later.");
-            setModalErrorType("error");
-            setIsButton(true)
-            setModalVisibility(true);
+            return next;
+          });
         }
-    };
+      } else {
+        showModal(msg, "error");
+      }
+    } catch (error) {
+      showModal(error?.message || "Something went wrong. Try again later.", "error");
+    } finally {
+      setGlobalLoading(false);
+    }
+  };
 
+  // Restart signup
+  const restart = () => {
+    router.push({
+      pathname: "auth/signup",
+      params: { show: true, trimmedEmail, resetEmail },
+    });
+  };
 
-    return (
-        <SafeAreaView className="flex-1 bg-white">
-            <StatusBar barStyle="light-content" backgroundColor="#0000ff" />
-            <HeroSection />
+  // Resend email
+  const sendEmailCode = async () => {
+    setGlobalLoading(true);
+    try {
+      const result = await put("register/resend-email");
+      const msg = result?.data || result?.message || "Unexpected response.";
+      if (result?.status === "success") {
+        showModal(msg, "success");
+      } else if (result?.restart === true) {
+        const duration = result?.lockoutDuration || 180;
+        setIsBlocked(true);
+        setLockoutEndTime(Date.now() + duration * 1000);
+        showModal(
+          msg || "Too many resend attempts. Please wait before trying again.",
+          "error"
+        );
+      } else {
+        showModal(msg, "error");
+      }
+    } catch (error) {
+      showModal(error?.message || "Failed to resend verification email.", "error");
+    } finally {
+      setGlobalLoading(false);
+    }
+  };
 
-            <View className=" p-4 mx-auto bg-white">
-                <View className={`bg-[rgba(255,255,255,0.9)] rounded-xl p-6 ${Platform.OS === "ios" ? " shadow-sm" : ''
-                    }`}
-                    style={{ marginTop: -300, elevation: 5 }}>
-                    <Text className="text-headercolor text-2xl font-medium mb-2">
-                        Verify your email address
-                    </Text>
-                    <Text className="text-md text-headercolor">
-                        We've sent a 6-digit code to {trimmedEmail || reastartEmail || resetEmail} from
-                        register@trackingdudes.com. Please enter it below.
-                    </Text>
+  return (
+    <SafeAreacontext className="flex-1">
+      <HeaderSection />
 
-                    <Text className="text-2xl mt-4 mb-2 text-headercolor">Enter code here</Text>
-                    <TextInput
-                        autoFocus
-                        keyboardType="numeric"
-                        maxLength={6}
-                        className={`text-center border rounded-md px-3 py-2 text-lg text-headercolor ${otpError ? "border-red-500" : "border-gray-400"
-                            }`}
-                        value={code}
-                        onChangeText={(text) => {
-                            setCode(text);
-                            setOtpError("");
-                        }}
-                    />
+      <View style={{ marginTop: -320 }} className="p-3">
+        <ThemedView
+          bgColor={'rgba(255,255,255,0.9)'}
+          className={` rounded-2xl p-6 mt-6 ${Platform.OS === "ios" ? "shadow-sm" : ""
+            }`}
+          style={{ elevation: 5 }}
+        >
+          <ThemedText color="#646060ff" className=" text-2xl font-medium mb-2">
+            Verify your email address
+          </ThemedText>
+          <ThemedText color="#646060ff" className="text-md ">
+            We've sent a 6-digit code to{" "}
+            {trimmedEmail || reastartEmail || resetEmail} from{" "}
+            <Text className="font-medium">register@trackingdudes.com</Text>. Please
+            enter it below.
+          </ThemedText>
 
-                    {otpError ? <Text className="text-red-500 text-sm mt-2">{otpError}</Text> : null}
-
-                    {isBlocked && (
-                        <Text className="text-red-500 text-sm mt-1">
-                            You are blocked for {formatTime(blockTimer)} due to too many failed attempts.
-                        </Text>
-                    )}
-
-                    <View className="mt-2">
-                        <Button title="Submit" onClickEvent={submitCode} disabled={isAllDisabled} />
-                    </View>
-
-                    <View className="border border-gray-400 my-4"></View>
-
-                    <Text className="text-2xl text-headercolor mb-2">Didn't receive the email?</Text>
-
-                    <View className="flex-row justify-between items-center">
-                        <TouchableOpacity
-                            disabled={isAllDisabled || (!canResend && !enableBtn)}
-                            className={`border rounded-md h-12 pt-1 ${canResend || enableBtn ? "border-blue" : "border-gray-400"
-                                }`}
-                            onPress={sendEmailCode}
-                        >
-                            <Text
-                                className={`p-2 ${canResend || enableBtn ? "text-blue" : "text-gray-400"
-                                    }`}
-                            >
-                                Resend Email {!enableBtn && !canResend && `| in ${formatTime(resendTimer)}`}
-                            </Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            disabled={isAllDisabled || (!canRestart && !enableBtn)}
-                            onPress={restart}
-                            className={`border rounded-md h-12 pt-1 ${canRestart || enableBtn ? "border-blue" : "border-gray-400"
-                                }`}
-                        >
-                            <Text
-                                className={`p-2 ${canRestart || enableBtn ? "text-blue" : "text-gray-400"
-                                    }`}
-                            >
-                                Restart {!enableBtn && !canRestart && `| in ${formatTime(restartTimer)}`}
-                            </Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-
-                <View className="mt-3 px-3">
-                    <Text className="text-2xl text-headercolor">
-                        Already Registered?{" "}
-                        <TouchableOpacity disabled={isAllDisabled} onPress={() => router.push("/otherPages/home")} className="pt-2">
-                            <Text className="text-blue underline text-xl">Login here</Text>
-                        </TouchableOpacity>
-                    </Text>
-                </View>
-
-                <View className="px-3 mt-2">
-                    <Text>
-                        Please ensure that your email service provider does not block our emails. If you attempt to send emails from this page multiple times in a short period of time, they may end up in your spam folder. Therefore, please double-check all folders, including spam, before resending another email. Thank you.
-                    </Text>
-                </View>
-            </View>
-
-            <LoadingComponent visible={loading} />
-
-            <ModalComponent
-                visible={modalVisibility}
-                onClose={() => setModalVisibility(false)}
-                message={modalMess}
-                errorType={modalErrorType}
-                isButton={isButton}
+          <ThemedText color="#646060ff" className="text-xl mt-4 mb-2 ">Enter code here</ThemedText>
+          <Animated.View
+            style={{
+              borderWidth: 1,
+              borderRadius: 8,
+              paddingHorizontal: 5,
+              paddingVertical: 2,
+              marginTop: 10,
+              borderColor: borderColor,
+              transform: [{ translateX: shakeAnim }],
+            }}
+          >
+            <TextInput
+              ref={inputRef}
+              keyboardType="numeric"
+              maxLength={6}
+              value={code}
+              onChangeText={(t) => {
+                setCode(t);
+                if (t !== "") setOtpError("");
+              }}
+              onFocus={() => setIsFocused(true)}
+              onBlur={() => setIsFocused(false)}
+              placeholder="Enter code"
+              placeholderTextColor={darkMode ? "#9ca3af" : "#646060ff"}
+              style={{
+                textAlign: "center",
+                textAlignVertical: "center",   // ✔ Fix cursor position
+                includeFontPadding: false,     // ✔ Prevents right-shift cursor
+                fontSize: 18,
+                paddingVertical: 10,
+                color: darkMode ? "white" : "#1f2937",
+              }}
             />
-        </SafeAreaView>
-    );
+          </Animated.View>
+
+
+          {showError && (
+            <Text className="text-red-500 text-sm mt-2">{otpError}</Text>
+          )}
+
+
+          {isBlocked && (
+            <Text className="text-red-500 text-sm mt-2">
+              You are locked out for {formatTime(blockTimer)}. Please wait.
+            </Text>
+          )}
+
+          <View className="mt-3">
+            <Button title="Submit" onClickEvent={submitCode} disabled={isAllDisabled} />
+          </View>
+
+          <View className={`${darkMode ? ' border-gray-700' :' border-gray-300'} border my-4`}></View>
+
+          <ThemedText color="#646060ff" className="text-xl  mb-2">
+            Didn't receive the email?
+          </ThemedText>
+
+          <View className="flex-row justify-between">
+            <TouchableOpacity
+              disabled={isAllDisabled || (!canResend && !enableBtn)}
+              onPress={sendEmailCode}
+              className={`border rounded-md h-12 justify-center px-3 ${canResend || enableBtn ? "border-blue" : darkMode ? "border-gray-400" : "border-gray-400"
+                }`}
+            >
+              <Text
+                className={`${canResend || enableBtn ? "text-customBlue" : "text-gray-400"
+                  }`}
+              >
+                Resend Email {!enableBtn && !canResend && `| in ${formatTime(resendTimer)}`}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              disabled={isAllDisabled || (!canRestart && !enableBtn)}
+              onPress={restart}
+              className={`border rounded-md h-12 justify-center px-3 ${canRestart || enableBtn ? "border-blue" : "border-gray-400"
+                }`}
+            >
+              <Text
+                className={`${canRestart || enableBtn ? "text-customBlue" : "text-gray-400"
+                  }`}
+              >
+                Restart {!enableBtn && !canRestart && `| in ${formatTime(restartTimer)}`}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </ThemedView>
+
+        {/*  Info Text Below Card */}
+        <View className="mt-3">
+          <ThemedText color="#646060ff" className="text-gray-600 text-lg leading-6 text-justify">
+            Please ensure that your email service provider does not block our emails. If
+            you attempt to send emails from this page multiple times in a short period,
+            they may end up in your spam folder. Therefore, please double-check all
+            folders, including spam, before resending another email. Thank you.
+          </ThemedText>
+        </View>
+      </View>
+    </SafeAreacontext>
+  );
 };
 
 export default EmailVerification;

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, ImageBackground } from 'react-native';
-
+import { ThemedView,ThemedText } from './ThemedColor';
+import { useTheme } from '../context/ThemeProvider';
 //  Define an array of all your image sources
 const images = [
     require("../../assets/images/clean1.jpeg"),
@@ -20,7 +21,8 @@ const getRandomImage = () => {
     return images[randomIndex];
 };
 
-const HeroSection = () => {
+const HeaderSection = () => {
+    const {darkMode} = useTheme()
     const [randomImage] = useState(getRandomImage);
 
     return (
@@ -29,13 +31,13 @@ const HeroSection = () => {
             className="h-[400px] w-full"
             resizeMode={'cover'}
         >
-            <View className="bg-blue p-4" >
-                <Text className="text-white text-2xl text-center font-semibold ">
+            <View className={`${darkMode ? 'bg-[#121212]' :'bg-customBlue'} p-4`} >
+                <ThemedText color={"#fff"} className="text-white text-2xl text-center font-semibold ">
                     TRACKING DUDES LLC
-                </Text>
+                </ThemedText>
             </View>
         </ImageBackground>
     );
 };
 
-export default HeroSection;
+export default HeaderSection;

@@ -15,13 +15,12 @@ const Home = () => {
 
   return (
     <SafeAreaView className="flex-1 bg-black">
-      <StatusBar barStyle="light-content" backgroundColor="#0000ff" />
       <ImageBackground
         source={require("../../assets/images/clean5.png")}
         className="h-[400px] w-full  relative"
       >
         <TouchableOpacity
-          className="bg-blue w-26 rounded-md p-2 absolute bottom-28 self-center"
+          className="bg-customBlue w-26 rounded-md p-2 absolute bottom-28 self-center"
           onPress={handleLogout}
         >
           <View className="flex-row justify-center items-center">
@@ -38,7 +37,7 @@ const Home = () => {
 
       <View className="relative bg-white">
         <View
-          className="flex-row p-3 bg-blue m-3 rounded-xl justify-center items-center"
+          className="flex-row p-3 bg-customBlue m-3 rounded-xl justify-center items-center"
           style={{ marginTop: -50 }}
         >
           <TouchableOpacity className="w-1/3">

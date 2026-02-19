@@ -1,60 +1,161 @@
-import React from "react";
-import { Modal, View, Text, TouchableOpacity, Image } from "react-native";
+import React, { useEffect, useState, useRef } from "react";
+import { Modal, View, Text, TouchableOpacity, Image, StyleSheet, Dimensions } from "react-native";
+import { playSound } from "../hooks/useSound";
+import { useTheme } from "../context/ThemeProvider";
+import { ThemedView, ThemedText } from "./ThemedColor";
+import { useModalBars } from "../hooks/useModalBar";
+import CustomConffeti from "./CustomConffeti";
 
-const ModalComponent = ({ visible, onClose, message, errorType,isButton = true}) => {
-  let imageSource;
+const { height, width } = Dimensions.get("window");
 
-  switch (errorType) {
-    case "error":
-      imageSource = require("../../assets/images/cross-markup.png");
-      break;
-    case "success":
-      imageSource = require("../../assets/images/check-markup.png"); 
-      break;
-    default:
-      imageSource = require("../../assets/images/check-markup.png"); 
-  }
+const ModalComponent = ({
+  visible,
+  onClose,
+  message,
+  errorType = "success",
+  buttons = [],
+  title,
+  autoHideProp,
+}) => {
+  const { darkMode } = useTheme();
+  const [imageSource, setImageSource] = useState(null);
+  const [autoHide, setAutoHide] = useState(false);
+  const [confettiVisible, setConfettiVisible] = useState(false);
+
+  const buttonColored = darkMode ? "border border-blue-950 bg-blue-600" : "bg-customBlue";
+
+  useModalBars(visible, darkMode, "#030025");
+
+  // Main Logic Effect
+  useEffect(() => {
+    if (!visible) return;
+
+    let img, hide = false;
+
+    switch (errorType) {
+      case "error":
+        img = require("../../assets/images/cross-markup.png");
+        playSound("error");
+        break;
+      case "success":
+        img = require("../../assets/images/check-markup.png");
+        hide = autoHideProp === undefined ? true : autoHideProp;
+        playSound("success");
+        setConfettiVisible(true);
+        setTimeout(() => setConfettiVisible(false), 3000);
+        break;
+      case "warning":
+        img = null;
+        playSound("warning");
+        break;
+      default:
+        img = require("../../assets/images/check-markup.png");
+    }
+
+    setImageSource(img);
+    setAutoHide(hide);
+  }, [visible, errorType, autoHideProp]);
+
+  // Auto Hide Effect
+  useEffect(() => {
+    if (visible && autoHide) {
+      const timer = setTimeout(onClose, 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [visible, autoHide, onClose]);
 
   return (
-    <Modal transparent={true} visible={visible} animationType="fade">
-      <View className="flex-1 justify-center items-center bg-black/80">
-        <View className="bg-[rgba(255,255,255,0.9)] p-6 rounded-2xl w-11/12 max-w-sm items-center">
-          <View className="mb-1">
+    <Modal transparent visible={visible} animationType="fade">
+      <View className="flex-1 justify-center items-center bg-black/85">
+
+        {confettiVisible && (
+          <View style={{
+            position: 'absolute',
+            top: 0, left: 0, right: 0, bottom: 0,
+            zIndex: 999
+          }} pointerEvents="none">
+            <CustomConffeti trigger={confettiVisible} />
+          </View>
+        )}
+
+
+        <ThemedView
+          darkBgColor={"#1f2937"}
+          bgColor={"rgba(255,255,255,0.9)"}
+          className="p-4 rounded-2xl w-11/12 max-w-sm items-center"
+        >
+          {/* Icon */}
+          <View className="mb-2">
             {errorType === "warning" ? (
-            <View style={{
-              width: 80,
-              height: 80,
-              borderRadius: 50,
-              justifyContent: 'center',
-              alignItems: 'center',
-              borderWidth: 3,
-              borderColor: '#FFA500'
-            }}>
-              <Text style={{ fontSize: 48, color: 'orange', fontWeight: 'bold' }}>!</Text>
-            </View>
-          ) : (
-            <Image
-              source={imageSource}
-              style={{ width: 105, height: 105 }}
-            />
+              <View style={styles.warningIcon} className="justify-center items-center mt-2 mb-4">
+                <Text preventWrap={true} style={{ fontSize: 48, color: "orange", fontWeight: "bold" }}>!</Text>
+              </View>
+            ) : (
+              imageSource && (
+                <Image source={imageSource} style={{ width: 105, height: 105 }} />
+              )
+            )}
+          </View>
+
+          {/* Title */}
+          {title && (
+            <ThemedText color={"#646060ff"} className=" text-3xl font-medium text-center my-2">
+              {title}
+            </ThemedText>
           )}
 
-          </View>
-          <Text className="text-2xl mb-2 text-headercolor font-normal text-center">
-            {message}
-          </Text>
-          {
-            isButton ? (
-              <TouchableOpacity onPress={onClose} className="mt-2 w-full bg-blue p-3 rounded-md mb-4"
-              activeOpacity={0.6}>
-            <Text className="font-semibold text-white text-center text-xl">Close</Text>
-          </TouchableOpacity>
-            ):""
-          }
-        </View>
+          {/* Message */}
+          {message && (
+            <ThemedText color={"#646060ff"} className="text-2xl mb-4 font-medium text-center">
+              {message}
+            </ThemedText>
+          )}
+
+          {/* Buttons */}
+          {buttons.length > 0 ? (
+            <View className="flex-row justify-between w-full mt-3 mb-2">
+              {buttons.map((btn, index) => (
+                <TouchableOpacity
+                  key={index}
+                  onPress={btn.onPress}
+                  className={`flex-1 p-3 rounded-md ${btn.bgColor || "bg-customBlue"} ${index > 0 ? "ml-3" : ""}`}
+                >
+                  <Text
+                    preventWrap={true}
+                    className="font-semibold text-white text-center text-xl">
+                    {btn.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : (
+            !autoHide && (
+              <TouchableOpacity
+                onPress={onClose}
+                className={`mt-2 w-full ${buttonColored} p-3 rounded-md mb-1`}
+              >
+                <Text
+                  preventWrap={true}
+                  className="font-semibold text-center text-white text-xl">
+                  Close
+                </Text>
+              </TouchableOpacity>
+            )
+          )}
+        </ThemedView>
       </View>
     </Modal>
   );
 };
+
+const styles = StyleSheet.create({
+  warningIcon: {
+    width: 70,
+    height: 70,
+    borderRadius: 50,
+    borderWidth: 3,
+    borderColor: "#FFA500",
+  },
+});
 
 export default ModalComponent;

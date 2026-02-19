@@ -1,8 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from "react-native-safe-area-context";
+import PageHeader from '../../src/components/PageHeader';
+import Tabs from '../../src/components/Tabs';
+import { AddFilterCard, FilterChip, AddItemCard } from '../../src/components/AddEntityCard';
+import { ThemedView, ThemedText, SafeAreacontext } from '../../src/components/ThemedColor';
 const CURRENT_DATE = '10-13 2025';
 
 export default function ShiftsData() {
@@ -13,35 +17,6 @@ export default function ShiftsData() {
     const timeFilters = ['this-week', 'prev-week', 'this-month', 'others'];
 
     const tabs = ['In-progress', 'Summary', 'Audit', 'Last'];
-
-    const FilterChip = ({ label, iconName }) => (
-        <View className="flex-row items-center bg-blue rounded-full px-4 py-2 mr-2 mb-2">
-            {iconName && <Ionicons name={iconName} size={16} color="white" className="mr-1" />}
-            <Text className="text-white text-sm font-semibold">{label}</Text>
-        </View>
-    );
-
-  
-    const TabsSection = () => (
-        <View className="mt-6 bg-white p-5  shadow-md rounded-lg">
-            <View className="flex-row">
-                {tabs.map(tab => (
-                    <TouchableOpacity
-                        key={tab}
-                        onPress={() => setActiveTab(tab)}
-                        className={`mr-6 pb-1 ${activeTab === tab ? 'border-b-2 border-blue' : ''}`}
-                    >
-                        <Text 
-                            className={`text-md font-semibold ${activeTab === tab ? 'text-blue' : 'text-gray-500'}`}
-                        >
-                            {tab}
-                        </Text>
-                    </TouchableOpacity>
-                ))}
-            </View>
-        </View>
-    );
-
     
     const TabContent = () => {
         if (activeTab === 'In-progress') {
@@ -87,9 +62,9 @@ export default function ShiftsData() {
 
     const TabsHeader = ({label}) => {
       return(
-        <Text className="text-lg font-bold text-gray-800 ">
+        <ThemedText color={"#1f2937"} className="text-lg font-bold  ">
             {label}       
-        </Text>
+        </ThemedText>
       )
     }
 
@@ -110,43 +85,21 @@ export default function ShiftsData() {
     }
 
     return (
-        <SafeAreaView className="flex-1 bg-gray-50">
-          <View className="bg-blue flex-row justify-between items-center h-12 px-2">
-             <View className="flex-row items-center">
-              <Ionicons name="close"  size={30} color="white" onPress={()=> router.back()}/>
-              <Text className="text-white text-xl ml-2">Trips tracking</Text>
-             </View>
-
-             <TouchableOpacity 
-             className=" bg-white w-6 h-6 flex-row justify-center items-center rounded-full"
-             >
-              <Ionicons color="dark" name='unknown' size={15} />
-             </TouchableOpacity>
-          </View>
-            
+        <SafeAreacontext bgColor={"#eff6ff"} className="flex-1 ">
+          <PageHeader routes={"Trips Tracking"}/>   
            <View className="p-4 flex-1">
             <View className="mb-6">
                 <View className="flex-row items-center">
                     <Ionicons name="filter" size={24} color="#3b82f6" />
-                    <Text className="text-2xl font-bold text-gray-800 ml-2">Filters</Text>
+                    <Text className="text-xl font-medium text-['#3b82f6'] ml-2">Filters</Text>
                 </View>
                 
-                
-                <View className="flex-row mt-4 mb-4 bg-white p-5 rounded-md"
-                style={{elevation:2}}>
-                    {timeFilters.map(filter => (
-                        <TouchableOpacity 
-                            key={filter}
-                            onPress={() => setActiveTimeFilter(filter)}
-                            className={`mr-4 pb-1 ${activeTimeFilter === filter ? 'border-b-2 border-blue' : ''}`}
-                        >
-                            <Text 
-                                className={`text-md font-medium ${activeTimeFilter === filter ? 'text-blue' : 'text-gray-500'}`}
-                            >
-                                {filter}
-                            </Text>
-                        </TouchableOpacity>
-                    ))}
+                <View className="my-4">
+                    <Tabs 
+                      tabs={timeFilters}
+                      setActiveTab={setActiveTimeFilter}
+                      activeTab={activeTimeFilter}
+                    />
                 </View>
 
               
@@ -157,18 +110,19 @@ export default function ShiftsData() {
                 </View>
             </View>
 
-            
-            <View className="bg-white p-4 rounded-lg shadow-md border border-gray-200">
-                <View className="flex-row justify-between items-center">
-                    <Text className="text-xl font-bold text-gray-800">Trip tracking</Text>
-                    <TouchableOpacity>
-                        <Ionicons name="add-circle" size={24} color="#10b981" />
-                    </TouchableOpacity>
-                </View>
-            </View>
 
-          
-            <TabsSection />
+            <AddItemCard 
+             title='Trip tracking'
+             onchange={()=>console.log('starting working on it soon')}
+            />
+
+             <View className="my-4">
+                <Tabs  
+                  tabs={tabs}
+                  activeTab={activeTab}
+                  setActiveTab={setActiveTab}
+                />
+             </View>
 
             <View className="mt-2">
                 {/* FIX 1: The Tabs Header is now correctly rendered */}
@@ -178,6 +132,6 @@ export default function ShiftsData() {
             </View>
            </View>
 
-        </SafeAreaView>
+        </SafeAreacontext>
     );
 }
