@@ -122,72 +122,98 @@ export const DATE_TABS = {
 
 //============== get type and icon name from string ex:fontAwosome6:car
 
+// export const parseIconString = (iconStr = "") => {
+//   if (!iconStr || !iconStr.includes(":")) {
+//     return { type: null, icon: null }; // property name 'icon'
+//   }
+
+//   const [prefix, iconName] = iconStr.split(":");
+
+//   const map = {
+//     fa: "FontAwesome",
+//     fa5: "FontAwesome5",
+//     fa6: "FontAwesome6",
+//     ion: "Ionicons",
+//     mat: "MaterialIcons",
+//     svg: "SvgIcon",
+//     ant: "AntDesign",
+//     fth: "Feather"
+//   };
+
+//   return {
+//     type: map[prefix] || "Ionicons",
+//     icon: iconName,
+//     prefix: prefix
+//   };
+// };
+
 export const parseIconString = (iconStr = "") => {
   if (!iconStr || !iconStr.includes(":")) {
-    return { type: null, icon: null }; // property name 'icon'
+    return { type: null, icon: null };
   }
 
   const [prefix, iconName] = iconStr.split(":");
 
-  const map = {
-    fa: "FontAwesome",
-    fa5: "FontAwesome5",
-    fa6: "FontAwesome6",
-    ion: "Ionicons",
-    mat: "MaterialIcons",
-    svg: "SvgIcon",
-    ant: "AntDesign",
-    fth: "Feather"
-  };
-
   return {
-    type: map[prefix] || "Ionicons",
-    icon: iconName,
-    prefix: prefix
+    type: prefix?.trim().toLowerCase(), // 👈 IMPORTANT
+    icon: iconName?.trim()
   };
 };
 
 
 // To display icon
-export const RenderIcon = ({ icon, size = 26, color = "#000", prefix , type = "vendor" }) => {
-  if (!icon || "") return null;
+export const RenderIcon = ({ icon, size = 26, color = "#000", prefix, type = "vendor" }) => {
+  if (!icon) return null;
 
-  // Type ya prefix dono mein se jo mile use use karein
-  const iconType = (prefix || "").toLowerCase();
+  // 🔑 AUTO PARSE if prefix not provided (API case)
+  let finalPrefix = prefix;
+  let finalIcon = icon;
 
-  switch (iconType.toLowerCase()) {
+  if (!finalPrefix && typeof icon === "string" && icon.includes(":")) {
+    const [p, i] = icon.split(":");
+    finalPrefix = p;
+    finalIcon = i;
+  }
+
+  const iconType = (finalPrefix || "").toLowerCase();
+
+  switch (iconType) {
 
     case "svg":
-      const SvgComponent = getIconComponent(icon , type );
+      const SvgComponent = getIconComponent(finalIcon, type);
       if (!SvgComponent) return null;
-      // return <SvgComponent width={size} height={size} fill={color} preserveAspectRatio="xMidYMid meet" overflow="visible" />;
+
       return (
-        <Svg width={size} height={size}  viewBox="0 0 64 64" fill={color}>
+        <Svg width={size} height={size} viewBox="0 0 64 64" fill={color}>
           <SvgComponent width={size * 2} height={size * 2} />
         </Svg>
       );
 
     case "fa5":
-      return <FontAwesome5 name={icon} size={size} color={color} />;
-
-    case "ant":
-      return <AntDesign name={icon} size={size} color={color} />;
+    case "font5":
+      return <FontAwesome5 name={finalIcon} size={size} color={color} />;
 
     case "fa6":
-      return <FontAwesome6 name={icon} size={size} color={color} />;
-
-    case "mat":
-      return <MaterialIcons name={icon} size={size} color={color} />;
-
-    case "fth":
-      return <Feather name={icon} size={size} color={color} />;
-
+    case "font6":
+      return <FontAwesome6 name={finalIcon} size={size} color={color} />;
 
     case "fa":
-      return <FontAwesome name={icon} size={size} color={color} />;
+    case "font":
+      return <FontAwesome name={finalIcon} size={size} color={color} />;
 
+    case "ant":
+      return <AntDesign name={finalIcon} size={size} color={color} />;
 
+    case "fth":
+    case "fthr":
+      return <Feather name={finalIcon} size={size} color={color} />;
+
+    case "mat":
+    case "mater":
+      return <MaterialIcons name={finalIcon} size={size} color={color} />;
+
+    case "ion":
     default:
-      return <Ionicons name={icon} size={size} color={color} />;
+      return <Ionicons name={finalIcon} size={size} color={color} />;
   }
 };

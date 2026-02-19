@@ -606,11 +606,7 @@ const Expense = () => {
     // --- RENDER HELPERS ---
 
     const RenderIcons = ({ item, size = 26, color = "#2563eb" }) => {
-        if (!item.icon || item.icon === "undefined:undefined") {
-            // Fallback: try icon from vendor nme
-            return getSvgIconByVendor(item.vendor, size, color);
-        }
-
+        if(!item || !item.icon) return null;
         const iconData = parseIconString(item.icon);
         const { type, icon } = iconData;
         const types = type?.toLowerCase();
@@ -620,11 +616,8 @@ const Expense = () => {
             case "svg":
                 // Complete tab-to-icon-type mapping
                 const iconType = getIconTypeFromTab(activeTab);
-                console.log(` Loading ${icon} as ${iconType} from ${activeTab} tab`);
-
                 const SvgComponent = getIconComponent(icon, iconType);
                 if (!SvgComponent) {
-                    console.log(` SVG not found: ${icon} in ${iconType} folder`);
                     return null;
                 }
                 return (
@@ -640,13 +633,13 @@ const Expense = () => {
             case "fa5":
             case "font5":
                 return <FontAwesome5 name={icon} size={size} color={color} />;
-
+            case "font5":
             case "fa6":
                 return <FontFace name={icon} size={size} color={color} />;
 
             case "ant":
                 return <AntDesign name={icon} size={size} color={color} />;
-
+            case "fthr" :
             case "fth":
                 return <Feather name={icon} size={size} color={color} />;
 
@@ -668,37 +661,9 @@ const Expense = () => {
             "payment-option": "payment",
             "categories": "category",
             "reporting": "vendor", // fallback
-            "vendor": "vendor" // explicit
         };
         return tabMapping[tab] || "vendor";
     };
-
-    // Vendor fallback helper
-    const getSvgIconByVendor = (vendorName, size, color) => {
-        if (!vendorName) return <Ionicons name="storefront" size={size} color={color} />;
-
-        const vendorKey = vendorName.toLowerCase().replace(/\s+/g, '');
-
-        // Try vendor folder first
-        let SvgComponent = getIconComponent(vendorKey, "vendor");
-        if (SvgComponent) return renderSvg(SvgComponent, size, color);
-
-        // Try payment folder
-        SvgComponent = getIconComponent(vendorKey, "payment");
-        if (SvgComponent) return renderSvg(SvgComponent, size, color);
-
-        // Try category folder
-        SvgComponent = getIconComponent(vendorKey, "category");
-        if (SvgComponent) return renderSvg(SvgComponent, size, color);
-
-        return <Ionicons name="storefront" size={size} color={color} />;
-    };
-
-    const renderSvg = (SvgComponent, size, color) => (
-        <Svg width={size} height={size} viewBox="0 0 64 64" fill={color}>
-            <SvgComponent width={size * 2} height={size * 2} />
-        </Svg>
-    );
 
 
 

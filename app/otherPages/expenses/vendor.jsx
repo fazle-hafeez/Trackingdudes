@@ -49,6 +49,22 @@ const Vendor = () => {
         return EXPENSE_VENDOR_ICONS.slice(0, 6);
     }, []);
 
+    // Map stored icon string (prefix:name) back to full object for the UI
+    // Improved helper to find icon even if prefix is missing
+    const getFullIconObject = (iconStr) => {
+        if (!iconStr) return null;
+
+        // Case 1: If string contains ":" (e.g., "Ion:cash")
+        const parsed = parseIconString(iconStr);
+
+        // Case 2: Try to find by icon name directly if prefix search fails
+        const found = EXPENSE_VENDOR_ICONS.find(
+            i =>
+                i.icon?.toLowerCase() === parsed.icon?.toLowerCase() &&
+                i.prefix?.toLowerCase() === parsed.type?.toLowerCase()
+        );
+        return found || { icon: parsed.icon || iconStr, type: "Ionicons", prefix: "Ion" };
+    };
 
     // ===============Load cached vendors on mount======================
     useEffect(() => {
@@ -69,17 +85,11 @@ const Vendor = () => {
                 const finalRecord = cachedVendors.find(
                     item => item?.id != null && String(item.id) === String(id)
                 );
-
+                console.log('offline record found :', finalRecord);
 
                 if (finalRecord) {
                     setVendorName(finalRecord.vendor || finalRecord.label || "");
-
-                    const parsed = parseIconString(finalRecord.icon ?? "");
-                    const matchedIcon = EXPENSE_VENDOR_ICONS.find(
-                        i => i.icon === parsed.icon && (i.prefix === parsed.prefix || i.type?.toLowerCase() === parsed.prefix)
-                    );
-
-                    setSelectedIcon(matchedIcon || null);
+                    setSelectedIcon(getFullIconObject(finalRecord.icon));
 
                 }
 
@@ -93,13 +103,7 @@ const Vendor = () => {
 
                         if (res?.status === "success" && res.data) {
                             setVendorName(res.data.vendor || "");
-
-                            const parsed = parseIconString(res.data.icon ?? "");
-                            const matchedIcon = EXPENSE_VENDOR_ICONS.find(
-                                i => i.icon === parsed.icon && (i.prefix === parsed.prefix || i.type?.toLowerCase() === parsed.prefix)
-                            );
-
-                            setSelectedIcon(matchedIcon || null);
+                            setSelectedIcon(getFullIconObject(res.data.icon));
                         }
 
 
@@ -511,8 +515,8 @@ const Vendor = () => {
                                                 icon={item.icon}
                                                 color={selectedIcon?.label === item.label ? "#2563eb" : "#4b5563"}
                                                 size={30}
-                                                prefix={item.prefix}
-                                                type = "vendor"
+                                                prefix={item.prefix || ''}
+                                                type="vendor"
                                             />
 
                                             {/* Icon Label - Truncated if too long */}
@@ -565,11 +569,6 @@ const Vendor = () => {
 
                                 setIsFocused(true);
 
-                                // Clear icon if input becomes empty
-                                if (!textValue || textValue.trim() === "") {
-                                    setSelectedIcon(null);
-                                    setVendorErr("");
-                                }
                             }}
 
                             inputError={vendorError}

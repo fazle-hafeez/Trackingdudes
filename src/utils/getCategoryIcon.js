@@ -1,10 +1,11 @@
-import WallsFargo from '../../assets/payment-option-icons/wallsFargo.svg';
+import { CATEGORY_ICONS, DEFAULT_CATEGORY_ICON } from '../constants/categoryIcon';
+export function getCategoryIcon(label) {
+    if (!label || label.trim() === "" || label == undefined) return DEFAULT_CATEGORY_ICON;
 
+    const key = label.toLowerCase().trim();
 
+    // LOGGING FOR DEBUGGING:
+    const icon = CATEGORY_ICONS[key] || DEFAULT_CATEGORY_ICON;
 
-export const PAYMENT_OPTION_ICONS = {
-    wallsfargo: WallsFargo,
-
-};
-
-export const DEFAULT_PAYMENT_OPTION_ICON = DefaultIcon;
+    return icon;
+}

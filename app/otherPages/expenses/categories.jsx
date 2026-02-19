@@ -1,18 +1,20 @@
-import React, { useState, useEffect, useContext } from "react";
-import { View, Text } from "react-native";
-import { FontAwesome, FontAwesome5, MaterialIcons, Ionicons } from "@expo/vector-icons";
+import React, { useState, useEffect, useContext, useRef, useMemo } from "react";
+import { View, Text, KeyboardAvoidingView, Platform, TouchableOpacity, ScrollView } from "react-native";
+import { Feather } from "@expo/vector-icons";
 import { ThemedView, ThemedText, SafeAreacontext } from "../../../src/components/ThemedColor";
 import PageHeader from "../../../src/components/PageHeader";
 import Button from "../../../src/components/Button";
 import Input from "../../../src/components/Input";
-import Select from "../../../src/components/Select";
 import { readCache, storeCache } from "../../../src/offline/cache";
 import { OfflineContext } from "../../../src/offline/OfflineProvider";
 import { useApi } from "../../../src/hooks/useApi";
 import { useAuth } from "../../../src/context/UseAuth";
 import { router, useLocalSearchParams } from "expo-router";
 import { useDebounce } from "../../../src/hooks/useDebounce";
-import { parseIconString } from "../../../src/helper";
+import { parseIconString, RenderIcon } from "../../../src/helper";
+import { EXPENSE_CATEGORIES_ICONS } from "../../../src/constants/icons";
+import IconPicker from "../../../src/components/IconPicker";
+import { useTheme } from "../../../src/context/ThemeProvider";
 
 const CACHE_KEY = "expense_cache_data";
 
@@ -24,84 +26,28 @@ const CategoryPage = () => {
   const { isConnected } = useContext(OfflineContext);
   const { id = null, activeStatus } = useLocalSearchParams(); // activeStatus helps in logic
   const { post, put, get } = useApi();
+  const { darkMode } = useTheme()
+  const pickerRef = useRef(null)
 
   const [categoryName, setCategoryName] = useState("");
   const [selectedIcon, setSelectedIcon] = useState(null);
   const [message, setMessage] = useState("");
+  const [categoryError, setCategoryError] = useState("")
   const [messageStatus, setMessageStatus] = useState(false);
   const [categoryList, setCategoryList] = useState([]);
   const [isFocused, setIsFocused] = useState(false);
+  const [isPickerVisible, setIsPickerVisible] = useState(false);
   const debouncedName = useDebounce(categoryName, 600);
 
-  const iconOptions = [
-    // --- Food & Dining ---
-    { icon: "fast-food", label: "Food / Snacks", type: "Ionicons", prefix: "Ion" },
-    { icon: "restaurant", label: "Dining Out", type: "Ionicons", prefix: "Ion" },
-    { icon: "coffee", label: "Coffee/Tea", type: "FontAwesome", prefix: "font" },
-    { icon: "pizza", label: "Fast Food", type: "Ionicons", prefix: "Ion" },
-    { icon: "ice-cream", label: "Desserts", type: "Ionicons", prefix: "Ion" },
-    { icon: "wine", label: "Drinks/Bar", type: "Ionicons", prefix: "Ion" },
+  const suggestedIcons = useMemo(() => {
+    return EXPENSE_CATEGORIES_ICONS.slice(0, 6);
+  }, []);
 
-    // --- Shopping & Lifestyle ---
-    { icon: "cart", label: "Grocery/Shopping", type: "Ionicons", prefix: "Ion" },
-    { icon: "shopping-bag", label: "Clothing/Fashion", type: "FontAwesome", prefix: "font" },
-    { icon: "gift", label: "Gifts/Donations", type: "FontAwesome", prefix: "font" },
-    { icon: "gem", label: "Jewelry/Luxury", type: "FontAwesome5", prefix: "font5" },
-    { icon: "cut", label: "Salon/Barber", type: "FontAwesome", prefix: "font" },
-
-    // --- Home & Utilities ---
-    { icon: "home", label: "Rent/Mortgage", type: "FontAwesome", prefix: "font" },
-    { icon: "flash", label: "Electricity", type: "Ionicons", prefix: "Ion" },
-    { icon: "water", label: "Water Bill", type: "Ionicons", prefix: "Ion" },
-    { icon: "local-gas-station", label: "Gas/Fuel", type: "MaterialIcons", prefix: "mater" },
-    { icon: "trash", label: "Maintenance", type: "FontAwesome", prefix: "font" },
-    { icon: "hammer", label: "Repairs", type: "Ionicons", prefix: "Ion" },
-    { icon: "bed", label: "Furniture", type: "FontAwesome", prefix: "font" },
-
-    // --- Transport & Travel ---
-    { icon: "bus", label: "Public Transport", type: "FontAwesome", prefix: "font" },
-    { icon: "car-sport", label: "Car Expense", type: "Ionicons", prefix: "Ion" },
-    { icon: "bicycle", label: "Bike/Cycle", type: "Ionicons", prefix: "Ion" },
-    { icon: "airplane", label: "Travel/Flights", type: "Ionicons", prefix: "Ion" },
-    { icon: "subway", label: "Metro/Train", type: "Ionicons", prefix: "Ion" },
-    { icon: "map", label: "Tours", type: "FontAwesome", prefix: "font" },
-
-    // --- Health & Fitness ---
-    { icon: "medical", label: "Doctor/Medicine", type: "Ionicons", prefix: "Ion" },
-    { icon: "fitness", label: "Gym/Workout", type: "Ionicons", prefix: "Ion" },
-    { icon: "heart", label: "Personal Care", type: "FontAwesome", prefix: "font" },
-    { icon: "bandage", label: "First Aid", type: "Ionicons", prefix: "Ion" },
-
-    // --- Education & Work ---
-    { icon: "book", label: "Education/Fees", type: "FontAwesome", prefix: "font" },
-    { icon: "briefcase", label: "Business/Work", type: "FontAwesome", prefix: "font" },
-    { icon: "laptop", label: "Electronics/Tech", type: "FontAwesome", prefix: "font" },
-    { icon: "pencil", label: "Stationary", type: "FontAwesome", prefix: "font" },
-    { icon: "newspaper", label: "Subscriptions", type: "Ionicons", prefix: "Ion" },
-
-    // --- Entertainment ---
-    { icon: "game-controller", label: "Gaming", type: "Ionicons", prefix: "Ion" },
-    { icon: "film", label: "Movies/Cinema", type: "FontAwesome", prefix: "font" },
-    { icon: "musical-notes", label: "Music/Events", type: "Ionicons", prefix: "Ion" },
-    { icon: "camera", label: "Photography", type: "FontAwesome", prefix: "font" },
-
-    // --- Finance & Bills ---
-    { icon: "bank", label: "Banking/Taxes", type: "FontAwesome", prefix: "font" },
-    { icon: "card", label: "Credit Card Bill", type: "Ionicons", prefix: "Ion" },
-    { icon: "shield-checkmark", label: "Insurance", type: "Ionicons", prefix: "Ion" },
-    { icon: "wallet", label: "Savings", type: "Ionicons", prefix: "Ion" },
-    { icon: "cash", label: "Loan/EMI", type: "Ionicons", prefix: "Ion" },
-
-    // --- Miscellaneous ---
-    { icon: "paw", label: "Pets", type: "FontAwesome", prefix: "font" },
-    { icon: "leaf", label: "Garden/Plants", type: "FontAwesome", prefix: "font" },
-    { icon: "help-circle", label: "Other/Misc", type: "Ionicons", prefix: "Ion" },
-  ];
 
   const getFullIconObject = (iconStr) => {
     if (!iconStr) return null;
     const parsed = parseIconString(iconStr);
-    return iconOptions.find(opt => opt.prefix === parsed.prefix && opt.icon === parsed.icon) ||
+    return EXPENSE_CATEGORIES_ICONS.find(opt => opt.prefix === parsed.prefix && opt.icon === parsed.icon) ||
       { icon: parsed.icon, type: "Ionicons", prefix: parsed.prefix };
   };
 
@@ -215,7 +161,20 @@ const CategoryPage = () => {
 
   // 3. Create Category
   const handleAddCategory = async () => {
-    if (!categoryName?.trim() || !selectedIcon) { showModal("Enter name and select icon", "error"); return; }
+
+    if (!categoryName?.trim()) {
+      setCategoryError("Field is required!");
+      return;
+    }
+
+    if (!selectedIcon) {
+      showModal(
+        "Please select an icon that best represents this category...",
+        "warning"
+      );
+      return;
+    }
+
     setGlobalLoading(true);
     const iconString = buildIconString(selectedIcon);
     const payload = { category: categoryName.trim(), icon: iconString, status: "enabled" };
@@ -247,7 +206,19 @@ const CategoryPage = () => {
 
   // 4. Update Category (Queueing + Cache logic)
   const handleUpdateCategory = async () => {
-    if (!categoryName?.trim() || !selectedIcon || messageStatus) return;
+    
+    if (!categoryName?.trim()) {
+      setCategoryError("Field is required!");
+      return;
+    }
+
+    if (!selectedIcon) {
+      showModal(
+        "Please select an icon that best represents this category...",
+        "warning"
+      );
+      return;
+    }
     setGlobalLoading(true);
 
     let currentStatus = (activeStatus && activeStatus.toLowerCase().includes("dis")) ? "disabled" : "enabled";
@@ -302,67 +273,206 @@ const CategoryPage = () => {
     setGlobalLoading(false);
   };
 
-  const RenderIcon = ({ item, size = 26, color = "#000" }) => {
-    if (!item) return null;
-    switch (item.type) {
-      case "FontAwesome": return <FontAwesome name={item.icon} size={size} color={color} />;
-      case "FontAwesome5": return <FontAwesome5 name={item.icon} size={size} color={color} />;
-      case "MaterialIcons": return <MaterialIcons name={item.icon} size={size} color={color} />;
-      default: return <Ionicons name={item.icon} size={size} color={color} />;
-    }
-  };
+
+  const filterOptions = [
+    { label: "Food", value: "food" },
+    { label: "Retail", value: "retail" },
+    { label: "Office", value: "office" },
+    { label: "Supplies", value: "supplies" },
+    { label: "Transport", value: "travel" },
+    { label: "utilities", value: "utilities" },
+    { label: "Shipping", value: "shipping" },
+    { label: "Lodging", value: "lodging" },
+  ]
 
   return (
     <SafeAreacontext bgColor="#eff6ff" className="flex-1">
+
+      {/* Page Header */}
       <PageHeader routes={` ${id ? "Edit Category" : "Adding Category"}`} />
-      <View className="p-4 flex-1">
-        <ThemedView className="p-4 rounded-lg mb-5 shadow-md">
-          <ThemedText className="text-center text-lg font-medium">{id ? "Edit Category" : "Add Category"}</ThemedText>
-        </ThemedView>
 
-        <ThemedView className="p-4 rounded-lg mb-5 shadow-md">
-          <ThemedText className="mb-1 font-medium">Category Name:</ThemedText>
-          <Input placeholder="Enter category label" value={categoryName} onchange={(v) => { setCategoryName(v); setIsFocused(true); }} />
-          {message ? (
-            <Text
-              preventWrap={true}
-              style={{
-                marginTop: 4,
-                fontWeight: '400',
-                color: messageStatus ? '#dc2626' : '#16a34a' // Pure Red and Pure Green
-              }}
-            >
-              {message}
-            </Text>
-          ) : null}
-        </ThemedView>
+      {/* Keyboard handler for inputs */}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
 
-        <ThemedView className="p-4 rounded-lg  shadow-md">
-          <ThemedText className="mb-2 font-medium">Choose an icon:</ThemedText>
-          <Select
-            items={iconOptions.map(i => ({ label: i.label, value: i.icon, icon: i.icon, type: i.type, prefix: i.prefix }))}
-            value={selectedIcon?.icon || ""}
-            onChange={(val) => setSelectedIcon(iconOptions.find(i => i.icon === val))}
-            iconVisibility={true}
-            placeholder="Select icon"
-          />
-        </ThemedView>
+        <ScrollView contentContainerStyle={{ padding: 12 }} >
 
-        {categoryName && selectedIcon && (
-          <ThemedView className="flex-row items-center p-4 shadow-md rounded-lg my-4 border-blue-500 border bg-blue-50">
-            <RenderIcon item={selectedIcon} color="#2563eb" size={28} />
-            <ThemedText className="text-base font-bold ml-3 text-blue-700">{categoryName}</ThemedText>
+          <ThemedView className="p-4 rounded-lg mt-2 mb-4 " style={{ elevation: 2 }} >
+            <ThemedText color="#374151" className="text-lg  mb-1">
+              Choose a popular category or add a new one
+            </ThemedText>
           </ThemedView>
-        )}
 
-        <Button title={id ? "Update" : "Save"} onClickEvent={id ? handleUpdateCategory : handleAddCategory} />
-        <ThemedText color="#374151" className="mt-3 text-lg">
 
-          Please choose an icon that best represents this category. This helps identify category quickly in the app.
+          {/* ---------------- Suggested Icon Section ---------------- */}
+          {!isPickerVisible && (
+            <ThemedView className="p-4 rounded-lg" style={{ elevation: 2 }}>
 
-        </ThemedText>
+              {/* Header Row */}
+              <View className="flex-row justify-between items-center mb-1">
+                <ThemedText className="">Choose icon here:</ThemedText>
+
+                {/* Open full picker */}
+                <TouchableOpacity onPress={() => {
+                  pickerRef.current?.open();
+                  setIsFocused(true)
+                }}>
+                  <Feather name="search" size={22} color="#9ca3af" />
+                </TouchableOpacity>
+              </View>
+
+              {/* Suggested Icons */}
+              <View className={`
+                 flex-row flex-wrap justify-between mt-1 border rounded-lg p-4 ${darkMode ? "border-gray-500" : "border-gray-300"}
+                  `}>
+                {(() => {
+                  let iconsToDisplay = [];
+
+                  if (selectedIcon) {
+                    // 1. Filter out the selected icon from the default list to avoid duplication
+                    const otherIcons = suggestedIcons.filter(
+                      (item) => item.label !== selectedIcon.label
+                    );
+
+                    // 2. Place the selected icon at the first position (index 0)
+                    // 3. Take the remaining icons and slice to ensure the total count is exactly 6
+                    iconsToDisplay = [selectedIcon, ...otherIcons].slice(0, 6);
+                  } else {
+                    // If no icon is selected, show the default top 6 icons
+                    iconsToDisplay = suggestedIcons;
+                  }
+
+                  return iconsToDisplay.map((item, index) => (
+                    <TouchableOpacity
+                      key={`${item.label}-${index}`}
+                      onPress={() => {
+                        setSelectedIcon(item);
+                        setCategoryName(item.label || item.category);
+                        setIsFocused(true);
+                      }}
+                      style={{ width: '31%', marginBottom: 10 }}
+                      className={`items-center p-3 rounded-xl border ${selectedIcon?.label === item.label
+                        ? darkMode ? "border-blue-500" : "border-blue-500 bg-blue-50" // Highlighted state
+                        : darkMode ? "border-gray-500 " : "border-gray-200 bg-gray-50"  // Default state
+                        }`}
+                    >
+                      {/* Custom Icon Component */}
+                      <RenderIcon
+                        icon={item.icon}
+                        color={selectedIcon?.label === item.label ? "#2563eb" : "#4b5563"}
+                        size={30}
+                        prefix={item.prefix || ''}
+                        type="category"
+                      />
+
+                      {/* Icon Label - Truncated if too long */}
+                      <Text numberOfLines={1} className="text-[10px] mt-1 text-gray-500 text-center">
+                        {item.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ));
+                })()}
+              </View>
+
+              {/* Load More Button */}
+              <TouchableOpacity
+                onPress={() => {
+                  pickerRef.current?.open();
+                  setIsFocused(true)
+                }}
+                className={`py-2 mt-2 border-t ${darkMode ? "border-gray-500" : "border-gray-300"} items-center`}
+              >
+
+                <Text preventWrap={true} className={`font-medium ${darkMode ? 'text-blue-500' : 'text-blue-600'}`}>
+                  Load More Icons.....
+                </Text>
+
+              </TouchableOpacity>
+
+            </ThemedView>
+          )}
+
+          {/* ---------------- Vendor Name Input ---------------- */}
+          <ThemedView className="p-4 rounded-lg mt-6" style={{ elevation: 2 }}>
+
+            <ThemedText className="mb-2">Give the category a label or name:  </ThemedText>
+            <Input
+              placeholder="Enter vendor name here"
+              value={categoryName}
+              // Open icon picker from input icon *
+              rightIcon={true}
+              iconEvent={() => pickerRef.current?.open()}
+              onchange={(val) => {
+                // If value comes from picker (object), extract label
+                const textValue = typeof val === 'object' ? val?.label : val;
+
+                setCategoryName(textValue || "");
+
+                // Set selected icon only if full object received
+                if (typeof val === 'object' && val !== null) {
+                  setSelectedIcon(val);
+                }
+
+                setIsFocused(true);
+
+              }}
+
+              inputError={categoryError}
+              setInputError={setCategoryError}
+            />
+            {
+              message !== "" && (
+                <Text preventWrap={true} className={`${messageStatus ? "text-red-500" : "text-green-500"} mt-2`}>
+                  {message}
+                </Text>
+              )
+            }
+
+          </ThemedView>
+
+          {/* ---------------- Save / Update Button ---------------- */}
+          <Button
+            className="mt-5"
+            title={`${id ? "Update" : "Save"}`}
+            onClickEvent={id ? handleUpdateCategory : handleAddCategory}
+          />
+
+
+          {/* ---------------- Info Card ---------------- */}
+          <View className="p-2 rounded-lg mt-2" >
+            <ThemedText color="#374151" className="text-lg  mb-1">
+              Please choose an icon that best represents this category and give it a proper name.
+              This helps identify category quickly inside the app.
+            </ThemedText>
+          </View>
+
+        </ScrollView>
+      </KeyboardAvoidingView >
+
+      {/* ---------------- Hidden Full Icon Picker ---------------- */}
+      <View View className="opacity-0" >
+        <IconPicker
+          ref={pickerRef}
+          label="category"
+          modalTitle="Choose a category"
+          inputPlaceholder="Search category......"
+          items={EXPENSE_CATEGORIES_ICONS}
+          value={selectedIcon}
+          isPickerContentShown={true}
+          filterOptions={filterOptions}
+          onChange={(val) => {
+            console.log("selected icon :", val);
+            setCategoryName(val.label);
+            setSelectedIcon(val);
+            setIsPickerVisible(false);
+            setIsFocused(true);
+          }}
+        />
       </View>
-    </SafeAreacontext>
+
+    </SafeAreacontext >
   );
 };
 

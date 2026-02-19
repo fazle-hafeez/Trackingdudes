@@ -28,7 +28,7 @@ const Input = ({
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const { darkMode } = useTheme()
 
-  const finalColor = darkMode ? '#9ca3af' : '#646060ff'
+  const finalColor = inputError ? "#ef4444" :  darkMode ? '#9ca3af' : '#646060ff'
   const showError = inputError && value === ""
 
   const errorColor = darkMode ? '#ef4444' : '#dc3545'
@@ -121,7 +121,7 @@ const Input = ({
             <Feather
               name="search"
               size={22}
-              color="#9ca3af"
+              color={ inputError ? "#ef4444" : "#9ca3af"}
               style={{ marginLeft: 8 }}
             />
             </TouchableOpacity>

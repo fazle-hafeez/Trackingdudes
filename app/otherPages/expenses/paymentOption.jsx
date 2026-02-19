@@ -55,11 +55,11 @@ const PaymentOption = () => {
     const parsed = parseIconString(iconStr);
 
     // Case 2: Try to find by icon name directly if prefix search fails
-    const found = PAYMENT_OPTION_ICONS.find(opt =>
-      (opt.prefix === parsed.prefix && opt.icon === parsed.icon) ||
-      (opt.icon === iconStr) // fallback for simple names
+    const found = PAYMENT_OPTION_ICONS.find(
+      i =>
+        i.icon?.toLowerCase() === parsed.icon?.toLowerCase() &&
+        i.prefix?.toLowerCase() === parsed.type?.toLowerCase()
     );
-
     return found || { icon: parsed.icon || iconStr, type: "Ionicons", prefix: "Ion" };
   };
 
@@ -157,8 +157,16 @@ const PaymentOption = () => {
 
   // 3. Create Record
   const handleAddPaymentOption = async () => {
-    if (!paymentName?.trim() || !selectedIcon) {
-      showModal("Enter name and select icon", "error");
+    if (!paymentName?.trim()) {
+      setVendorErr("Field is required!")
+      return;
+    }
+
+    if (!selectedIcon) {
+      showModal(
+        "Please select an icon that best represents this payment option...",
+        "warning"
+      );
       return;
     }
 
@@ -199,8 +207,19 @@ const PaymentOption = () => {
 
   // 4. Update Record (Fixed Logic)
   const handleUpdatePaymentOption = async () => {
-    if (!paymentName?.trim() || !selectedIcon || messageStatus) return;
 
+    if (!paymentName?.trim()) {
+      setVendorErr("Field is required!")
+      return;
+    }
+
+    if (!selectedIcon) {
+      showModal(
+        "Please select an icon that best represents this payment option...",
+        "warning"
+      );
+      return;
+    }
     setGlobalLoading(true);
 
     // ----------------------------
@@ -312,14 +331,14 @@ const PaymentOption = () => {
   //=================================
 
   const MAIN_CATEGORY_FILTER = [
-  { label: "Credit Cards", value: "credit_card" },
-  { label: "Bank Accounts", value: "bank_account" },
-  { label: "Digital Wallets", value: "digital_wallet"},
-  { label: "Processors", value: "payment_processor" },
-  { label: "BNPL", value: "bnpl_financing" },
-  { label: "Cash Methods", value: "cash" },
-  { label: "Crypto", value: "crypto" }
-];
+    { label: "Credit Cards", value: "credit_card" },
+    { label: "Bank Accounts", value: "bank_account" },
+    { label: "Digital Wallets", value: "digital_wallet" },
+    { label: "Processors", value: "payment_processor" },
+    { label: "BNPL", value: "bnpl_financing" },
+    { label: "Cash Methods", value: "cash" },
+    { label: "Crypto", value: "crypto" }
+  ];
 
   return (
     <SafeAreacontext bgColor="#eff6ff" className="flex-1">
@@ -400,7 +419,7 @@ const PaymentOption = () => {
                         color={selectedIcon?.label === item.label ? "#2563eb" : "#4b5563"}
                         size={30}
                         prefix={item.prefix}
-                        type = "payment"
+                        type="payment"
                       />
 
                       {/* Icon Label - Truncated if too long */}
@@ -441,24 +460,18 @@ const PaymentOption = () => {
               rightIcon={true}
               iconEvent={() => pickerRef.current?.open()}
               onchange={(val) => {
-                // If value comes from picker (object), extract label
                 const textValue = typeof val === 'object' ? val?.label : val;
 
                 setPaymentName(textValue || "");
 
-                // Set selected icon only if full object received
+                // Only set icon when user selects from picker
                 if (typeof val === 'object' && val !== null) {
                   setSelectedIcon(val);
                 }
 
                 setIsFocused(true);
-
-                // Clear icon if input becomes empty
-                if (!textValue || textValue.trim() === "") {
-                  setSelectedIcon(null);
-                  // setVendorErr("");
-                }
               }}
+
 
               inputError={vendorError}
               setInputError={setVendorErr}
