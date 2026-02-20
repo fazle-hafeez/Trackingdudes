@@ -26,7 +26,7 @@ const Pagination = ({ page, totalPages, onPageChange }) => {
         continue;
       }
 
-      const isActive = i === page;
+      const isActive = i == page;
       buttons.push(
         <TouchableOpacity
           key={i}

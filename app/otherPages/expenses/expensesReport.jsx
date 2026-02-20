@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useContext, useCallback, useMemo } from "react";
-import { View, FlatList, TouchableOpacity, RefreshControl, Text } from "react-native";
-import { FontAwesome, FontAwesome6, Ionicons, MaterialIcons } from "@expo/vector-icons";
+import { View, FlatList, TouchableOpacity, RefreshControl, Text,Image } from "react-native";
+import { FontAwesome, FontAwesome5, FontAwesome6, Ionicons, MaterialIcons, AntDesign, Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
 
@@ -11,7 +11,8 @@ import { OfflineContext } from "../../../src/offline/OfflineProvider";
 import usePersistentValue from "../../../src/hooks/usePersistentValue";
 import { readCache, storeCache } from "../../../src/offline/cache";
 import { useApi } from "../../../src/hooks/useApi";
-import { mergePendingAndNormalize, formatCurrency, DATE_TABS, getDateRange, parseIconString } from "../../../src/helper";
+import { RenderIcon } from "../../../src/helper";
+import { formatCurrency, DATE_TABS, getDateRange, parseIconString } from "../../../src/helper";
 
 // Components
 import Tabs from "../../../src/components/Tabs";
@@ -37,10 +38,19 @@ const ICON_MAP = {
   font5: FontAwesome,      // API key
   FontAwesome6: FontAwesome6,
   Ionicons: Ionicons,
-  Ion: Ionicons,           // API key
-  mater: MaterialIcons,
   MaterialIcons: MaterialIcons,
+  fa: FontAwesome,
+  fa5: FontAwesome5,
+  fa6: FontAwesome6,
+  font6: FontAwesome6,
+  ant: AntDesign,
+  mat: MaterialIcons,
+  mater: MaterialIcons,
+  fth: Feather,
+  fthr: Feather,
+  ion: Ionicons
 };
+
 
 
 // ---------------- COMPONENT ----------------
@@ -83,6 +93,7 @@ const Expenses = () => {
       paymentIcon,
       projectIcon
     };
+
   };
 
   // date arrange  helper function
@@ -105,7 +116,7 @@ const Expenses = () => {
   const fetchExpenses = async (
     pageNumber = 1,
     currentOrder = order,
-    bypassLoading = false
+
   ) => {
 
     /* ===============================
@@ -137,7 +148,7 @@ const Expenses = () => {
             `&page=${pageNumber}` +
             `&_t=${Date.now()}`;
 
-          const res = await get(`my-expenses/?${query}`, {
+          const res = await get(`my-expenses?${query}`, {
             useBearerAuth: true
           });
 
@@ -150,9 +161,10 @@ const Expenses = () => {
           }
 
           // Pagination handling
-          if (res?.pagination) {
-            setPage(Number(res.pagination.current_page || pageNumber));
-            setTotalPages(Number(res.pagination.total_pages || 1));
+          if (isConnected && res?.pagination) {
+            setPage(res?.pagination.current_page || pageNumber);
+            setTotalPages(res?.pagination.total_pages || 1)
+
           } else {
             setPage(1);
             setTotalPages(1);
@@ -289,14 +301,14 @@ const Expenses = () => {
           const upRec = await readCache("recordUpdated");
 
           if (newRec || delRec || upRec) {
-            await fetchExpenses(1, order, false);
+            await fetchExpenses(1, order);
 
             if (newRec) await storeCache("newRecordAdded", false);
             if (delRec) await storeCache("recordDeleted", false);
             if (upRec) await storeCache("recordUpdated", false);
 
           } else {
-            fetchExpenses(page, order, true);
+            fetchExpenses(page, order);
           }
 
         } catch (err) {
@@ -306,7 +318,7 @@ const Expenses = () => {
 
       checkActionsAndFetch();
 
-    }, [activeTab, fetchExpense, isConnected])
+    }, [activeTab, fetchExpense, isConnected, page])
   );
 
 
@@ -443,7 +455,7 @@ const Expenses = () => {
         }}
         onPress={() => {
           if (selectionMode) toggleSelect(id);
-          else router.push({ pathname: "/otherPages/expenses/addExpenses", params: { id,activeTab,from,to } });
+          else router.push({ pathname: "/otherPages/expenses/addExpenses", params: { id, activeTab, from, to } });
         }}
         activeOpacity={0.8}
         className="mb-4"
@@ -469,6 +481,7 @@ const Expenses = () => {
                     icon={item.categoryIcon?.icon}
                     size={18}
                     color="#7c3aed"
+                    showSpecificIcon="category"
                     fallbackType="Ionicons"
                     fallbackName="pricetag-outline"
                   />
@@ -491,6 +504,7 @@ const Expenses = () => {
                     icon={item.paymentIcon?.icon}
                     size={18}
                     color="#15803d"
+                    showSpecificIcon="payment"
                     fallbackType="FontAwesome"
                     fallbackName="credit-card"
                   />
@@ -508,6 +522,7 @@ const Expenses = () => {
                     icon={item.vendorIcon?.icon}
                     size={18}
                     color="#c2410c"
+                    showSpecificIcon="vendor"
                     fallbackType="Ionicons"
                     fallbackName="storefront-outline"
                   />
@@ -535,6 +550,11 @@ const Expenses = () => {
                 <ThemedText>{item?.project}</ThemedText>
               </View>
             </View>
+
+            {/* <Image
+              source={{ uri: "https://trackingdudes.com/uploads/"+item.receipt }}  // remote URL
+              style={{ width: 50, height: 50, resizeMode: "contain" }}
+            /> */}
 
             {item.memo && (
               <View className="mt-3 px-2">
@@ -611,13 +631,13 @@ const Expenses = () => {
               ListFooterComponent={
                 isConnected && totalPages > 1 ? (
                   <Pagination
-                    currentPage={page}
+                    page={page}
                     totalPages={totalPages}
                     onPageChange={(newPage) => {
-                      console.log("Moving to page:", newPage);
                       fetchExpenses(newPage);
                     }}
                   />
+
                 ) : null
               }
             />
@@ -647,11 +667,31 @@ const DynamicIcon = ({
   type,
   icon,
   size = 16,
+  showSpecificIcon = "",
   color = "#000",
-  fallbackType = "Ionicons",
-  fallbackName = "pricetag-outline",
+  fallbackType = "ion",
+  fallbackName = "help-circle-outline",
 }) => {
-  const IconComponent = (type && ICON_MAP[type]) ? ICON_MAP[type] : ICON_MAP[fallbackType] || Ionicons;
+
+  const iconType = (type || "").toLowerCase();
+
+  // ✅ SVG case
+  if (iconType === "svg") {
+    return (
+      <RenderIcon
+        icon={`svg:${icon}`}
+        size={18}
+        color={color}
+        type={showSpecificIcon}
+      />
+    );
+  }
+
+  //  Vector icon case
+  const IconComponent =
+    ICON_MAP[iconType] ||
+    ICON_MAP[fallbackType] ||
+    Ionicons;
 
   return (
     <IconComponent

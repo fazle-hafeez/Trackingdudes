@@ -1,7 +1,7 @@
 import { View, Text, TouchableOpacity, FlatList, RefreshControl, StatusBar } from "react-native";
 import React, { useCallback, useState, useEffect, useContext } from "react";
 import { useFocusEffect } from "@react-navigation/native";
-import { FontAwesome6,  Ionicons, FontAwesome5 } from "@expo/vector-icons";
+import { FontAwesome6, Ionicons, FontAwesome5 } from "@expo/vector-icons";
 import { router } from "expo-router";
 
 // -----Hooks----------
@@ -514,7 +514,7 @@ const MyProjects = () => {
                             item.pending ? darkMode ? 'border-yellow-300' : "border-yellow-400 bg-yellow-50" :
                                 darkMode ? "border-gray-700" : "bg-white border-gray-100"}
           `}>
-                    <View className={` ${darkMode ?  item.pending ? 'border-yellow-300': 'border-gray-700' : 'border-orange-300'} 
+                    <View className={` ${darkMode ? item.pending ? 'border-yellow-300' : 'border-gray-700' : 'border-orange-300'} 
                       flex-row items-center border-b  pb-2 mb-2`}>
                         <View className="flex-row items-center flex-1">
                             {selectionMode && (
@@ -563,7 +563,7 @@ const MyProjects = () => {
 
                     {isPending && (
                         <Text className="text-yellow-600 my-2 text-xs font-medium">
-                            {item.id  ? "⏳ Status/Update pending sync..." : "⏳ New record pending sync..."}
+                            {item.id ? "⏳ Status/Update pending sync..." : "⏳ New record pending sync..."}
                         </Text>
                     )}
 
@@ -611,6 +611,9 @@ const MyProjects = () => {
                         renderItem={renderProject}
                         keyExtractor={(item) => (item.id || item.tempId)?.toString()}
                         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+                        contentContainerStyle={{
+                            paddingBottom: selectionMode ? 90 : 10
+                        }}
                         ListFooterComponent={
                             isConnected && totalPages > 1 ? (
                                 <View className="items-center mb-2">

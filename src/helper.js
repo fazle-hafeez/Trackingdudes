@@ -2,6 +2,7 @@ import { getVendorIcon } from "./utils/getVendorIcon";
 import { Ionicons, FontAwesome, FontAwesome5, FontAwesome6, MaterialIcons, AntDesign, Feather } from "@expo/vector-icons";
 import { Svg } from "react-native-svg";
 import { getIconComponent } from "./utils/getIconComponent";
+import { getUniversalIcon } from "./utils/getUniversalIcon";
 
 export const normalizeStatus = (value) => {
   if (!value) return null;
@@ -122,30 +123,6 @@ export const DATE_TABS = {
 
 //============== get type and icon name from string ex:fontAwosome6:car
 
-// export const parseIconString = (iconStr = "") => {
-//   if (!iconStr || !iconStr.includes(":")) {
-//     return { type: null, icon: null }; // property name 'icon'
-//   }
-
-//   const [prefix, iconName] = iconStr.split(":");
-
-//   const map = {
-//     fa: "FontAwesome",
-//     fa5: "FontAwesome5",
-//     fa6: "FontAwesome6",
-//     ion: "Ionicons",
-//     mat: "MaterialIcons",
-//     svg: "SvgIcon",
-//     ant: "AntDesign",
-//     fth: "Feather"
-//   };
-
-//   return {
-//     type: map[prefix] || "Ionicons",
-//     icon: iconName,
-//     prefix: prefix
-//   };
-// };
 
 export const parseIconString = (iconStr = "") => {
   if (!iconStr || !iconStr.includes(":")) {
@@ -155,17 +132,17 @@ export const parseIconString = (iconStr = "") => {
   const [prefix, iconName] = iconStr.split(":");
 
   return {
-    type: prefix?.trim().toLowerCase(), // 👈 IMPORTANT
+    type: prefix?.trim().toLowerCase(),
     icon: iconName?.trim()
   };
 };
 
 
 // To display icon
-export const RenderIcon = ({ icon, size = 26, color = "#000", prefix, type = "vendor" }) => {
+
+export const RenderIcon = ({ icon, size = 26, color = "#000", prefix, type  }) => {
   if (!icon) return null;
 
-  // 🔑 AUTO PARSE if prefix not provided (API case)
   let finalPrefix = prefix;
   let finalIcon = icon;
 
@@ -180,13 +157,19 @@ export const RenderIcon = ({ icon, size = 26, color = "#000", prefix, type = "ve
   switch (iconType) {
 
     case "svg":
-      const SvgComponent = getIconComponent(finalIcon, type);
+      const SvgComponent = type
+        ? getIconComponent(finalIcon, type)
+        : getUniversalIcon(finalIcon);
       if (!SvgComponent) return null;
 
+      //  Directly render SVG component with proper size and fill
       return (
-        <Svg width={size} height={size} viewBox="0 0 64 64" fill={color}>
-          <SvgComponent width={size * 2} height={size * 2} />
-        </Svg>
+        <SvgComponent
+          width={size}
+          height={size}
+          fill={color}
+          style={{ alignSelf: "center" }}
+        />
       );
 
     case "fa5":

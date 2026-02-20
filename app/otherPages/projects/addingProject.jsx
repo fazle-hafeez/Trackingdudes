@@ -1,19 +1,7 @@
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  Modal,
-  Animated,
-} from "react-native";
+import {View,Text,TextInput,TouchableOpacity,  Modal,Animated,} from "react-native";
 import React, { useState, useRef, useEffect, useContext } from "react";
 import Checkbox from "expo-checkbox";
-import {
-  FontAwesome6,
-  FontAwesome,
-  Entypo,
-  AntDesign,
-} from "@expo/vector-icons";
+import {FontAwesome6,FontAwesome,Entypo,AntDesign,} from "@expo/vector-icons";
 import PageHeader from "../../../src/components/PageHeader";
 import Button from "../../../src/components/Button";
 import { useApi } from "../../../src/hooks/useApi";
@@ -217,7 +205,7 @@ const AddingProject = () => {
 
   const validateForm = () => {
     const newErrors = {};
-    if (!project.name.trim()) newErrors.name = "Project name required";
+    if (!project.name.trim()) newErrors.name = "Field is required!";
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -237,14 +225,12 @@ const AddingProject = () => {
   };
 
 
- //======================= Handle Create project ========
-
-              //======================//
-              
-//========================================================
+ //==============================================
+ //===========  Handle Create project ===========//      
+//===============================================
 
   const handleCreateProject = async () => {
-    if (!validateForm() || messageStatus) return;
+    if (!validateForm()) return;
 
     setGlobalLoading(true);
     try {
@@ -324,7 +310,7 @@ const AddingProject = () => {
   //==================// 
 
   const handleUpdateProject = async () => {
-    if (!validateForm() || messageStatus) return;
+    if (!validateForm()) return;
 
     setGlobalLoading(true);
     try {
